@@ -1,0 +1,9 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+     <file alias="menubar_icon.png">./images/clouds.png</file>
+     <file alias="indicator_icon1.png">./images/progress-indicator-static-rotate1.png</file>
+     <file alias="indicator_icon2.png">./images/progress-indicator-static-rotate2.png</file>
+     <file alias="indicator_icon3.png">./images/progress-indicator-static-rotate3.png</file>
+     <file alias="indicator_icon4.png">./images/progress-indicator-static-rotate4.png</file>
+</qresource>
+</RCC>

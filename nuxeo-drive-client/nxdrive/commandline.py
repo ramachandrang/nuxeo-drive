@@ -178,10 +178,33 @@ def make_cli_parser(add_subparsers=True):
     console_parser.add_argument(
         "--delay", default=DEFAULT_DELAY, type=float,
         help="Delay in seconds between consecutive sync operations.")
+#    console_parser.add_argument(
+#        # XXX: Make it true by default as the fault tolerant mode is not yet
+#        # implemented
+#        "--stop-on-error", default=True, action="store_true",
+#        help="Stop the process on first unexpected error."
+#        "Useful for developers and Continuous Integration.")
+    
     console_parser.add_argument(
         # XXX: Make it true by default as the fault tolerant mode is not yet
         # implemented
-        "--stop-on-error", default=True, action="store_true",
+        "--stop-on-error", default=True, action="store",
+        help="Stop the process on first unexpected error."
+        "Useful for developers and Continuous Integration.")
+        
+    gui_parser = subparsers.add_parser(
+        'gui',
+        help='Start as a menubar application.',
+        parents=[common_parser],
+    )
+    gui_parser.set_defaults(command='gui')
+    gui_parser.add_argument(
+        "--delay", default=DEFAULT_DELAY, type=float,
+        help="Delay in seconds between consecutive sync operations.")
+    gui_parser.add_argument(
+        # XXX: Make it true by default as the fault tolerant mode is not yet
+        # implemented
+        "--stop-on-error", default=True, action="store",
         help="Stop the process on first unexpected error."
         "Useful for developers and Continuous Integration.")
 
@@ -276,6 +299,13 @@ class CliHandler(object):
         log = get_logger(__name__)
         log.debug("Running command '%s' with options %r", command, options)
         return handler(options)
+    
+    def looper(self, options=None):
+        def wrapper(operation):
+            fault_tolerant = not getattr(options, 'stop_on_error', True)
+            delay=getattr(options, 'delay', DEFAULT_DELAY)
+            return self.controller.loop(fault_tolerant=fault_tolerant, delay=delay, sync_operation=operation)
+        return wrapper
 
     def default(self, options=None):
         # TODO: use the start method as default once implemented
@@ -303,6 +333,10 @@ class CliHandler(object):
         self.controller.loop(fault_tolerant=fault_tolerant,
                              delay=getattr(options, 'delay', DEFAULT_DELAY))
         return 0
+    
+    def gui(self, options):
+        from nxdrive.gui.menubar import startApp
+        return startApp(self.controller, self.looper(options))
 
     def status(self, options):
         states = self.controller.status(options.files)

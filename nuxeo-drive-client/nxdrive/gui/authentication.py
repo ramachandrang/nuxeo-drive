@@ -39,8 +39,8 @@ class Dialog(QDialog):
     """Dialog box to prompt the user for Server Bind credentials"""
 
     def __init__(self, fields_spec, title=None, fields_title=None,
-                 callback=None):
-        super(Dialog, self).__init__()
+                 callback=None, parent=None):
+        super(Dialog, self).__init__(parent)
         if QtGui is None:
             raise RuntimeError("PySide is not installed.")
         self.create_authentication_box(fields_spec)
@@ -104,7 +104,7 @@ class Dialog(QDialog):
 
 
 def prompt_authentication(controller, local_folder, url=None, username=None,
-                          is_url_readonly=False):
+                          is_url_readonly=False, parent=None):
     """Prompt a QT dialog to ask for user credentials for binding a server"""
     if QtGui is None:
         # Qt / PySide is not installed
@@ -157,9 +157,12 @@ def prompt_authentication(controller, local_folder, url=None, username=None,
             dialog.show_message("Unable to connect to " + url)
             return False
 
-    QtGui.QApplication([])
+#    QtGui.QApplication([])
+    from nxdrive.utils.helpers import QApplicationSingleton
+    QApplicationSingleton()
+    
     dialog = Dialog(field_specs, title="Nuxeo Drive - Authentication",
-                    callback=bind_server)
+                    callback=bind_server, parent=parent)
     try:
         dialog.exec_()
     except:

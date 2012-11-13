@@ -146,7 +146,7 @@ class LocalClient(object):
     # Automation operations fetched at controller init time.
 
     def __init__(self, base_folder, digest_func='md5', ignored_prefixes=None,
-                 ignored_suffixes=None):
+                 ignored_suffixes=None, fault_tolerant=False):
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -161,9 +161,12 @@ class LocalClient(object):
             base_folder = base_folder[:-1]
         self.base_folder = base_folder
         self._digest_func = digest_func
+        self.fault_tolerant = fault_tolerant
 
     # Getters
-    def get_info(self, ref, raise_if_missing=True):
+    def get_info(self, ref, raise_if_missing=None):
+        if raise_if_missing == None:
+            raise_if_missing = not self.fault_tolerant
         os_path = self._abspath(ref)
         if not os.path.exists(os_path):
             if raise_if_missing:
@@ -262,6 +265,9 @@ class LocalClient(object):
         return os.path.abspath(os.path.join(self.base_folder, path_suffix))
 
     def _abspath_deduped(self, parent, orig_name):
+        
+#        import pdb; pdb.set_trace()
+        
         """Absolute path on the operating system with deduplicated names"""
         # make name safe by removing invalid chars
         name = safe_filename(orig_name)
@@ -279,7 +285,7 @@ class LocalClient(object):
                 return os_path, name + suffix
 
             # the is a duplicated file, try to come with a new name
-            m = re.match(r'(.*)__(\d)', name)
+            m = re.match(r'(.*)__(\d{1,3})', name)
             if m:
                 short_name, increment = m.groups()
                 name = "%s__%d" % (short_name, int(increment) + 1)
@@ -304,7 +310,7 @@ class NuxeoClient(object):
     def __init__(self, server_url, user_id, device_id,
                  password=None, token=None,
                  base_folder=None, repository="default",
-                 ignored_prefixes=None, ignored_suffixes=None):
+                 ignored_prefixes=None, ignored_suffixes=None, fault_tolerant=False):
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -340,6 +346,8 @@ class NuxeoClient(object):
             self._base_folder_path = base_folder_doc['path']
         else:
             self._base_folder_ref, self._base_folder_path = None, None
+            
+        self.fault_tolerant = fault_tolerant
 
     def _update_auth(self, password=None, token=None):
         """Select the most appropriate authentication heads based on credentials"""
@@ -520,8 +528,10 @@ class NuxeoClient(object):
 
         return filtered
 
-    def get_info(self, ref, raise_if_missing=True, fetch_parent_uid=True,
+    def get_info(self, ref, raise_if_missing=None, fetch_parent_uid=True,
                  use_trash=True):
+        if raise_if_missing == None:
+            raise_if_missing = not self.fault_tolerant
         if not self.exists(ref, use_trash=use_trash):
             if raise_if_missing:
                 raise NotFound("Could not find '%s' on '%s'" % (

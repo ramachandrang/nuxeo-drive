@@ -171,7 +171,7 @@ class LastKnownState(Base):
     remotely_moved_to = Column(String)
 
     def __init__(self, local_root, local_info=None, remote_info=None,
-                 local_state='unknown', remote_state='unknown'):
+                 local_state='unknown', remote_state='unknown', fault_tolerant=None):
         self.local_root = local_root
         if local_info is None and remote_info is None:
             raise ValueError(
@@ -183,6 +183,7 @@ class LastKnownState(Base):
             self.update_remote(remote_info)
 
         self.update_state(local_state=local_state, remote_state=remote_state)
+        self.fault_tolerant = fault_tolerant
 
     def update_state(self, local_state=None, remote_state=None):
         if local_state is not None:
@@ -214,7 +215,7 @@ class LastKnownState(Base):
     def refresh_local(self, client=None):
         """Update the state from the local filesystem info."""
         client = client if client is not None else self.get_local_client()
-        local_info = client.get_info(self.path, raise_if_missing=False)
+        local_info = client.get_info(self.path, raise_if_missing=True)
         self.update_local(local_info)
         return local_info
 
@@ -283,7 +284,7 @@ class LastKnownState(Base):
         """
         client = client if client is not None else self.get_remote_client()
         fetch_parent_uid = self.path != '/'
-        remote_info = client.get_info(self.remote_ref, raise_if_missing=False,
+        remote_info = client.get_info(self.remote_ref, raise_if_missing=True,
                                       fetch_parent_uid=fetch_parent_uid)
         self.update_remote(remote_info)
         return remote_info
@@ -342,7 +343,7 @@ class FileEvent(Base):
     def __init__(self, local_root, path, utc_time=None):
         self.local_root = local_root
         if utc_time is None:
-            utc_time = datetime.utcnow()
+            utc_time = datetime.datetime.utcnow()
 
 
 def init_db(nxdrive_home, echo=False, scoped_sessions=True, poolclass=None):
