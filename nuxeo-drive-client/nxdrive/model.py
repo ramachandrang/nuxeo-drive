@@ -210,12 +210,13 @@ class LastKnownState(Base):
         sb = rb.server_binding
         return factory(
             sb.server_url, sb.remote_user, sb.remote_password,
-            base_folder=rb.remote_root, repository=rb.remote_repo)
+            base_folder=rb.remote_root, repository=rb.remote_repo,
+            fault_tolerant=self.fault_tolerant)
 
     def refresh_local(self, client=None):
         """Update the state from the local filesystem info."""
         client = client if client is not None else self.get_local_client()
-        local_info = client.get_info(self.path, raise_if_missing=True)
+        local_info = client.get_info(self.path, raise_if_missing=None)
         self.update_local(local_info)
         return local_info
 

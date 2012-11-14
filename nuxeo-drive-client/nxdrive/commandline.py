@@ -320,8 +320,10 @@ class CliHandler(object):
         return 0
 
     def console(self, options):
-
-        fault_tolerant = not getattr(options, 'stop_on_error', True)
+        value = getattr(options, 'stop_on_error', True)
+        if str(value).lower() in ('true', 't', 'yes', 'y'): fault_tolerant = False
+        elif str(value).lower() in ('false', 'no', 'f', 'n'): fault_tolerant = True
+        else: fault_tolerant = None
 
         if len(self.controller.list_server_bindings()) == 0:
             # Launch the GUI to create a binding

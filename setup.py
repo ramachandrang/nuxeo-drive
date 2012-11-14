@@ -7,6 +7,8 @@ import sys
 from datetime import datetime
 
 from distutils.core import setup
+import py2exe
+
 scripts = ["nuxeo-drive-client/bin/ndrive"]
 freeze_options = {}
 

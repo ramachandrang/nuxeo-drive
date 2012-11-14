@@ -146,7 +146,7 @@ class LocalClient(object):
     # Automation operations fetched at controller init time.
 
     def __init__(self, base_folder, digest_func='md5', ignored_prefixes=None,
-                 ignored_suffixes=None, fault_tolerant=False):
+                 ignored_suffixes=None, fault_tolerant=True):
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -310,7 +310,7 @@ class NuxeoClient(object):
     def __init__(self, server_url, user_id, device_id,
                  password=None, token=None,
                  base_folder=None, repository="default",
-                 ignored_prefixes=None, ignored_suffixes=None, fault_tolerant=False):
+                 ignored_prefixes=None, ignored_suffixes=None, fault_tolerant=True):
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -528,8 +528,9 @@ class NuxeoClient(object):
 
         return filtered
 
+    # TEST: changed use_trash to False
     def get_info(self, ref, raise_if_missing=None, fetch_parent_uid=True,
-                 use_trash=True):
+                 use_trash=False):
         if raise_if_missing == None:
             raise_if_missing = not self.fault_tolerant
         if not self.exists(ref, use_trash=use_trash):

@@ -406,7 +406,7 @@ class Controller(object):
             # manual local-only bounding: the server is not aware of any root
             # config
             self._local_bind_root(server_binding, remote_info, nxclient,
-                                  session)
+                                  session, fault_tolerant=self.fault_tolerant)
 
     def _local_bind_root(self, server_binding, remote_info, nxclient, session, fault_tolerant=False):
         # Check that this workspace does not already exist locally
@@ -562,7 +562,7 @@ class Controller(object):
                                         repository=repository,
                                         base_folder=ref)
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
-                                  rc, session)
+                                  rc, session, fault_tolerant=self.fault_tolerant)
 
     def scan_local(self, local_root, session=None):
         """Recursively scan the bound local folder looking for updates"""
@@ -864,7 +864,8 @@ class Controller(object):
             # local clients are cheap
             local_client = doc_pair.get_local_client()
     
-            log.debug("syncing local %s with remote %s", local_client.get_info, remote_client.get_info)
+            log.debug("syncing local %s with remote %s", local_client.get_info(doc_pair.get_local_abspath()), 
+                      remote_client.get_info(doc_pair.remote_name) if not doc_pair.remote_name == None else 'none')
             
             # Update the status the collected info of this file to make sure
             # we won't perfom inconsistent operations
@@ -1197,6 +1198,7 @@ class Controller(object):
         loop_count = 0
         try:
             while True:
+
                 if self.should_stop_synchronization():
                     log.info("Stopping synchronization (pid=%d)", pid)
                     break
