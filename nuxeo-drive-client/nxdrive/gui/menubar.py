@@ -6,7 +6,6 @@ Created on Oct 27, 2012
 
 import sys
 import os
-import time
 import platform
 import itertools
 
@@ -15,10 +14,11 @@ from PySide import QtCore
 from PySide.QtGui import QDialog, QDialogButtonBox, QFileDialog, QImage, QPainter, QIcon, QPixmap
 from PySide.QtCore import QTimer
 from PySide.QtCore import Slot
-import nxdrive.gui.resources.qrc_resources
 from  nxdrive import Constants
 from nxdrive.async.operations import SyncOperations
-from nxdrive.gui.resources.ui_preferences import Ui_preferencesDlg
+from nxdrive.data.resources.ui_preferences import Ui_preferencesDlg
+# this import is flagged erroneously as unused import - do not remove
+import nxdrive.data.resources.qrc_resources
 from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
@@ -84,7 +84,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionStatus.setEnabled(False)
 
     def setupMisc(self):
-        self.setIcon(QIcon(':/menubar_icon.png'))
+        self.setIcon(QIcon(Constants.APP_ICON))
         self.setContextMenu(self.menuCloudDesk)
         self.actionQuit.triggered.connect(self.quit)
         self.menuCloudDesk.aboutToShow.connect(self.updateMenus)
@@ -113,7 +113,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def _startAnimation(self):
         if not self.startDelay:
             self.timer.start(Constants.ICON_ANIMATION_DELAY)
-            self.iterator = itertools.cycle('1234')
+            self.iterator = itertools.cycle('2341')
             log.debug("started animation")
     
     def _stopAnimation(self):
@@ -122,7 +122,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             log.debug("animation stopped before starting")
         else:
             self.timer.stop()
-            self.setIcon(QIcon(':/menubar_icon.png'))
+            self.setIcon(QIcon(Constants.APP_ICON))
             log.debug("animation stopped")
         
     def _onTimerDelay(self):
@@ -131,9 +131,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self._startAnimation()
         
     def _onTimer(self):
-        iconBase = QImage(':/menubar_icon.png')
-        iconOverlay = QImage(':/indicator_icon%s.png' % (self.iterator.next()))
-        icon = QIcon(QPixmap.fromImage(self._createImageWithOverlay(iconBase, iconOverlay)))
+#        iconBase = QImage(':/menubar_icon.png')
+#        iconOverlay = QImage(Constants.APP_ICON_PATTERN % (self.iterator.next()))
+#        icon = QIcon(QPixmap.fromImage(self._createImageWithOverlay(iconBase, iconOverlay)))
+        # not using overlays
+        icon = QIcon(Constants.APP_ICON_PATTERN % (self.iterator.next()))
         self.setIcon(icon)
         
     def quit(self):
