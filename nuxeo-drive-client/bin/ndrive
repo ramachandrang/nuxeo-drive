@@ -3,4 +3,7 @@
 
 import sys
 from nxdrive.commandline import main
-sys.exit(main())
+#sys.exit(main())
+# run the GUI option
+sys.exit(main('gui --log-level-file DEBUG --stop-on-error False'.split()))
+

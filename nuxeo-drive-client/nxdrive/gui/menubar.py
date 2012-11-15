@@ -14,11 +14,12 @@ from PySide import QtCore
 from PySide.QtGui import QDialog, QDialogButtonBox, QFileDialog, QImage, QPainter, QIcon, QPixmap
 from PySide.QtCore import QTimer
 from PySide.QtCore import Slot
-from  nxdrive import Constants
+from nxdrive import Constants
+from nxdrive.gui.ui_preferences import Ui_preferencesDlg
 from nxdrive.async.operations import SyncOperations
-from nxdrive.data.resources.ui_preferences import Ui_preferencesDlg
+#from nxdrive.gui.ui_preferences import Ui_preferencesDlg
 # this import is flagged erroneously as unused import - do not remove
-import nxdrive.data.resources.qrc_resources
+import nxdrive.gui.qrc_resources
 from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
@@ -286,8 +287,10 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                     super(PreferencesDlg, self).showEvent(evt)
         
     def _getDefaultFolder(self):
-                # get home directory
-        home = os.environ["HOME"]
+        # get home directory
+        # this does not work in Windows
+#        home = os.environ["HOME"]
+        home = os.path.expanduser("~")
         if (home[-1] != os.sep):
             home += os.sep
         home += Constants.DEFAULT_NXDRIVE_FOLDER

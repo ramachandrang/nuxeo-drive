@@ -865,7 +865,7 @@ class Controller(object):
             local_client = doc_pair.get_local_client()
     
             log.debug("syncing local %s with remote %s", 
-                      local_client.get_info(doc_pair.get_local_abspath()) if not doc_pair.local_name == None else 'none', 
+                      local_client.get_info(doc_pair.path).filepath if not doc_pair.path == None else 'none', 
                       remote_client.get_info(doc_pair.remote_name) if not doc_pair.remote_name == None else 'none')
             
             # Update the status the collected info of this file to make sure
