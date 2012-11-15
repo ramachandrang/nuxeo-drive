@@ -19,7 +19,10 @@ packages = [
     'nxdrive.gui',
     'nxdrive.protocol_handler',
     'nxdrive.data',
+#    'nxdrive.data.resources',
     'nxdrive.data.icons',
+    'nxdrive.async',
+    'nxdrive.utils',
 ]
 package_data = {
     'nxdrive.data.icons': ['*.png', '*.svg', '*.ico'],
@@ -73,6 +76,7 @@ if '--freeze' in sys.argv:
          "icons/nuxeo_drive_icon_%d.png" % i)
         for i in [16, 32, 48, 64]
     ]
+    
     freeze_options = dict(
         executables=executables,
         options={
