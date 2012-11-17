@@ -96,7 +96,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._onTimer)
-        self.startDelay = True
+        self.startDelay = False
+        self.stop = False
 
     def about(self):
         msgbox = QMessageBox()
@@ -128,19 +129,21 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 self._stopAnimation()
         
     def _startAnimationDelay(self):
+        assert not self.startDelay
+        assert not self.stop
         QTimer.singleShot(Constants.ICON_ANIMATION_START_DELAY, self._onTimerDelay)
         self.startDelay = True
         log.debug("started animation delay")
         
     def _startAnimation(self):
-        if not self.startDelay:
-            self.timer.start(Constants.ICON_ANIMATION_DELAY)
-            self.iterator = itertools.cycle('2341')
-            log.debug("started animation")
+        assert not self.startDelay  #this shouldn't happen, delay is reset before
+        self.timer.start(Constants.ICON_ANIMATION_DELAY)
+        self.iterator = itertools.cycle('2341')
+        log.debug("started animation")
     
     def _stopAnimation(self):
         if self.startDelay:
-            self.startDelay = False
+            self.stop = True
             log.debug("animation stopped before starting")
         else:
             self.timer.stop()
@@ -148,17 +151,21 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             log.debug("animation stopped")
         
     def _onTimerDelay(self):
-        if self.startDelay:
+        assert self.startDelay
+        self.startDelay = False
+        if self.stop: 
             # stopped before delay elapsed, do not start animation
-            self.startDelay = False
+            self.stop = False
             log.debug("animation not started after delay (stopped before)")
             return
-        else:
-            self.startDelay = False
-            log.debug("animation delay elapsed")
-            self._startAnimation()
+
+        log.debug("animation delay elapsed")
+        self._startAnimation()
         
     def _onTimer(self):
+        assert not self.startDelay #this should not happen, actions are sequential
+        assert not self.stop #this should not happen outside a delay
+        
 #        iconBase = QImage(':/menubar_icon.png')
 #        iconOverlay = QImage(Constants.APP_ICON_PATTERN % (self.iterator.next()))
 #        icon = QIcon(QPixmap.fromImage(self._createImageWithOverlay(iconBase, iconOverlay)))
