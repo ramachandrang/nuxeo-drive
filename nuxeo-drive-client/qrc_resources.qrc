@@ -1,8 +1,9 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
-     <file alias="indicator_icon1.png">../icons/nuxeo_drive_icon_16.png</file>
-     <file alias="indicator_icon2.png">../icons/nuxeo_drive_icon_16_R90.png</file>
-     <file alias="indicator_icon3.png">../icons/nuxeo_drive_icon_16_R180.png</file>
-     <file alias="indicator_icon4.png">../icons/nuxeo_drive_icon_16_R270.png</file>
+     <file alias="indicator_icon1.png">nxdrive/data/icons/nuxeo_drive_icon_16.png</file>
+     <file alias="indicator_icon2.png">nxdrive/data/icons/nuxeo_drive_icon_16_R90.png</file>
+     <file alias="indicator_icon3.png">nxdrive/data/icons/nuxeo_drive_icon_16_R180.png</file>
+     <file alias="indicator_icon4.png">nxdrive/data/icons/nuxeo_drive_icon_16_R270.png</file>
+     <file alias="about_icon.png">nxdrive/data/icons/nuxeo_drive_icon_48.png</file>
 </qresource>
 </RCC>

@@ -9,15 +9,15 @@ import os
 import platform
 import itertools
 
+import PySide
 from PySide import QtGui
 from PySide import QtCore
-from PySide.QtGui import QDialog, QDialogButtonBox, QFileDialog, QImage, QPainter, QIcon, QPixmap
+from PySide.QtGui import QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QImage, QPainter, QIcon, QPixmap
 from PySide.QtCore import QTimer
 from PySide.QtCore import Slot
 from nxdrive import Constants
 from nxdrive.gui.ui_preferences import Ui_preferencesDlg
 from nxdrive.async.operations import SyncOperations
-#from nxdrive.gui.ui_preferences import Ui_preferencesDlg
 # this import is flagged erroneously as unused import - do not remove
 import nxdrive.gui.qrc_resources
 from nxdrive.async.worker import Worker
@@ -91,12 +91,33 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.aboutToShow.connect(self.updateMenus)
         self.actionPreferences.triggered.connect(self.showPreferences)
         self.actionCommand.triggered.connect(self.doWork)
+        self.actionAbout.triggered.connect(self.about)
         self.controller.notifier.register(self._updateOperationStatus)
         
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._onTimer)
         self.startDelay = True
 
+    def about(self):
+        msgbox = QMessageBox()
+#        msgbox.setTsetTitle(self.tr("CloudDesk Sync"))
+        msgbox.setText(self.tr("About CloudDesk Sync"))
+        msgbox.setStandardButtons(QMessageBox.Ok)
+        msgbox.setInformativeText("""version<b>%s</b>
+                <p>Copyright &copy; 2012 SHARP CORPORATION
+                All Rights Reserved.
+                <p>Platform Details: %s</p>
+                <p style="font-size: small">Python %s</p>
+                <p style="font-size: small">PySide %s</p>
+                <p style="font-size: small">Qt %s</p>""" % (Constants.__version__, platform.system(), 
+                            platform.python_version(), PySide.__version__, QtCore.__version__))
+        icon = QIcon(Constants.APP_ICON_ABOUT)
+        msgbox.setIconPixmap(icon.pixmap(48, 48))
+        msgbox.setDetailedText(open(Constants.COPYRIGHT_FILE).read())
+        msgbox.setDefaultButton(QMessageBox.Ok)
+        msgbox.exec_()
+
+        
     # also using a flag in the worker thread to update the menu
     @Slot(int)
     def _updateOperationStatus(self, sync_status):
@@ -127,9 +148,15 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             log.debug("animation stopped")
         
     def _onTimerDelay(self):
-        self.startDelay = False
-        log.debug("animation delay elapsed")
-        self._startAnimation()
+        if self.startDelay:
+            # stopped before delay elapsed, do not start animation
+            self.startDelay = False
+            log.debug("animation not started after delay (stopped before)")
+            return
+        else:
+            self.startDelay = False
+            log.debug("animation delay elapsed")
+            self._startAnimation()
         
     def _onTimer(self):
 #        iconBase = QImage(':/menubar_icon.png')
@@ -263,28 +290,33 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.controller = controller
         applyBtn = self.buttonBox.button(QDialogButtonBox.Apply)
         applyBtn.clicked.connect(self.applyChanges)
-        self.btnDisconnect.clicked.connect(self.disconnect)
+        self.btnDisconnect.clicked.connect(self.manageBinding)
         self.btnBrowsefolder.clicked.connect(self.browseFolder)
-        self.initDlg()
+
         
-    def initDlg(self):
-        self.txtUrl.setText(Constants.DEFAULT_CLOUDDESK_URL)
-        self.txtAccount.setText(Constants.DEFAULT_ACCOUNT)
-        self.txtCloudfolder.setText(self._getDefaultFolder())
-        self.lblComputer.setText(platform.node())
-        self.lblStorage.setText("123Mb (0.03%) of 4Gb")
+    def _isConnected(self):
+        return not (len(self.controller.list_server_bindings()) == 0)
+        
+    def _getDisconnectText(self):
+        return self.tr("Connect...") if not self._isConnected() else self.tr("Disconnect")
         
     def showEvent(self, evt):
         if evt.spontaneous:
-            if len(self.controller.list_server_bindings()) == 0:
+            self.lblComputer.setText(platform.node())
+            self.lblStorage.setText("123Mb (0.03%) of 4Gb")    
+            
+            if not self._isConnected():
+                self.txtUrl.setText(Constants.DEFAULT_CLOUDDESK_URL)
+                self.txtAccount.setText(Constants.DEFAULT_ACCOUNT)
+                self.txtCloudfolder.setText(self._getDefaultFolder())
                 # Launch the GUI to create a binding
-                from nxdrive.gui.authentication import prompt_authentication
-                from nxdrive.commandline import default_nuxeo_drive_folder
-                ok = prompt_authentication(self.controller, default_nuxeo_drive_folder())
+                ok = self._connect()
                 if not ok:
                     self.destroy()
-                else:
-                    super(PreferencesDlg, self).showEvent(evt)
+                    return
+
+            self._updateBinding()
+            super(PreferencesDlg, self).showEvent(evt)
         
     def _getDefaultFolder(self):
         # get home directory
@@ -302,7 +334,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             defaultFld = self._getDefaultFolder()
         selectedFld = QFileDialog.getExistingDirectory(self, self.tr("Choose or create directory"),
                         defaultFld, QFileDialog.DontResolveSymlinks)
-        if (selectedFld == None):
+        if (len(selectedFld) == 0):
             selectedFld = defaultFld
         self.txtCloudfolder.setText(selectedFld)
         
@@ -310,13 +342,56 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         # test
         print "changes accepted"
         
-    def disconnect(self):
-        # test
-        print "current account disconnected"
+    def manageBinding(self):
+        if (self._isConnected()):
+            self._disconnect()
+        else:
+            self._connect()
+        self._updateBinding()
         
-        self.txtAccount.setEnabled(True)
-        self.txtCloudfolder.setEnabled(True)
-        self.txtUrl.setEnabled(True)
+    def _updateBinding(self):
+        self.btnDisconnect.setText(self._getDisconnectText())
+        if (self._isConnected()):
+            local_folder = self.txtCloudfolder.text()
+            if local_folder == '': local_folder = None
+            binding = self.controller.get_server_binding(local_folder)
+            self.txtAccount.setText(binding.remote_user)
+            self.txtAccount.setCursorPosition(0)
+            self.txtAccount.setToolTip(binding.remote_user)
+            self.txtUrl.setText(binding.server_url)
+            self.txtUrl.setCursorPosition(0)
+            self.txtUrl.setToolTip(binding.server_url)
+            self.txtCloudfolder.setText(binding.local_folder)
+            self.txtCloudfolder.setCursorPosition(0)
+            self.txtCloudfolder.setToolTip(binding.local_folder)
+            self.txtAccount.setReadOnly(True)
+            self.txtAccount.deselect()
+            self.txtCloudfolder.setReadOnly(True)
+            self.txtUrl.setReadOnly(True)
+            self.btnBrowsefolder.setEnabled(False)
+        else:
+            self.txtAccount.setReadOnly(False)
+            # widget looks still read-only
+            self.txtAccount.setEnabled(True)
+            self.txtAccount.setSelection(0, len(self.txtAccount.text()))
+            self.txtCloudfolder.setReadOnly(False)
+            self.txtCloudfolder.setEnabled(True)
+            self.txtUrl.setReadOnly(False)
+            self.txtUrl.setEnabled(True)
+            self.btnBrowsefolder.setEnabled(True)
+    
+    def _connect(self):
+        # Launch the GUI to create a binding
+        from nxdrive.gui.authentication import prompt_authentication
+        from nxdrive.commandline import default_nuxeo_drive_folder
+        local_folder = self.txtCloudfolder.text() if self.txtCloudfolder.text() else DEFAULT_NX_DRIVE_FOLDER
+        remote_user = self.txtAccount.text() if self.txtAccount.text() else Constants.DEFAULT_ACCOUNT
+        server_url = self.txtUrl.text() if self.txtUrl.text() else Constants.DEFAULT_CLOUDDESK_URL
+        return prompt_authentication(self.controller, local_folder, url=server_url, username=remote_user)
+                
+    def _disconnect(self):
+        local_folder = self.txtCloudfolder.text()
+        self.controller.unbind_server(local_folder)
         
     def applyChanges(self):
         # test

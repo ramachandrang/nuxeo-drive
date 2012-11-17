@@ -12,5 +12,9 @@ ICON_ANIMATION_START_DELAY = 100
 SYNC_STATUS_STOP = 1
 SYNC_STATUS_START = 2
 APP_ICON = ':/indicator_icon1.png'
+APP_ICON_ABOUT = ':/about_icon.png'
 APP_ICON_PATTERN = ':/indicator_icon%s.png'
+COPYRIGHT_FILE = 'nxdrive/data/COPYING.txt'
+
+__version__ = '1.0.0'
 

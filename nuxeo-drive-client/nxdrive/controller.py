@@ -251,7 +251,7 @@ class Controller(object):
         path = path.replace(os.path.sep, '/')
         return binding, path
 
-    def get_server_binding(self, local_folder, raise_if_missing=None,
+    def get_server_binding(self, local_folder=None, raise_if_missing=None,
                            session=None):
         """Find the ServerBinding instance for a given local_folder"""
         if raise_if_missing == None:
@@ -259,7 +259,10 @@ class Controller(object):
         if session is None:
             session = self.get_session()
         try:
-            return session.query(ServerBinding).filter(
+            if local_folder is None:
+                return session.query(ServerBinding).one()
+            else:
+                return session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
         except NoResultFound:
             if raise_if_missing:
