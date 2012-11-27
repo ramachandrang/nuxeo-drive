@@ -93,6 +93,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionCommand.triggered.connect(self.doWork)
         self.actionAbout.triggered.connect(self.about)
         self.controller.notifier.register(self._updateOperationStatus)
+        self.actionOpenCloudDeskFolder.triggered.connect(self.openLocalFolder)
         
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._onTimer)
@@ -118,6 +119,16 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox.setDefaultButton(QMessageBox.Ok)
         msgbox.exec_()
 
+        
+    def _get_local_folder(self):
+        local_folder = DEFAULT_NX_DRIVE_FOLDER
+        # get the one server binding
+        binding = self.controller.get_server_binding()
+        if not binding is None: local_folder = binding.local_folder
+        return local_folder
+    
+    def openLocalFolder(self):
+        self.controller.open_local_file(self._get_local_folder())
         
     # also using a flag in the worker thread to update the menu
     @Slot(int)
@@ -181,7 +192,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         #TO DO retrieve storage used
         self.actionUsedStorage.setText("123Mb (0.03%) of 4Gb")
         self.actionStatus.setText(self._syncStatus())
-        self.actionCommand.setText(self._syncCommand())
+        self.actionCommand.setText(self._syncCommand())   
+        self.actionOpenCloudDeskFolder.setText('Open %s folder' % os.path.basename(self._get_local_folder()))        
         # if thread is sleeping, cannot use command action
 #        if (not self.worker == None and self.worker.operation.waiting):
 #            self.actionCommand.setEnabled(False)
