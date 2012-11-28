@@ -801,7 +801,7 @@ class Controller(object):
             self._scan_remote_recursive(local_root, session, client,
                                         child_pair, child_info)
 
-    def refresh_remote_folders_from_log(root_binding):
+    def refresh_remote_folders_from_log(self, root_binding):
         """Query the remote server audit log looking for state updates."""
         # TODO
         raise NotImplementedError()
