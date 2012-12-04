@@ -156,6 +156,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.communicator.message.connect(self.handle_message)
         self.communicator.invalid_credentials.connect(self.handle_invalid_credentials)
         
+        # Show 'up-to-date' notification message only once
+        self.firsttime_pending_message = True
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._onTimer)
         self.startDelay = False
@@ -349,9 +351,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         info.has_more_pending = or_more
 
         # show message notification
-        self.communicator.message.emit(self.tr("ClouDesk Operation"), 
-                                       info.get_status_message(), 
-                                       QtGui.QSystemTrayIcon.Information)
+        if n_pending > 0 or (self.firsttime_pending_message and info.online):
+            self.communicator.message.emit(self.tr("ClouDesk Operation"), 
+                                           info.get_status_message(), 
+                                           QtGui.QSystemTrayIcon.Information)
+
+        self.firsttime_pending_message = n_pending > 0
         
         if not info.online:
             log.debug("Switching to online mode for: %s", local_folder)
