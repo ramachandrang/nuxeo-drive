@@ -18,10 +18,12 @@ from sqlalchemy.orm import scoped_session
 from nxdrive.client import NuxeoClient
 from nxdrive.client import LocalClient
 
+WindowsError = None
 try:
     from exceptions import WindowsError
 except ImportError:
-    WindowsError = None  # this will never be raised under unix
+    # This will never be raised under unix
+    pass
 
 
 log = logging.getLogger(__name__)
@@ -93,6 +95,23 @@ class ServerBinding(Base):
         self.remote_password = remote_password
         self.remote_token = remote_token
 
+    def invalidate_credentials(self):
+        """Ensure that all stored credentials are zeroed."""
+        self.remote_password = None
+        self.remote_token = None
+
+    def has_invalid_credentials(self):
+        """Check whether at least one credential is active"""
+        return self.remote_password is None and self.remote_token is None
+
+    def __eq__(self, other):
+        return (isinstance(other, ServerBinding) and
+                self.local_folder == other.local_folder and
+                self.server_url == other.server_url and
+                self.remote_user == other.remote_user) 
+        
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 class RootBinding(Base):
     __tablename__ = 'root_bindings'

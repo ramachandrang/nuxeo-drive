@@ -12,6 +12,7 @@ except ImportError:
     debugger = pdb
 
 from nxdrive.controller import Controller
+from nxdrive.daemon import daemonize
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import configure
 from nxdrive.logging_config import get_logger
@@ -22,6 +23,9 @@ from nxdrive.protocol_handler import register_protocol_handlers
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_DELAY = 5.0
 USAGE = """ndrive [command]
+
+If no command is provided, the graphical application is started along with a
+synchronization process.
 
 Possible commands:
 - console
@@ -42,7 +46,6 @@ PROTOCOL_COMMANDS = {
     'nxdriveedit': 'edit',
     'nxdrivebind': 'bind_server',
 }
-
 
 
 def make_cli_parser(add_subparsers=True):
@@ -75,6 +78,15 @@ def make_cli_parser(add_subparsers=True):
         "--debug", default=False, action="store_true",
         help="Fire a debugger (ipdb or pdb) one uncaught error."
     )
+    common_parser.add_argument(
+        "--delay", default=DEFAULT_DELAY, type=float,
+        help="Delay in seconds between consecutive sync operations.")
+    common_parser.add_argument(
+        # XXX: Make it true by default as the fault tolerant mode is not yet
+        # implemented
+        "--stop-on-error", default=True, action="store_true",
+        help="Stop the process on first unexpected error."
+        "Useful for developers and Continuous Integration.")
 
     parser = argparse.ArgumentParser(
         parents=[common_parser],
@@ -160,7 +172,7 @@ def make_cli_parser(add_subparsers=True):
 
     # Start / Stop the synchronization daemon
     start_parser = subparsers.add_parser(
-        'start', help='Start the synchronization daemon',
+        'start', help='Start the synchronization as a GUI-less daemon',
         parents=[common_parser],
     )
     start_parser.set_defaults(command='start')
@@ -171,42 +183,17 @@ def make_cli_parser(add_subparsers=True):
     stop_parser.set_defaults(command='stop')
     console_parser = subparsers.add_parser(
         'console',
-        help='Start the synchronization without detaching the process.',
+        help='Start a GUI-less synchronization without detaching the process.',
         parents=[common_parser],
     )
     console_parser.set_defaults(command='console')
-    console_parser.add_argument(
-        "--delay", default=DEFAULT_DELAY, type=float,
-        help="Delay in seconds between consecutive sync operations.")
-#    console_parser.add_argument(
-#        # XXX: Make it true by default as the fault tolerant mode is not yet
-#        # implemented
-#        "--stop-on-error", default=True, action="store_true",
-#        help="Stop the process on first unexpected error."
-#        "Useful for developers and Continuous Integration.")
-    
-    console_parser.add_argument(
-        # XXX: Make it true by default as the fault tolerant mode is not yet
-        # implemented
-        "--stop-on-error", default=True, action="store",
-        help="Stop the process on first unexpected error."
-        "Useful for developers and Continuous Integration.")
         
     gui_parser = subparsers.add_parser(
         'gui',
-        help='Start as a menubar application.',
+        help='Start as a TrayIcon application.',
         parents=[common_parser],
     )
     gui_parser.set_defaults(command='gui')
-    gui_parser.add_argument(
-        "--delay", default=DEFAULT_DELAY, type=float,
-        help="Delay in seconds between consecutive sync operations.")
-    gui_parser.add_argument(
-        # XXX: Make it true by default as the fault tolerant mode is not yet
-        # implemented
-        "--stop-on-error", default=True, action="store",
-        help="Stop the process on first unexpected error."
-        "Useful for developers and Continuous Integration.")
 
     # embedded test runner base on nose:
     test_parser = subparsers.add_parser(
@@ -231,11 +218,15 @@ def make_cli_parser(add_subparsers=True):
 class CliHandler(object):
     """Command Line Interface handler: parse options and execute operation"""
 
-    def handle(self, args):
-        # XXX filter psn argument provided by OSX .app service launcher
+
+    def parse_cli(self, argv):
+        """Parse the command line argument using argparse and protocol URL"""
+        # Filter psn argument provided by OSX .app service launcher
         # https://developer.apple.com/library/mac/documentation/Carbon/Reference/LaunchServicesReference/LaunchServicesReference.pdf
-        # TODO reconfigure generated Info.plist
-        args = [a for a in args if not a.startswith("-psn_")]
+        # When run from the .app bundle generated with py2app with
+        # argv_emulation=True this is already filtered out but we keep it
+        # for running CLI from the source folder in development.
+        argv = [a for a in argv if not a.startswith("-psn_")]
 
         # Preprocess the args to detect protocol handler calls and be more
         # tolerant to missing subcommand
@@ -243,7 +234,7 @@ class CliHandler(object):
         protocol_url = None
 
         filtered_args = []
-        for arg in args:
+        for arg in argv[1:]:
             if arg.startswith('nxdrive://'):
                 protocol_url = arg
                 continue
@@ -270,25 +261,33 @@ class CliHandler(object):
             for k, v in protocol_info.items():
                 setattr(options, k, v)
 
-        # Configure the logs
+        return options
+
+    def _configure_logger(self, options):
+        """Configure the logging framework from the provided options"""
         filename = options.log_filename
         if filename is None:
             filename = os.path.join(
                 options.nxdrive_home, 'logs', 'nxdrive.log')
 
-        command = getattr(options, 'command', 'default')
         configure(
             filename,
             file_level=options.log_level_file,
             console_level=options.log_level_console,
-            process_name=command,
+            command_name=options.command,
         )
+
+    def handle(self, argv):
+        """Parse options, setup logs and controller and dispatch execution."""
+        options = self.parse_cli(argv)
+        # 'start' is the default command if None is provided
+        command = options.command = getattr(options, 'command', 'launch')
+
+        # Configure the logging frameork
+        self._configure_logger(options)
+
         # Initialize a controller for this process
         self.controller = Controller(options.nxdrive_home)
-
-        # Register the protocol handlers: required when running for the first
-        # time on Windows and Linux and each time (event listener) on OSX
-        register_protocol_handlers(self.controller)
 
         # Find the command to execute based on the
         handler = getattr(self, command, None)
@@ -296,9 +295,21 @@ class CliHandler(object):
             raise NotImplementedError(
                 'No handler implemented for command ' + options.command)
 
-        log = get_logger(__name__)
-        log.debug("Running command '%s' with options %r", command, options)
-        return handler(options)
+        self.log = get_logger(__name__)
+        self.log.debug("Command line: " + ' '.join(argv))
+  
+        # Ensure that the protocol handler are registered:
+        # this is useful for the edit / open link in the Nuxeo interface
+        register_protocol_handlers(self.controller)
+        try:
+            return handler(options)
+        except Exception, e:
+            if options.debug:
+                # Make it possible to use the postmortem debugger
+                raise
+            else:
+                self.log.error("Error executing '%s': %s", command, e,
+                          exc_info=True)
     
     def looper(self, options=None):
         def wrapper(operation):
@@ -307,38 +318,52 @@ class CliHandler(object):
             return self.controller.loop(fault_tolerant=fault_tolerant, delay=delay, sync_operation=operation)
         return wrapper
 
+
     def default(self, options=None):
         # TODO: use the start method as default once implemented
         return self.console(options=options)
+ 
+    def launch(self, options=None):
+        """Launch the QT app in the main thread and sync in another thread."""
+        # TODO: use the start method as default once implemented
+        from nxdrive.gui.application import Application
+        app = Application(self.controller, options)
+        app.exec_()
 
     def start(self, options=None):
-        self.controller.start()
-        return 0
+        """Launch the synchronization in a daemonized process (under POSIX)"""
+        # Close DB connections before Daemonization
+        self.controller.dispose()
+        daemonize()
 
-    def stop(self, options=None):
-        self.controller.stop()
+        self.controller = Controller(options.nxdrive_home)
+        self._configure_logger(options)
+        self.log.debug("Synchronization daemon started.")
+
+        fault_tolerant = not getattr(options, 'stop_on_error', True)
+        self.controller.loop(fault_tolerant=fault_tolerant,
+                             delay=getattr(options, 'delay', DEFAULT_DELAY))
         return 0
 
     def console(self, options):
-        value = getattr(options, 'stop_on_error', True)
-        if str(value).lower() in ('true', 't', 'yes', 'y'): fault_tolerant = False
-        elif str(value).lower() in ('false', 'no', 'f', 'n'): fault_tolerant = True
-        else: fault_tolerant = None
+#        value = getattr(options, 'stop_on_error', True)
+#        if str(value).lower() in ('true', 't', 'yes', 'y'): fault_tolerant = False
+#        elif str(value).lower() in ('false', 'no', 'f', 'n'): fault_tolerant = True
+#        else: fault_tolerant = None
 
-        if len(self.controller.list_server_bindings()) == 0:
-            # Launch the GUI to create a binding
-            from nxdrive.gui.authentication import prompt_authentication
-            ok = prompt_authentication(self.controller, DEFAULT_NX_DRIVE_FOLDER)
-            if not ok:
-                sys.exit(0)
-
+        fault_tolerant = not getattr(options, 'stop_on_error', True)
         self.controller.loop(fault_tolerant=fault_tolerant,
                              delay=getattr(options, 'delay', DEFAULT_DELAY))
         return 0
     
     def gui(self, options):
         from nxdrive.gui.menubar import startApp
-        return startApp(self.controller, self.looper(options))
+#        return startApp(self.controller, self.looper(options))
+        return startApp(self.controller, options)
+
+    def stop(self, options=None):
+        self.controller.stop()
+        return 0
 
     def status(self, options):
         states = self.controller.status(options.files)
@@ -410,10 +435,10 @@ class CliHandler(object):
         return 0 if nose.run(argv=argv) else 1
 
 
-def main(args=None):
-    if args is None:
-        args = sys.argv[1:]
-    return CliHandler().handle(args)
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+    return CliHandler().handle(argv)
 
 if __name__ == "__main__":
     sys.exit(main())

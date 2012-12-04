@@ -1,6 +1,7 @@
 """GUI prompt to bind a new server"""
 import os
 from nxdrive.client import Unauthorized
+from nxdrive.gui.resources import find_icon
 from nxdrive.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -10,9 +11,13 @@ QtGui, QDialog = None, object
 try:
     from PySide import QtGui
     QDialog = QtGui.QDialog
+    log.debug("QT / PySide successfully imported")
 except ImportError:
-    log.warn("QT / PySide is not installed: GUI is disabled")
+    log.warning("QT / PySide is not installed: GUI is disabled")
     pass
+
+
+is_dialog_open = False
 
 
 def find_icon(icon_filename):
@@ -60,9 +65,11 @@ class Dialog(QDialog):
         if title is not None:
             self.setWindowTitle(title)
         icon = find_icon('nuxeo_drive_icon_64.png')
-        self.setWindowIcon(QtGui.QIcon(icon))
+        if icon is not None:
+            self.setWindowIcon(QtGui.QIcon(icon))
         self.resize(600, -1)
         self.accepted = False
+        self.values = None
 
     def create_authentication_box(self, fields_spec):
         self.authentication_group_box = QtGui.QGroupBox()
@@ -93,8 +100,9 @@ class Dialog(QDialog):
 
     def accept(self):
         if self.callback is not None:
-            values = dict((id_, w.text()) for id_, w in self.fields.items())
-            if not self.callback(values, self):
+            self.values = dict((id_, w.text())
+                               for id_, w in self.fields.items())
+            if not self.callback(self.values, self):
                 return
         self.accepted = True
         super(Dialog, self).accept()
@@ -104,16 +112,22 @@ class Dialog(QDialog):
 
 
 def prompt_authentication(controller, local_folder, url=None, username=None,
-                          is_url_readonly=False, parent=None):
+                          is_url_readonly=False, parent=None, app=None, update=True):
     """Prompt a QT dialog to ask for user credentials for binding a server"""
+    global is_dialog_open
+
     if QtGui is None:
         # Qt / PySide is not installed
         log.error("QT / PySide is not installed:"
                   " use commandline options for binding a server.")
         return False
 
+    if is_dialog_open:
+        # Do not reopen the dialog multiple times
+        return False
+
     # TODO: learn how to use QT i18n support to handle translation of labels
-    field_specs = [
+    fields_spec = [
         {
             'id': 'url',
             'label': 'Nuxeo Server URL:',
@@ -146,29 +160,37 @@ def prompt_authentication(controller, local_folder, url=None, username=None,
                 dialog.show_message("A user name is required")
                 return False
             password = values['password']
-            dialog.show_message("Connecting to %s ..." % url)
-            controller.bind_server(local_folder, url, username, password)
+            if update:
+                dialog.show_message("Connecting to %s ..." % url)
+                controller.bind_server(local_folder, url, username, password)
             return True
         except Unauthorized:
             dialog.show_message("Invalid credentials.")
             return False
         except:
+            msg = "Unable to connect to " + url
+            log.debug(msg, exc_info=True)
             # TODO: catch a new ServerUnreachable catching network isssues
-            dialog.show_message("Unable to connect to " + url)
+            dialog.show_message(msg)
             return False
 
-#    QtGui.QApplication([])
-    from nxdrive.utils.helpers import QApplicationSingleton
-    QApplicationSingleton()
-    
-    dialog = Dialog(field_specs, title="Nuxeo Drive - Authentication",
-                    callback=bind_server, parent=parent)
+    if app is None:
+        log.debug("Launching QT prompt for server binding.")
+        from nxdrive.utils.helpers import QApplicationSingleton
+        QApplicationSingleton()
+#        QtGui.QApplication([])
+
+    dialog = Dialog(fields_spec, title="Nuxeo Drive - Authentication",
+                    callback=bind_server)
+    is_dialog_open = True
     try:
         dialog.exec_()
     except:
         dialog.reject()
         raise
-    return dialog.accepted
+    finally:
+        is_dialog_open = False
+    return dialog.accepted, dialog.values
 
 if __name__ == '__main__':
     from nxdrive.controller import Controller

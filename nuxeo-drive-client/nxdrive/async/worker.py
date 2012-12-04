@@ -1,52 +1,40 @@
 '''
-Created on Nov 6, 2012
+Created on Nov 29, 2012
 
 @author: mconstantin
 '''
-from PySide.QtCore import QThread, QMutexLocker
+from threading import Thread
 
-class Worker(QThread):
-    def __init__(self, operation, parent=None):
-        QThread.__init__(self, parent)
+class Worker(Thread):
+    def __init__(self, operation, group=None, target=None, name=None, args=(), kvargs={}):
+        kvargs['sync_operation'] = operation
+        Thread.__init__(self, group, target, name, args, kvargs)
         self.operation = operation
         
-    #Note: cannot use QMutex with 'with' Python statement
-    # May use the convenience wrapper QMutexLocker which locks when created and unlocks when destructed
-    # but I'm not sure how it works in PySide (vs C++) if non-deterministic destruction..
-    
     def isPaused(self):
         status = False
-        if not self.operation == None:
-            #QMutexLocker(self.operation.mutex)
-            self.operation.mutex.lock()  
-            status = self.operation.paused
-            self.operation.mutex.unlock()                
+        if self.operation is not None:
+            with self.operation.lock:
+                status = self.operation.paused               
         return status
     
     def isPausing(self):
         status = False
-        if not self.operation == None:
-            #QMutexLocker(self.operation.mutex)
-            self.operation.mutex.lock()  
-            status = self.operation.pause and not self.operation.paused
-            self.operation.mutex.unlock()                
+        if self.operation is not None:
+            with self.operation.lock:
+                status = self.operation.pause and not self.operation.paused
+              
         return status
     
     def pause(self):
-        if not self.operation == None:
-            #QMutexLocker(self.operation.mutex) 
-            self.operation.mutex.lock()  
-            self.operation.pause = True
-            self.operation.mutex.unlock()      
+        if self.operation is not None:
+            with self.operation.lock:
+                self.operation.pause = True    
         
     def resume(self):
-        if not self.operation == None:
-            QMutexLocker(self.operation.mutex)                 
-            self.operation.pause = False
-            self.operation.condition.wakeAll()
+        if self.operation is not None:
+            with self.operation.lock:             
+                self.operation.pause = False
+            self.operation.event.set()
     
-    def run(self):
-        self.operation.work()
-   
-                
-
+        

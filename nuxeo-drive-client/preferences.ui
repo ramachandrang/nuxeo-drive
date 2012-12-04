@@ -1,0 +1,367 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>preferencesDlg</class>
+ <widget class="QDialog" name="preferencesDlg">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>605</width>
+    <height>438</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <widget class="QDialogButtonBox" name="buttonBox">
+   <property name="geometry">
+    <rect>
+     <x>430</x>
+     <y>397</y>
+     <width>161</width>
+     <height>32</height>
+    </rect>
+   </property>
+   <property name="orientation">
+    <enum>Qt::Horizontal</enum>
+   </property>
+   <property name="standardButtons">
+    <set>QDialogButtonBox::Apply|QDialogButtonBox::Cancel</set>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>31</x>
+     <y>13</y>
+     <width>56</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Account:</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_2">
+   <property name="geometry">
+    <rect>
+     <x>31</x>
+     <y>40</y>
+     <width>108</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Computer Name:</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="lblComputer">
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>40</y>
+     <width>281</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>computer name here</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="lblStorage">
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>124</y>
+     <width>281</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>used storage here</string>
+   </property>
+  </widget>
+  <widget class="Line" name="line">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>140</y>
+     <width>571</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="orientation">
+    <enum>Qt::Horizontal</enum>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="cbAutostart">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>187</y>
+     <width>491</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Start CloudDesk sync automatically when starting this computer</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="cbShowsync">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>217</y>
+     <width>501</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Show files sync status icons</string>
+   </property>
+  </widget>
+  <widget class="Line" name="line_2">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>237</y>
+     <width>571</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="orientation">
+    <enum>Qt::Horizontal</enum>
+   </property>
+  </widget>
+  <widget class="QRadioButton" name="rbAutodetect">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>257</y>
+     <width>471</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Automatically detect proxy settings</string>
+   </property>
+  </widget>
+  <widget class="QRadioButton" name="rbDirect">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>287</y>
+     <width>471</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Direct connection</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_3">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>94</y>
+     <width>121</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>CloudDesk Url</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="txtUrl">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>94</y>
+     <width>291</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="btnDisconnect">
+   <property name="geometry">
+    <rect>
+     <x>480</x>
+     <y>10</y>
+     <width>114</width>
+     <height>32</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Disconnect</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_4">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>66</y>
+     <width>131</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>CloudDesk folder</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="txtCloudfolder">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>63</y>
+     <width>291</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="Line" name="line_3">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>307</y>
+     <width>571</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="orientation">
+    <enum>Qt::Horizontal</enum>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="cbEnablelog">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>327</y>
+     <width>201</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Enable logging</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_5">
+   <property name="geometry">
+    <rect>
+     <x>32</x>
+     <y>357</y>
+     <width>121</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Log file</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="txtLogfile">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>354</y>
+     <width>291</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="btnBrowsefolder">
+   <property name="geometry">
+    <rect>
+     <x>480</x>
+     <y>59</y>
+     <width>51</width>
+     <height>32</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>...</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="btnBrowselog">
+   <property name="geometry">
+    <rect>
+     <x>480</x>
+     <y>350</y>
+     <width>51</width>
+     <height>32</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>...</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="txtAccount">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>14</y>
+     <width>291</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLabel" name="lblMessage">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>155</y>
+     <width>551</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string/>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>accepted()</signal>
+   <receiver>preferencesDlg</receiver>
+   <slot>accept()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>248</x>
+     <y>254</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>157</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>preferencesDlg</receiver>
+   <slot>reject()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>316</x>
+     <y>260</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>286</x>
+     <y>274</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>

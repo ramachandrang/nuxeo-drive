@@ -1,9 +1,12 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
-     <file alias="indicator_icon1.png">nxdrive/data/icons/nuxeo_drive_icon_16.png</file>
-     <file alias="indicator_icon2.png">nxdrive/data/icons/nuxeo_drive_icon_16_R90.png</file>
-     <file alias="indicator_icon3.png">nxdrive/data/icons/nuxeo_drive_icon_16_R180.png</file>
-     <file alias="indicator_icon4.png">nxdrive/data/icons/nuxeo_drive_icon_16_R270.png</file>
+     <file alias="indicator_icon_enabled.png">nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png</file>
+     <file alias="indicator_icon_disabled.png">nxdrive/data/icons/nuxeo_drive_icon_16_disabled.png</file> 
+     <file alias="indicator_icon_stopping.png">nxdrive/data/icons/nuxeo_drive_icon_16_stopping.png</file>
+     <file alias="indicator_icon_transferring_1.png">nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png</file>
+     <file alias="indicator_icon_transferring_2.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R90.png</file>
+     <file alias="indicator_icon_transferring_3.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R180.png</file>
+     <file alias="indicator_icon_transferring_4.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R270.png</file>
      <file alias="about_icon.png">nxdrive/data/icons/nuxeo_drive_icon_48.png</file>
 </qresource>
 </RCC>
