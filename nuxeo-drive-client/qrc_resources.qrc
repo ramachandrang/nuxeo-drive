@@ -8,5 +8,6 @@
      <file alias="indicator_icon_transferring_3.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R180.png</file>
      <file alias="indicator_icon_transferring_4.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R270.png</file>
      <file alias="about_icon.png">nxdrive/data/icons/nuxeo_drive_icon_48.png</file>
+     <file alias="wheel.gif">nxdrive/data/icons/animation.gif</file>
 </qresource>
 </RCC>

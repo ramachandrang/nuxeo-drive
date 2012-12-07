@@ -71,5 +71,18 @@ class Communicator(QObject):
     stop = Signal()
     invalid_credentials = Signal(str)
     message = Signal(str, str, QSystemTrayIcon.MessageIcon)
-#    uistatus = Signal(int)
+
+class ProxyInfo(QObject):
+    PROXY_TYPE_HTTP = 1
+    PROXY_TYPE_SOCKS4 = 2
+    PROXY_TYPE_SOCKS5 = 3
     
+    proxy_url = None
+    proxy_port = None
+    username = None
+    password = None
+    
+    def __init__(self):
+        self.proxy_type = ProxyInfo.PROXY_TYPE_HTTP
+        self.proxy_use_authn = False
+        

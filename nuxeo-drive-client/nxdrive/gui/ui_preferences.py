@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'preferences.ui'
 #
-# Created: Sat Dec  1 01:37:32 2012
+# Created: Tue Dec  4 22:44:33 2012
 #      by: pyside-uic 0.2.13 running on PySide 1.1.0
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,9 +12,9 @@ from PySide import QtCore, QtGui
 class Ui_preferencesDlg(object):
     def setupUi(self, preferencesDlg):
         preferencesDlg.setObjectName("preferencesDlg")
-        preferencesDlg.resize(605, 438)
+        preferencesDlg.resize(609, 438)
         self.buttonBox = QtGui.QDialogButtonBox(preferencesDlg)
-        self.buttonBox.setGeometry(QtCore.QRect(430, 397, 161, 32))
+        self.buttonBox.setGeometry(QtCore.QRect(430, 401, 161, 32))
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
         self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Apply|QtGui.QDialogButtonBox.Cancel)
         self.buttonBox.setObjectName("buttonBox")
@@ -37,18 +37,20 @@ class Ui_preferencesDlg(object):
         self.line.setObjectName("line")
         self.cbAutostart = QtGui.QCheckBox(preferencesDlg)
         self.cbAutostart.setGeometry(QtCore.QRect(30, 187, 491, 20))
+        self.cbAutostart.setChecked(True)
         self.cbAutostart.setObjectName("cbAutostart")
         self.cbShowsync = QtGui.QCheckBox(preferencesDlg)
         self.cbShowsync.setGeometry(QtCore.QRect(30, 217, 501, 20))
+        self.cbShowsync.setChecked(True)
         self.cbShowsync.setObjectName("cbShowsync")
         self.line_2 = QtGui.QFrame(preferencesDlg)
         self.line_2.setGeometry(QtCore.QRect(20, 237, 571, 16))
         self.line_2.setFrameShape(QtGui.QFrame.HLine)
         self.line_2.setFrameShadow(QtGui.QFrame.Sunken)
         self.line_2.setObjectName("line_2")
-        self.rbAutodetect = QtGui.QRadioButton(preferencesDlg)
-        self.rbAutodetect.setGeometry(QtCore.QRect(30, 257, 471, 20))
-        self.rbAutodetect.setObjectName("rbAutodetect")
+        self.rbProxy = QtGui.QRadioButton(preferencesDlg)
+        self.rbProxy.setGeometry(QtCore.QRect(30, 257, 291, 20))
+        self.rbProxy.setObjectName("rbProxy")
         self.rbDirect = QtGui.QRadioButton(preferencesDlg)
         self.rbDirect.setGeometry(QtCore.QRect(30, 287, 471, 20))
         self.rbDirect.setObjectName("rbDirect")
@@ -60,7 +62,7 @@ class Ui_preferencesDlg(object):
         self.txtUrl.setGeometry(QtCore.QRect(190, 94, 291, 22))
         self.txtUrl.setObjectName("txtUrl")
         self.btnDisconnect = QtGui.QPushButton(preferencesDlg)
-        self.btnDisconnect.setGeometry(QtCore.QRect(480, 10, 114, 32))
+        self.btnDisconnect.setGeometry(QtCore.QRect(493, 10, 101, 32))
         self.btnDisconnect.setObjectName("btnDisconnect")
         self.label_4 = QtGui.QLabel(preferencesDlg)
         self.label_4.setGeometry(QtCore.QRect(30, 66, 131, 20))
@@ -85,7 +87,7 @@ class Ui_preferencesDlg(object):
         self.txtLogfile.setGeometry(QtCore.QRect(190, 354, 291, 22))
         self.txtLogfile.setObjectName("txtLogfile")
         self.btnBrowsefolder = QtGui.QPushButton(preferencesDlg)
-        self.btnBrowsefolder.setGeometry(QtCore.QRect(480, 59, 51, 32))
+        self.btnBrowsefolder.setGeometry(QtCore.QRect(499, 64, 21, 20))
         self.btnBrowsefolder.setObjectName("btnBrowsefolder")
         self.btnBrowselog = QtGui.QPushButton(preferencesDlg)
         self.btnBrowselog.setGeometry(QtCore.QRect(480, 350, 51, 32))
@@ -94,10 +96,14 @@ class Ui_preferencesDlg(object):
         self.txtAccount.setEnabled(False)
         self.txtAccount.setGeometry(QtCore.QRect(190, 14, 291, 22))
         self.txtAccount.setObjectName("txtAccount")
-        self.lblMessage = QtGui.QLabel(preferencesDlg)
-        self.lblMessage.setGeometry(QtCore.QRect(30, 155, 551, 31))
-        self.lblMessage.setText("")
-        self.lblMessage.setObjectName("lblMessage")
+        self.checkBox = QtGui.QCheckBox(preferencesDlg)
+        self.checkBox.setEnabled(True)
+        self.checkBox.setGeometry(QtCore.QRect(30, 156, 411, 20))
+        self.checkBox.setChecked(True)
+        self.checkBox.setObjectName("checkBox")
+        self.btnProxy = QtGui.QPushButton(preferencesDlg)
+        self.btnProxy.setGeometry(QtCore.QRect(473, 255, 121, 32))
+        self.btnProxy.setObjectName("btnProxy")
 
         self.retranslateUi(preferencesDlg)
         QtCore.QObject.connect(self.buttonBox, QtCore.SIGNAL("accepted()"), preferencesDlg.accept)
@@ -105,14 +111,14 @@ class Ui_preferencesDlg(object):
         QtCore.QMetaObject.connectSlotsByName(preferencesDlg)
 
     def retranslateUi(self, preferencesDlg):
-        preferencesDlg.setWindowTitle(QtGui.QApplication.translate("preferencesDlg", "Dialog", None, QtGui.QApplication.UnicodeUTF8))
+        preferencesDlg.setWindowTitle(QtGui.QApplication.translate("preferencesDlg", "Preferences", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("preferencesDlg", "Account:", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("preferencesDlg", "Computer Name:", None, QtGui.QApplication.UnicodeUTF8))
         self.lblComputer.setText(QtGui.QApplication.translate("preferencesDlg", "computer name here", None, QtGui.QApplication.UnicodeUTF8))
         self.lblStorage.setText(QtGui.QApplication.translate("preferencesDlg", "used storage here", None, QtGui.QApplication.UnicodeUTF8))
         self.cbAutostart.setText(QtGui.QApplication.translate("preferencesDlg", "Start CloudDesk sync automatically when starting this computer", None, QtGui.QApplication.UnicodeUTF8))
         self.cbShowsync.setText(QtGui.QApplication.translate("preferencesDlg", "Show files sync status icons", None, QtGui.QApplication.UnicodeUTF8))
-        self.rbAutodetect.setText(QtGui.QApplication.translate("preferencesDlg", "Automatically detect proxy settings", None, QtGui.QApplication.UnicodeUTF8))
+        self.rbProxy.setText(QtGui.QApplication.translate("preferencesDlg", "Use Proxy Server", None, QtGui.QApplication.UnicodeUTF8))
         self.rbDirect.setText(QtGui.QApplication.translate("preferencesDlg", "Direct connection", None, QtGui.QApplication.UnicodeUTF8))
         self.label_3.setText(QtGui.QApplication.translate("preferencesDlg", "CloudDesk Url", None, QtGui.QApplication.UnicodeUTF8))
         self.btnDisconnect.setText(QtGui.QApplication.translate("preferencesDlg", "Disconnect", None, QtGui.QApplication.UnicodeUTF8))
@@ -121,4 +127,6 @@ class Ui_preferencesDlg(object):
         self.label_5.setText(QtGui.QApplication.translate("preferencesDlg", "Log file", None, QtGui.QApplication.UnicodeUTF8))
         self.btnBrowsefolder.setText(QtGui.QApplication.translate("preferencesDlg", "...", None, QtGui.QApplication.UnicodeUTF8))
         self.btnBrowselog.setText(QtGui.QApplication.translate("preferencesDlg", "...", None, QtGui.QApplication.UnicodeUTF8))
+        self.checkBox.setText(QtGui.QApplication.translate("preferencesDlg", "Show notifications", None, QtGui.QApplication.UnicodeUTF8))
+        self.btnProxy.setText(QtGui.QApplication.translate("preferencesDlg", "Proxy Config...", None, QtGui.QApplication.UnicodeUTF8))
 

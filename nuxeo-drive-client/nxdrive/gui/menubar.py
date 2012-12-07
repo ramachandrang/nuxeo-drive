@@ -12,21 +12,38 @@ import itertools
 import PySide
 from PySide import QtGui
 from PySide import QtCore
-from PySide.QtGui import QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QImage, QPainter, QIcon, QPixmap
-from PySide.QtCore import QTimer, Slot, Qt
+from PySide.QtGui import QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QImage, QPainter, QIcon, QPixmap, QPushButton, QLabel, QMovie
+from PySide.QtCore import QTimer, Slot, Qt, QRectF, QPointF
+import webbrowser
 from nxdrive import Constants
 from nxdrive.gui.ui_preferences import Ui_preferencesDlg
+from nxdrive.gui.ui_proxy import Ui_ProxyDialog
 from nxdrive.async.operations import SyncOperations
 from utils.helpers import Communicator
+from utils.helpers import ProxyInfo
 # this import is flagged erroneously as unused import - do not remove
 import nxdrive.gui.qrc_resources
 from nxdrive.model import ServerBinding
 from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
-                
-DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
+            
 
+def default_expanded_nuxeo_drive_folder():
+    # get home directory
+    # this does not work in Windows
+#        home = os.environ["HOME"]
+#        home = os.path.expanduser("~")
+#        if (home[-1] != os.sep):
+#            home += os.sep
+#        home += Constants.DEFAULT_NXDRIVE_FOLDER
+#        return home
+    return os.path.expanduser(DEFAULT_NX_DRIVE_FOLDER)
+
+DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
+DEFAULT_EX_NX_DRIVE_FOLDER = default_expanded_nuxeo_drive_folder()
+
+    
 log = get_logger(__name__)
 
 def sync_loop(controller, **kwargs):
@@ -54,7 +71,18 @@ def sync_loop(controller, **kwargs):
 class BindingInfo(object):
     """Summarize the state of each server connection"""
 
-    online = False
+    _online = False
+    _prev_online = False
+    
+    @property
+    def online(self):
+        return self._online
+    
+    @online.setter
+    def online(self, value):
+        self._prev_online = self._online
+        self._online = value
+        
     n_pending = 0
     has_more_pending = False
 
@@ -62,6 +90,9 @@ class BindingInfo(object):
         self.folder_path = folder_path
         self.short_name = os.path.basename(folder_path)
 
+    def online_status_change(self):
+        return self._online != self._prev_online
+    
     def get_status_message(self):
         # TODO: i18n
         if self.online:
@@ -80,6 +111,9 @@ class BindingInfo(object):
 class CloudDeskTray(QtGui.QSystemTrayIcon):
     def __init__(self, controller, options):
         super(CloudDeskTray, self).__init__()
+        # this should be retrieved from persistence storage, 
+        # i.e. last used connection's local folder
+        self.local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
         self.controller = controller
         self.options = options
         self.communicator = Communicator()
@@ -101,7 +135,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionCommand.setObjectName("actionCommand")
         self.actionOpenCloudDeskFolder = QtGui.QAction(self.tr("Open CloudDesk folder"), self)
         self.actionOpenCloudDeskFolder.setObjectName("actionOpenCloudDeskFolder")
-        self.actionShowClouDeskInfo = QtGui.QAction(self.tr("Show ClouDesk info"), self)
+        self.actionShowClouDeskInfo = QtGui.QAction(self.tr("Open ClouDesk"), self)
         self.actionShowClouDeskInfo.setObjectName("actionShowClouDeskInfo")
         self.actionViewSharedDocuments = QtGui.QAction(self.tr("View others shared documents"), self)
         self.actionViewSharedDocuments.setObjectName("actionViewSharedDocuments")
@@ -143,6 +177,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionCommand.triggered.connect(self.doWork)
         self.actionAbout.triggered.connect(self.about)
         self.actionOpenCloudDeskFolder.triggered.connect(self.openLocalFolder)  
+        self.actionShowClouDeskInfo.triggered.connect(self.openCloudDesk)
         # copy to local binding
         for sb in self.controller.list_server_bindings():
             self.get_binding_info(sb.local_folder)
@@ -195,14 +230,24 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         return self.binding_info[local_folder]
                
     def _get_local_folder(self):
-        local_folder = DEFAULT_NX_DRIVE_FOLDER
-        # get the one server binding
-        binding = self.controller.get_server_binding()
-        if not binding is None: local_folder = binding.local_folder
-        return local_folder
+        # verify that a binding still exists for the local folder
+        binding = self.controller.get_server_binding(self.local_folder)
+        if binding is None: 
+            # get the 'first' existing binding, if any
+            binding = self.controller.get_server_binding()
+            self.local_folder = binding.local_folder if binding is not None else DEFAULT_EX_NX_DRIVE_FOLDER
+        return self.local_folder
     
     def openLocalFolder(self):
         self.controller.open_local_file(self._get_local_folder())
+        
+    def openCloudDesk(self):
+        server_binding = self.controller.get_server_binding(self._get_local_folder())
+        if server_binding is not None:
+            new = 2 #open in a new tab if possible
+            
+            #TODO use the federated authentication,otherwise it prompts for credentials
+            webbrowser.open(server_binding.server_url, new=new)
                 
     @QtCore.Slot(str)
     def set_icon_state(self, state):
@@ -349,32 +394,33 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # Update pending stats
         info.n_pending = n_pending
         info.has_more_pending = or_more
-
-        # show message notification
-        if n_pending > 0 or (self.firsttime_pending_message and info.online):
-            self.communicator.message.emit(self.tr("ClouDesk Operation"), 
-                                           info.get_status_message(), 
-                                           QtGui.QSystemTrayIcon.Information)
-
-        self.firsttime_pending_message = n_pending > 0
         
         if not info.online:
             log.debug("Switching to online mode for: %s", local_folder)
             # Mark binding as online and update UI
-            info.online = True
             self.update_running_icon()
             self.communicator.menu.emit()
             
-    def notify_sync_completed(self, status):
+        info.online = True
+        # show message notification - DO NOT SHOW THIS
+#        if n_pending > 0 or info.online_status_change():
+#            self.communicator.message.emit(self.tr("ClouDesk Operation"), 
+#                                           info.get_status_message(), 
+#                                           QtGui.QSystemTrayIcon.Information)     
+                   
+            
+    def notify_pending_details(self, status):
+        """NOT USED"""
         local_folder = self._get_local_folder()
 
-        added = len(filter(lambda (x,y,z): x == local_folder and y == u'locally_created', status))
-        modified = len(filter(lambda (x,y,z): x == local_folder and y == u'locally_modified', status))
-        deleted = len(filter(lambda (x,y,z): x == local_folder and y == u'locally_deleted', status))
-        conflicted = len(filter(lambda (x,y,z): x == local_folder and y == u'conflicted', status))
+        if len(status) == 0: return
+        added = filter(lambda (x,y,z): x == local_folder and y == u'locally_created', status)[0][2]
+        modified = filter(lambda (x,y,z): x == local_folder and y == u'locally_modified', status)[0][2]
+        deleted = filter(lambda (x,y,z): x == local_folder and y == u'locally_deleted', status)[0][2]
+        conflicted = filter(lambda (x,y,z): x == local_folder and y == u'conflicted', status)[0][2]
         
         if modified == 0 and added == 0 and deleted == 0 and conflicted == 0: return
-        
+
         if modified > 1: msg = '%d files modified' % modified
         elif modified > 0: msg = '%d file modified' % modified
         else: msg = ''
@@ -393,6 +439,43 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                        msg, 
                                        QtGui.QSystemTrayIcon.Information)
 
+    def notify_sync_completed(self, status):
+        """Create a notification message"""
+        if not status: return
+        
+        multiple_pattern = {u'remotely_created':'%d%s%s added', u'remotely_modified':'%d%s%s updated', u'remotely_deleted':'%d%s%s deleted', u'conflicted':'%d%s%s conflicted' }
+        single_pattern = {u'remotely_created':'%s added', u'remotely_modified':'%s updated', u'remotely_deleted':'%s deleted', u'conflicted':'%s conflicted' }
+        msg = ''
+        
+        nonzero_items = dict(filter(lambda (k,v): v[0] > 0, status.iteritems()))
+        allzero_items = [(k,v) for (k,v) in status.iteritems() if v[0] == 0] 
+        allone_items = [(k,v) for (k,v) in status.iteritems() if v[0] == 1]   
+        
+        if len(allzero_items) + len(allone_items) == len(status) and len(allone_items) == 1:
+            # only 1 file present
+            k,fn = allone_items[0][0], allone_items[0][1][1]
+            try:
+                msg = single_pattern[k] % fn 
+            except KeyError:
+                return
+        else:
+            l = []; i=0
+            for k in nonzero_items.keys():
+                try:
+                    l.append(multiple_pattern[k] % (nonzero_items[k][0], ' file' if i==0 else '', 's' if i == 0 and nonzero_items[k][0] > 1 else ''))
+                    i += 1
+                except KeyError:
+                    continue
+            
+            msg = ', '.join(l)
+            
+        if len(msg) == 0: return
+        
+        # show message notification
+        self.communicator.message.emit(self.tr("ClouDesk Operation"), 
+                                       msg, 
+                                       QtGui.QSystemTrayIcon.Information)
+        
         
     def notify_start_transfer(self):
         self.communicator.icon.emit('enabled_start')
@@ -435,6 +518,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionUsername.setText(self._getUserName())
         #TO DO retrieve storage used
         self.actionUsedStorage.setText("123Mb (0.03%) of 4Gb")
+        
+        self.actionShowClouDeskInfo.setEnabled(len(self.binding_info.values()) > 0)
         self.actionStatus.setText(self._syncStatus())
         self.actionCommand.setText(self._syncCommand())   
         self.actionOpenCloudDeskFolder.setText('Open %s folder' % os.path.basename(self._get_local_folder())) 
@@ -451,17 +536,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # copy to local binding
         for sb in self.controller.list_server_bindings():
             self.get_binding_info(sb.local_folder)
-        #check whether has the same binding as the original
-        if self.server_binding != dlg.server_binding:
-            if self.worker is not None and self.worker.isAlive():
-                # Ask the controller to stop: the synchronization loop will in turn
-                # call notify_sync_stopped and finally handle_stop
-                self.controller.stop()
-                
-            if (self.server_binding is not None and dlg.server_binding is not None and 
-                self.server_binding.local_folder != dlg.server_binding.local_folder):
-                #TODO move the local folder
-                pass
+            
+        #check whether has the same local folder as the original               
+        if (self.server_binding is not None and dlg.server_binding is not None and 
+            self.server_binding.local_folder != dlg.server_binding.local_folder):
+            #TODO move the local folder
+            pass
        
 
     def setupProcessing(self):
@@ -577,9 +657,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
                 
     def _getUserName(self):
-        local_folder = default_nuxeo_drive_folder()
-        local_folder = os.path.abspath(os.path.expanduser(local_folder))
-        server_binding = self.controller.get_server_binding(local_folder)
+#        local_folder = default_nuxeo_drive_folder()
+#        local_folder = os.path.abspath(os.path.expanduser(local_folder))
+        server_binding = self.controller.get_server_binding(self.local_folder)
         return server_binding.remote_user if not server_binding == None else Constants.DEFAULT_ACCOUNT
             
     def _createImageWithOverlay(self, baseImage, overlayImage):
@@ -610,12 +690,18 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.values = None
         self.folder_to_disconnect = None
         self.stop_on_apply = False
-        self.server_binding = self.controller.get_server_binding(self._getDefaultFolder(), raise_if_missing=False)
+        self.local_folder = frontend._get_local_folder() if frontend is not None else DEFAULT_EX_NX_DRIVE_FOLDER
+        self.server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing=False)
         self.prev_server_binding = self.server_binding
+        self.proxy = None
+        self.rbProxy.setChecked(False)
         applyBtn = self.buttonBox.button(QDialogButtonBox.Apply)
         applyBtn.clicked.connect(self.applyChanges)
         self.btnDisconnect.clicked.connect(self.manageBinding)
         self.btnBrowsefolder.clicked.connect(self.browseFolder)
+        self.btnProxy.clicked.connect(self.configProxy)
+        self.rbProxy.toggled.connect(lambda checked : self.btnProxy.setEnabled(checked))
+        
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         
     def _isConnected(self):
@@ -628,11 +714,12 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if evt.spontaneous:
             self.lblComputer.setText(platform.node())
             self.lblStorage.setText("123Mb (0.03%) of 4Gb")    
+            self.rbProxy.setChecked(self.proxy != None)
             
             if not self._isConnected():
                 self.txtUrl.setText(Constants.DEFAULT_CLOUDDESK_URL)
                 self.txtAccount.setText(Constants.DEFAULT_ACCOUNT)
-                self.txtCloudfolder.setText(self._getDefaultFolder())
+                self.txtCloudfolder.setText(self.local_folder)
                 # Launch the GUI to create a binding
                 ok = self._connect()
                 if not ok:
@@ -641,21 +728,16 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
             self._updateBinding()
             super(PreferencesDlg, self).showEvent(evt)
-        
-    def _getDefaultFolder(self):
-        # get home directory
-        # this does not work in Windows
-#        home = os.environ["HOME"]
-        home = os.path.expanduser("~")
-        if (home[-1] != os.sep):
-            home += os.sep
-        home += Constants.DEFAULT_NXDRIVE_FOLDER
-        return home
     
+    def configProxy(self):
+        dlg = ProxyDlg(frontend=self)
+        if dlg.exec_() == QDialog.Rejected:
+            return
+        
     def browseFolder(self):
         defaultFld = self.txtCloudfolder.text()
         if (defaultFld == None):
-            defaultFld = self._getDefaultFolder()
+            defaultFld = self.local_folder
         selectedFld = QFileDialog.getExistingDirectory(self, self.tr("Choose or create directory"),
                         defaultFld, QFileDialog.DontResolveSymlinks)
         if (len(selectedFld) == 0):
@@ -663,8 +745,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.txtCloudfolder.setText(selectedFld)
         
     def accept(self):
-        # test
-        print "changes accepted"
+        pass
         
     def manageBinding(self):
         if (self._isConnected()):
@@ -707,13 +788,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         # Launch the GUI to create a binding
         from nxdrive.gui.authentication import prompt_authentication
         from nxdrive.commandline import default_nuxeo_drive_folder
-        local_folder = self.txtCloudfolder.text() if self.txtCloudfolder.text() else DEFAULT_NX_DRIVE_FOLDER
+        local_folder = self.txtCloudfolder.text() if self.txtCloudfolder.text() else self.local_folder
         remote_user = self.txtAccount.text() if self.txtAccount.text() else Constants.DEFAULT_ACCOUNT
         server_url = self.txtUrl.text() if self.txtUrl.text() else Constants.DEFAULT_CLOUDDESK_URL
-        result, self.values = prompt_authentication(self.controller, local_folder, url=server_url, username=remote_user)
+        result, self.values = prompt_authentication(self.controller, local_folder, url=server_url, username=remote_user, update=False)
         if result:
-            #remove the binding and rebind at apply
-            self.controller.unbind_server(local_folder)
             self.server_binding = ServerBinding(local_folder,
                                                 self.values['url'],
                                                 self.values['username'],
@@ -727,24 +806,126 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         
     def applyChanges(self):
         try:
-            if self.folder_to_disconnect is not None:
+            if self.folder_to_disconnect is not None and self._isConnected():
+                binding = self.controller.get_server_binding(local_folder=self.folder_to_disconnect, raise_if_missing=False)
+                if binding is not None and self.server_binding is not None and binding != self.server_binding:
+                    result = self._stopServer()
+                    if result == QDialog.Rejected:
+                        return self.reject()
+                    
+                    # disconnect and reconnect
+                    self.controller.unbind_server(self.folder_to_disconnect)
+                    self.controller.bind_server(self.server_binding.local_folder, 
+                        self.server_binding.server_url, 
+                        self.server_binding.remote_user,
+                        self.server_binding.remote_password) 
+                    if self.frontend is not None:
+                        self.frontend.local_folder = self.server_binding.local_folder
+                        
+            elif self.folder_to_disconnect is not None:
+                result = self._stopServer()
+                if result == QDialog.Rejected:
+                    return self.reject()                
+                # disconnect
                 self.controller.unbind_server(self.folder_to_disconnect)
-        except RuntimeError as ex:
-            log.debug("failed to disconnect folder %s, error: %s" % (self.folder_to_disconnect, str(ex)))  
-                  
-        if self._isConnected():
-            try:
-                self.controller.bind_server(self.server_binding.local_folder, 
-                                        self.server_binding.server_url, 
-                                        self.server_binding.remote_user,
-                                        self.server_binding.remote_password)
-            except Exception as ex:
-                self.lblMessage = str(ex)
-
+    
+            elif self._isConnected():
+                if self._isConnected():
+                    self.controller.bind_server(self.server_binding.local_folder, 
+                                            self.server_binding.server_url, 
+                                            self.server_binding.remote_user,
+                                            self.server_binding.remote_password)  
+                if self.frontend is not None:
+                    self.frontend.local_folder = self.server_binding.local_folder
+                            
+        except Exception as ex:
+            log.debug("failed to bind or unbind: %s", str(ex))
+             
         #TODO Apply other changes
         self.done(QDialog.Accepted)
         
+    def _stopServer(self):
+        if self.frontend.worker is not None and self.frontend.worker.isAlive():
+            # Ask the controller to stop: the synchronization loop will in turn
+            # call notify_sync_stopped and finally handle_stop (without quitting the app)
+            self.controller.stop()
+            
+            # wait in a loop while displaying a message...
+            self.dlg = ProgressDialog(self)
+            return self.dlg.exec_()
+            
+    def timeout(self):
+        if self.frontend.worker is None or not self.frontend.worker.isAlive():
+            self.dlg.ok()
+            
+                
+class ProgressDialog(QDialog):
+    WINDOW_WIDTH = 120
+    WINDOW_HEIGHT = 100
     
+    def __init__(self, parent=None):
+        super(ProgressDialog, self).__init__(parent=parent, f=Qt.FramelessWindowHint)
+        self.setFixedSize(ProgressDialog.WINDOW_WIDTH, ProgressDialog.WINDOW_HEIGHT)
+        self.btn = QPushButton('Cancel', self)
+        sizeBtn = self.btn.size()
+        
+        self.lblMov = QLabel(self)
+        self.movie = QMovie(':/wheel.gif')
+        self.lblMov.setMovie(self.movie)
+        self.lblMsg = QLabel("Stopping syncing...", self)
+        self.lblMsg.setStyleSheet("QLabel { font-family : arial; font-size : 10px; color : DarkBlue }")
+        
+        image = QImage(':/wheel.gif')
+        sizeImg = image.size()
+        sizeImg.setWidth(sizeImg.width() + 2)
+        sizeImg.setHeight(sizeImg.height() + 2)
+        sizeClient = self.rect()
+        sizeMsg = self.lblMsg.size()
+        
+        dy = (sizeClient.height() - sizeImg.height() - sizeBtn.height() - sizeMsg.height()) / 3
+        ix = (sizeClient.width() - sizeImg.width()) / 2
+        iy = dy
+        mx = (sizeClient.width() - sizeMsg.width()) / 2
+        my = iy + sizeImg.height() + dy
+        bx = (sizeClient.width() - sizeBtn.width()) / 2
+        by = my + sizeMsg.height() + dy 
+        self.rectImg = QRectF(QPointF(ix, iy), sizeImg)
+
+        # x-position doesn't add up!?
+        bx += 8; mx += 8
+        self.btn.move(bx, by)
+        self.lblMov.setGeometry(ix, iy, sizeImg.width(), sizeImg.height())
+        self.lblMsg.setGeometry(mx, my, sizeMsg.width(), sizeMsg.height())
+        
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.btn.clicked.connect(self.cancel)
+        
+        # start a timer
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.parentWidget().timeout)
+        self.timer.setInterval(500)
+        self.timer.start()
+        
+        self.movie.start()
+        
+        
+    def cancel(self):
+        self.timer.stop()
+        self.reject()
+        
+    def ok(self):
+        self.timer.stop()
+        self.accept()
+        
+    
+class ProxyDlg(QDialog, Ui_ProxyDialog):
+    def __init__(self, frontend=None, parent=None):
+        super(ProxyDlg, self).__init__(parent)
+        self.setupUi(self)
+        self.frontend = frontend
+        self.controller = frontend.controller
+        
+        
 from nxdrive.utils.helpers import QApplicationSingleton
 
 def startApp(controller, start):

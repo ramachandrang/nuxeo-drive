@@ -6,18 +6,18 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>605</width>
+    <width>609</width>
     <height>438</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string>Preferences</string>
   </property>
   <widget class="QDialogButtonBox" name="buttonBox">
    <property name="geometry">
     <rect>
      <x>430</x>
-     <y>397</y>
+     <y>401</y>
      <width>161</width>
      <height>32</height>
     </rect>
@@ -106,6 +106,9 @@
    <property name="text">
     <string>Start CloudDesk sync automatically when starting this computer</string>
    </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
   </widget>
   <widget class="QCheckBox" name="cbShowsync">
    <property name="geometry">
@@ -118,6 +121,9 @@
    </property>
    <property name="text">
     <string>Show files sync status icons</string>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
    </property>
   </widget>
   <widget class="Line" name="line_2">
@@ -133,17 +139,17 @@
     <enum>Qt::Horizontal</enum>
    </property>
   </widget>
-  <widget class="QRadioButton" name="rbAutodetect">
+  <widget class="QRadioButton" name="rbProxy">
    <property name="geometry">
     <rect>
      <x>30</x>
      <y>257</y>
-     <width>471</width>
+     <width>291</width>
      <height>20</height>
     </rect>
    </property>
    <property name="text">
-    <string>Automatically detect proxy settings</string>
+    <string>Use Proxy Server</string>
    </property>
   </widget>
   <widget class="QRadioButton" name="rbDirect">
@@ -188,9 +194,9 @@
   <widget class="QPushButton" name="btnDisconnect">
    <property name="geometry">
     <rect>
-     <x>480</x>
+     <x>493</x>
      <y>10</y>
-     <width>114</width>
+     <width>101</width>
      <height>32</height>
     </rect>
    </property>
@@ -279,10 +285,10 @@
   <widget class="QPushButton" name="btnBrowsefolder">
    <property name="geometry">
     <rect>
-     <x>480</x>
-     <y>59</y>
-     <width>51</width>
-     <height>32</height>
+     <x>499</x>
+     <y>64</y>
+     <width>21</width>
+     <height>20</height>
     </rect>
    </property>
    <property name="text">
@@ -315,17 +321,36 @@
     </rect>
    </property>
   </widget>
-  <widget class="QLabel" name="lblMessage">
+  <widget class="QCheckBox" name="checkBox">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
    <property name="geometry">
     <rect>
      <x>30</x>
-     <y>155</y>
-     <width>551</width>
-     <height>31</height>
+     <y>156</y>
+     <width>411</width>
+     <height>20</height>
     </rect>
    </property>
    <property name="text">
-    <string/>
+    <string>Show notifications</string>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="btnProxy">
+   <property name="geometry">
+    <rect>
+     <x>473</x>
+     <y>255</y>
+     <width>121</width>
+     <height>32</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Proxy Config...</string>
    </property>
   </widget>
  </widget>

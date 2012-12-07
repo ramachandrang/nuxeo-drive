@@ -63,13 +63,13 @@ def default_nuxeo_drive_folder():
     if sys.platform == "win32":
         if os.path.exists(os.path.expanduser(r'~\My Documents')):
             # Compat for Windows XP
-            return r'~\My Documents\Nuxeo Drive'
+            return os.path.join(r'~\My Documents', Constants.DEFAULT_NXDRIVE_FOLDER)
         else:
             # Default Documents folder with navigation shortcuts in Windows 7
             # and up.
-            return r'~\Documents\Nuxeo Drive'
+            return os.path.join(r'~\Documents', Constants.DEFAULT_NXDRIVE_FOLDER)
     else:
-        return '~/Nuxeo Drive'
+        return os.path.join('~', Constants.DEFAULT_NXDRIVE_FOLDER)
 
         
 class Controller(object):
@@ -354,6 +354,8 @@ class Controller(object):
         local_folder = os.path.abspath(os.path.expanduser(local_folder))
         binding = self.get_server_binding(local_folder, raise_if_missing=self.fault_tolerant,
                                           session=session)
+        if binding is None: return
+        
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
         session.delete(binding)
@@ -379,15 +381,21 @@ class Controller(object):
                     % local_root)
             return None
         
+    def validate_credentials(self, server_url, username, password):
+        # check the connection to the server by issuing an authenticated 'fetch API' request
+        # if invalid credentials, raises Unauthorized, or for invalid url, a generic exception
+        server_url = self._normalize_url(server_url)
+        nxclient = self.nuxeo_client_factory(server_url, username, self.device_id,
+                                             password)
+        
     def get_sync_status(self, local_folder=None, from_time=None, delay=10):
         """retrieve count of created/modified/deleted local files since 'from_time'.
         If 'from_time is None, use current time minus delay.
         If local_folder is None, return results for all bindings.
         Return a list of tuples of the form [('<local_folder>', '<pair_state>', count),...]
         """
-#        after = from_time if from_time is not None else datetime.now() - delay
-        #TOBE REMOVED
-        after = datetime(2012, 12, 02, 12, 28, 50)
+        after = from_time if from_time is not None else datetime.now() - delay
+
         #query for result of last synchronize cycle
         session = self.get_session()
         q = session.query(RootBinding.local_folder, LastKnownState.pair_state, func.count(LastKnownState.pair_state)).\
@@ -488,7 +496,7 @@ class Controller(object):
             # Initialize the metadata info by recursive walk on the remote
             # folder structure
             self._recursive_init(lcclient, local_info, nxclient, remote_info)
-        session.commit()
+            session.commit()
 
     def _recursive_init(self, local_client, local_info, remote_client,
                         remote_info):
@@ -919,7 +927,7 @@ class Controller(object):
 
     # TODO: move the synchronization related methods in a dedicated class
 
-    def synchronize_one(self, doc_pair, session=None, frontend=None):
+    def synchronize_one(self, doc_pair, session=None, frontend=None, status=None):
         """Refresh state a perform network transfer for a pair of documents."""
         if frontend is not None:
             frontend.notify_start_transfer()
@@ -978,7 +986,7 @@ class Controller(object):
                 try:
                     local_client.update_content(doc_pair.path, content)
                     doc_pair.refresh_local(local_client)
-                    doc_pair.update_state('synchronized', 'synchronized')
+                    doc_pair.update_state('synchronized', 'synchronized', status=status)
                 except (IOError, WindowsError):
                     log.debug("Delaying update for remotely modified "
                               "content %r due to concurrent file access.",
@@ -986,7 +994,7 @@ class Controller(object):
             else:
                 # digest agree, no need to transfer additional bytes over the
                 # network
-                doc_pair.update_state('synchronized', 'synchronized')
+                doc_pair.update_state('synchronized', 'synchronized', status=status)
 
         elif doc_pair.pair_state == 'locally_created':
             name = os.path.basename(doc_pair.path)
@@ -1031,7 +1039,7 @@ class Controller(object):
                 log.warning(
                     "Parent folder of doc %r (%r:%r) is not bound to a local"
                     " folder",
-                    name, doc_pair.remote_repo, doc_pair.remote_ref)
+                    name, doc_pair.remote_path, doc_pair.remote_ref)
                 # Inconsistent state: delete and let the next scan redetect for
                 # now
                 # TODO: how to handle this case in incremental mode?
@@ -1050,7 +1058,7 @@ class Controller(object):
                 log.debug("Creating local document '%s' in '%s'", name,
                           parent_pair.get_local_abspath())
             doc_pair.update_local(local_client.get_info(path))
-            doc_pair.update_state('synchronized', 'synchronized')
+            doc_pair.update_state('synchronized', 'synchronized', status=status)
 
         elif doc_pair.pair_state == 'locally_deleted':
             if doc_pair.path == '/':
@@ -1075,6 +1083,7 @@ class Controller(object):
                     log.debug("Deleting local doc '%s'",
                               doc_pair.get_local_abspath())
                     local_client.delete(doc_pair.path)
+                    doc_pair.update_state(status=status)
                     session.delete(doc_pair)
                     # XXX: shall we also delete all the subcontent / folder at
                     # once in the medata table?
@@ -1098,7 +1107,7 @@ class Controller(object):
         elif doc_pair.pair_state == 'conflicted':
             if doc_pair.local_digest == doc_pair.remote_digest != None:
                 # Automated conflict resolution based on digest content:
-                doc_pair.update_state('synchronized', 'synchronized')
+                doc_pair.update_state('synchronized', 'synchronized', status=status)
         else:
             log.warning("Unhandled pair_state: %r for %r",
                           doc_pair.pair_state, doc_pair)
@@ -1113,7 +1122,7 @@ class Controller(object):
         if frontend is not None:
             frontend.notify_stop_transfer()
 
-    def synchronize(self, limit=None, local_root=None, fault_tolerant=False, sync_operation=None, frontend=None):
+    def synchronize(self, limit=None, local_root=None, fault_tolerant=False, sync_operation=None, frontend=None, status=None):
         """Synchronize one file at a time from the pending list.
 
         Fault tolerant mode is meant to be skip problematic documents while not
@@ -1134,7 +1143,7 @@ class Controller(object):
             
             if fault_tolerant:
                 try:
-                    self.synchronize_one(doc_pair, session=session, frontend=frontend)
+                    self.synchronize_one(doc_pair, session=session, frontend=frontend, status=status)
                     synchronized += 1
                 except Exception as e:
                     log.error("Failed to synchronize %r: %r",
@@ -1145,7 +1154,7 @@ class Controller(object):
                     raise NotImplementedError(
                         'Fault tolerant synchronization not implemented yet.')
             else:
-                self.synchronize_one(doc_pair, session=session, frontend=frontend)
+                self.synchronize_one(doc_pair, session=session, frontend=frontend, status=status)
                 synchronized += 1
 
             doc_pair = self.next_pending(local_root=local_root,
@@ -1230,7 +1239,9 @@ class Controller(object):
                     if sync_operation.pause:
                         paused = sync_operation.paused = True     
                         sync_operation.pause = False   
-              
+                    else: 
+                        sync_operation.paused = False
+                        
             return False
              
     def _log_offline(self, exception, context):
@@ -1274,7 +1285,8 @@ class Controller(object):
             # detect new bindings while running)
             raise NotImplementedError()
 
-        previous_time = time()
+#        previous_time = time()
+        previous_time = datetime.now()
         first_pass = True
         session = self.get_session()
         
@@ -1292,6 +1304,7 @@ class Controller(object):
                 self.update_roots(session, frontend=frontend)
 
                 bindings = session.query(RootBinding).all()
+                status = {}
                 for rb in bindings:
                     try:
                         if self.should_pause_synchronization(sync_operation):
@@ -1319,7 +1332,8 @@ class Controller(object):
                                          local_root=rb.local_root,
                                          fault_tolerant=fault_tolerant,
                                          sync_operation=sync_operation,
-                                         frontend=frontend)
+                                         frontend=frontend,
+                                         status=status)
                     except POSSIBLE_NETWORK_ERROR_TYPES as e:
                         # Ignore expected possible network related errors
                         self._log_offline(e, "synchronization loop")
@@ -1340,12 +1354,13 @@ class Controller(object):
                 # safety net to ensure that Nuxe Drive won't eat all the CPU,
                 # disk and network resources of the machine scanning over an
                 # over the bound folders too often.
-                current_time = time()
-                spent = current_time - previous_time
+#                current_time = time()
+                current_time = datetime.now()
+                spent = (current_time - previous_time).total_seconds()
                 
                 # show notifications
                 if frontend is not None:
-                    frontend.notify_sync_completed(self.get_sync_status(from_time=previous_time))
+                    frontend.notify_sync_completed(status)
                     
                 if spent < delay:
                     sleep(delay - spent)
@@ -1376,14 +1391,6 @@ class Controller(object):
             # potentially quit the app
             if frontend is not None:
                 frontend.notify_sync_stopped()
-
-#    def _updateUiStatus(self, status, operation = None):
-#        self.notifier.notify(status)
-#        # for debug only
-#        if status == Constants.SYNC_STATUS_STOP:
-#            log.debug("worker thread stopped syncing")
-#        elif status == Constants.SYNC_STATUS_START:
-#            log.debug("worker thread started syncing")
 
 
     def get_state(self, server_url, remote_repo, remote_ref):

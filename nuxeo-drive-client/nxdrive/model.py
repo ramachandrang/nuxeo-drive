@@ -204,12 +204,21 @@ class LastKnownState(Base):
         self.update_state(local_state=local_state, remote_state=remote_state)
         self.fault_tolerant = fault_tolerant
 
-    def update_state(self, local_state=None, remote_state=None):
+    def update_state(self, local_state=None, remote_state=None, status=None):
         if local_state is not None:
             self.local_state = local_state
         if remote_state is not None:
             self.remote_state = remote_state
         pair = (self.local_state, self.remote_state)
+        if status is not None and self.folderish == 0:
+            try:
+                status_item = status[self.pair_state]
+                status_item[0] += 1
+                if status_item[1] is not None: status_item[1] = self.local_name
+                status[self.pair_state] = status_item
+            except KeyError:
+                status[self.pair_state] = [1, self.local_name]
+ 
         self.pair_state = PAIR_STATES.get(pair, 'unknown')
 
     def __repr__(self):
