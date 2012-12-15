@@ -5,8 +5,47 @@ Created on Nov 7, 2012
 '''
 
 from PySide.QtCore import Signal, QObject
-from PySide.QtGui import QSystemTrayIcon
+from PySide.QtGui import QSystemTrayIcon, QMessageBox
 
+class Communicator(QObject):
+    """Handle communication between sync and main GUI thread
+
+    Use a signal to notify the main thread event loops about states update by
+    the synchronization thread.
+
+    """
+    # (event name, new icon, rebuild menu, pause/resume)
+    icon = Signal(str)
+    menu = Signal()
+    stop = Signal()
+    invalid_credentials = Signal(str)
+    message = Signal(str, str, QSystemTrayIcon.MessageIcon)
+    error = Signal(str, str, QMessageBox.StandardButton)
+
+class ProxyInfo(QObject):
+    PROXY_TYPE_HTTP = 1
+    PROXY_TYPE_SOCKS4 = 2
+    PROXY_TYPE_SOCKS5 = 3
+    
+    proxy_url = None
+    proxy_port = None
+    username = None
+    password = None
+    
+    def __init__(self):
+        self.proxy_type = ProxyInfo.PROXY_TYPE_HTTP
+        self.proxy_use_authn = False
+        
+class RecoverableError(Exception):
+    def __init__(self, text, info, buttons=QMessageBox.Ok):
+        super(RecoverableError, self).__init__()
+        self.text = text
+        self.info = info
+        self.buttons = buttons
+        
+    def __str__(self):
+        return ("%s (%s)" % (self.text, self.info))
+    
 class QApplicationSingleton( object ):
     ## Stores the unique Singleton instance-
     _iInstance = None
@@ -40,49 +79,4 @@ class QApplicationSingleton( object ):
     def __setattr__(self, aAttr, aValue):
         return setattr(self._iInstance, aAttr, aValue)
  
-# Not used anymore
-#class Notifier(QObject):   
-#    uistatus = Signal(int, name='uistatus') 
-#    
-#    def __init__(self):
-#        # signal for updating UI status
-#        QObject.__init__(self)
-#          
-#    def notify(self, status):
-#        self.uistatus.emit(status)
-#        
-#    def register(self, f):
-#        self.uistatus.connect(f)
-#        
-#    def unregister(self):
-#        self.uistatus.disconnect()
-        
-        
-class Communicator(QObject):
-    """Handle communication between sync and main GUI thread
-
-    Use a signal to notify the main thread event loops about states update by
-    the synchronization thread.
-
-    """
-    # (event name, new icon, rebuild menu, pause/resume)
-    icon = Signal(str)
-    menu = Signal()
-    stop = Signal()
-    invalid_credentials = Signal(str)
-    message = Signal(str, str, QSystemTrayIcon.MessageIcon)
-
-class ProxyInfo(QObject):
-    PROXY_TYPE_HTTP = 1
-    PROXY_TYPE_SOCKS4 = 2
-    PROXY_TYPE_SOCKS5 = 3
-    
-    proxy_url = None
-    proxy_port = None
-    username = None
-    password = None
-    
-    def __init__(self):
-        self.proxy_type = ProxyInfo.PROXY_TYPE_HTTP
-        self.proxy_use_authn = False
         

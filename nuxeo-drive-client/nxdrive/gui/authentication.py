@@ -163,6 +163,8 @@ def prompt_authentication(controller, local_folder, url=None, username=None,
             dialog.show_message("Connecting to %s ..." % url)
             if update:
                 controller.bind_server(local_folder, url, username, password)
+                #get federated token for CloudDesk
+                
             else:
                 controller.validate_credentials(url, username, password)
             return True

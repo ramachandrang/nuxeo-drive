@@ -12,8 +12,9 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.orm import backref
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm import scoped_session
+from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.orm import synonym
+from sqlalchemy.ext.declarative import declared_attr
 
 from nxdrive.client import NuxeoClient
 from nxdrive.client import LocalClient
@@ -84,9 +85,13 @@ class ServerBinding(Base):
     remote_user = Column(String)
     remote_password = Column(String)
     remote_token = Column(String)
+    __fdtoken = Column('fdtoken', String)
+    password_hash = Column(String)
+    fdtoken_creation_date = Column(DateTime)
 
     def __init__(self, local_folder, server_url, remote_user,
-                 remote_password=None, remote_token=None):
+                 remote_password=None, remote_token=None, 
+                 fdtoken=None, password_hash=None, fdtoken_creation_date=None):
         self.local_folder = local_folder
         self.server_url = server_url
         self.remote_user = remote_user
@@ -94,11 +99,31 @@ class ServerBinding(Base):
         # auth
         self.remote_password = remote_password
         self.remote_token = remote_token
+        # Used for browser to access CloudDesk without log in prompting
+        self.fdtoken = fdtoken
+        if fdtoken_creation_date is not None:
+            self.fdtoken_creation_date = fdtoken_creation_date           
+        # Used to re-generate the federated token (expires in 15min by default)
+        self.password_hash = password_hash
+        
+    @declared_attr
+    def fdtoken(self):
+        return synonym('__fdtoken', descriptor=property(self.get_fdtoken, self.set_fdtoken))
+    
+    def get_fdtoken(self):
+        return self.__fdtoken
+    
+    def set_fdtoken(self, v):
+        self.__fdtoken = v
+        if v is not None: 
+            self.fdtoken_creation_date = datetime.datetime.now()
 
     def invalidate_credentials(self):
         """Ensure that all stored credentials are zeroed."""
         self.remote_password = None
         self.remote_token = None
+        self.password_hash = None
+        self.federated_token = None
 
     def has_invalid_credentials(self):
         """Check whether at least one credential is active"""
@@ -140,7 +165,31 @@ class RootBinding(Base):
                 "remote_root=%r>" % (self.local_root, self.local_folder,
                                      self.remote_repo, self.remote_root))
 
-
+class SyncFolders(Base):
+    __tablename__ = 'sync_folders'
+    
+    remote_id = Column(String, primary_key=True)
+    remote_repo = Column(String)
+    remote_name = Column(String)
+    remote_parent = Column(String, ForeignKey('sync_folders.remote_id'))
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder'))
+    
+    server_binding = relationship(
+                    'ServerBinding', backref=backref("folders", cascade="all, delete-orphan"))
+    children = relationship("SyncFolders")
+    
+    def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder):
+        self.remote_id = remote_id
+        self.remote_name = remote_name
+        self.remote_parent = remote_parent
+        self.remote_repo = remote_repo
+        self.local_folder = local_folder
+        
+    def __str__(self):
+        return ("SyncFolders<remote_name=%r, remote_id=%r, remote_parent=%r, remote_repo=%r, "
+                "local_folder=%r>" % (self.remote_name, self.remote_id, self.remote_parent, 
+                                      self.remote_repo, self.local_folder))
+        
 class LastKnownState(Base):
     """Aggregate state aggregated from last collected events."""
     __tablename__ = 'last_known_states'

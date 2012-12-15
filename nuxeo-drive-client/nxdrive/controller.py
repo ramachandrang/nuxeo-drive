@@ -9,11 +9,16 @@ import os
 import os.path
 from threading import local
 import urllib2
+import urllib
+import md5
+import suds
+from suds.client import Client
+import base64
 import socket
 import httplib
 import subprocess
-
 import psutil
+import logging
 
 import nxdrive
 from nxdrive.client import NuxeoClient
@@ -22,14 +27,12 @@ from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
 from nxdrive.client import Unauthorized
 from nxdrive.model import init_db
-from nxdrive.model import DeviceConfig
-from nxdrive.model import ServerBinding
-from nxdrive.model import RootBinding
-from nxdrive.model import LastKnownState
+from nxdrive.model import DeviceConfig, ServerBinding, RootBinding, LastKnownState, SyncFolders
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
+from utils.helpers import RecoverableError
 #from nxdrive.utils.helpers import Notifier
-from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy import DateTime, cast
 from sqlalchemy import func
 from sqlalchemy import asc
@@ -51,6 +54,10 @@ POSSIBLE_NETWORK_ERROR_TYPES = (
     socket.error,
 )
 
+schema_url = 'nxdrive/data/federatedloginservices.xml'
+service_url = 'https://swee.sharpb2bcloud.com/login/auth.ejs'
+ns = "http://www.inventua.com/federatedloginservices/"
+CLOUDDESK_SCOPE = 'clouddesk'
 
 log = get_logger(__name__)
 
@@ -302,6 +309,9 @@ class Controller(object):
         nxclient = self.nuxeo_client_factory(server_url, username, self.device_id,
                                              password)
         token = nxclient.request_token()
+        #get federated token for CloudDesk
+        fdtoken, password_hash = self._request_clouddesk_token(username, password)
+        
         if token is not None:
             # The server supports token based identification: do not store the
             # password in the DB
@@ -331,13 +341,22 @@ class Controller(object):
                 # Ensure that the password is not stored in the DB
                 if server_binding.remote_password is not None:
                     server_binding.remote_password = None
+                    
+            if fdtoken is not None and server_binding.fdtoken != fdtoken:
+                log.info("Updating federated token for user '%s' on server '%s, using token server %s'",
+                    username, server_url, service_url)
+                server_binding.fdtoken = fdtoken
+                server_binding.password_hash = password_hash
 
         except NoResultFound:
             log.info("Binding '%s' to '%s' with account '%s'",
                      local_folder, server_url, username)
             session.add(ServerBinding(local_folder, server_url, username,
                                       remote_password=password,
-                                      remote_token=token))
+                                      remote_token=token,
+                                      fdtoken=fdtoken,
+                                      password_hash=password_hash
+                                      ))
 
         # Create the local folder to host the synchronized files: this
         # is useless as long as bind_root is not called
@@ -352,7 +371,7 @@ class Controller(object):
         Local files are not deleted"""
         session = self.get_session()
         local_folder = os.path.abspath(os.path.expanduser(local_folder))
-        binding = self.get_server_binding(local_folder, raise_if_missing=self.fault_tolerant,
+        binding = self.get_server_binding(local_folder, raise_if_missing=False,
                                           session=session)
         if binding is None: return
         
@@ -387,6 +406,107 @@ class Controller(object):
         server_url = self._normalize_url(server_url)
         nxclient = self.nuxeo_client_factory(server_url, username, self.device_id,
                                              password)
+        
+    def _update_hash(self, password):
+        return md5.new(password).digest()
+        
+    # NOT USED - this uses HTTP GET
+#    def _request_clouddesk_token(self, username, password):
+#        """Request and return a token for CloudDesk (federated authentication)"""
+#        parameters = {
+#                      'UserName': username,
+#                      'PasswordHash': self._update_hash(password),
+#                      'ActionFlag': 'Login',
+#                      'Scope': 'clouddesk'
+#                      } 
+#        
+#        url = Constants.FEDERATED_SERVICES_URL + '/ValidateUser?'
+#        url += urllib.urlencode(parameters)
+#        base_error_message = (
+#            "Failed not connect to token server on %r"
+#            " with user %r"
+#        ) % (url, username)
+#        
+#        try:
+#            log.trace("calling %s to validate user", Constants.FEDERATED_SERVICES_URL)
+#            req = urllib2.Request(url)
+#            token = urllib2.urlopen(req)
+#            
+#            #TODO parse the result to extract the token (guid)
+#            return token
+#        except urllib2.HTTPError as e:
+#            if e.code == 401  or e.code == 403:
+#                raise Unauthorized(url, self.user_id, e.code)
+#            elif e.code == 404:
+#                # ValidateUser method is not supported by this server
+#                return None
+#            else:
+#                e.msg = base_error_message + ": HTTP error %d" % e.code
+#                raise e
+#        except Exception as e:
+#            if hasattr(e, 'msg'):
+#                e.msg = base_error_message + ": " + e.msg
+#            raise            
+        
+                  
+    def _rerequest_clouddesk_token(self, username, pwdhash):
+        """Request and return a token for CloudDesk (federated authentication)"""
+        location = os.path.join(os.getcwd(), schema_url)
+        logging.getLogger('suds.client').setLevel(logging.DEBUG)
+        
+        try:              
+            cli = suds.client.Client('file://' + location)
+            cli.wsdl.services[0].setlocation(service_url)
+            validateUserActionFlags = cli.factory.create('ValidateUserActionFlags')
+            log.trace("calling %s to validate user", service_url)
+            result = cli.service.ValidateUser(username, pwdhash, validateUserActionFlags.Login, CLOUDDESK_SCOPE)
+            status = cli.factory.create('ResultStatus')
+            if result.Status == status.Validated or result.Status == status.LoggedIn:
+                return result.ID
+            else:
+                return None
+     
+        except urllib2.URLError as e:
+            log.error('error connecting to %s: %s', service_url, str(e))
+            return None    
+        except suds.WebFault as fault:
+            log.error('error connecting to %s: %s', service_url, fault)
+            return None
+               
+    def _request_clouddesk_token(self, username, password):
+        pwdhash = base64.b16encode(md5.new(password).digest()).lower()
+        return self._rerequest_clouddesk_token(username, pwdhash), pwdhash
+          
+    def get_browser_token(self, local_folder, session=None):
+        """Retrieve federated token if it exists and is still valid, or request a new one"""
+
+        server_binding = self.get_server_binding(local_folder, raise_if_missing=False)
+        if server_binding is None:
+            return None
+        
+        fdtoken = server_binding.fdtoken
+        if fdtoken is not None:
+            duration = datetime.now() - server_binding.fdtoken_creation_date
+            if duration.total_seconds() > Constants.FDTOKEN_DURATION:
+                fdtoken = None
+                
+        if fdtoken is not None:
+            return fdtoken
+        
+        try:
+            fdtoken = self._rerequest_clouddesk_token(server_binding.remote_user, server_binding.password_hash)  
+            server_binding.fdtoken = fdtoken
+            if session is None:
+                session = self.get_session()
+            session.commit()
+        except Exception as e:
+            log.error('failed to get browser token for user %s from $: %s', 
+                      server_binding.remote_user,
+                      server_binding.server_url,
+                      str(e))
+            pass
+        
+        return fdtoken           
         
     def get_sync_status(self, local_folder=None, from_time=None, delay=10):
         """retrieve count of created/modified/deleted local files since 'from_time'.
@@ -561,6 +681,51 @@ class Controller(object):
         session.delete(binding)
         session.commit()
 
+    def get_folders(self, session=None, server_binding=None,
+                    repository=None, frontend=None):
+        """Retrieve all folder hierrachy from server.
+        If a server is not responding it is skipped.
+        """
+        if session is None:
+            session = self.get_session()
+        if server_binding is not None:
+            server_bindings = [server_binding]
+        else:
+            server_bindings = session.query(ServerBinding).all()
+        for sb in server_bindings:
+            if sb.has_invalid_credentials():
+                # Skip servers with missing credentials
+                continue
+            try:
+                nxclient = self.get_remote_client(sb)
+                if not nxclient.is_addon_installed():
+                    continue
+                if repository is not None:
+                    repositories = [repository]
+                else:
+                    repositories = nxclient.get_repository_names()
+                for repo in repositories:
+                    nxclient = self.get_remote_client(sb, repository=repo)
+                    mydocs_folder = nxclient.get_mydocs()
+                    self._update_mydocs(mydocs_folder, sb.local_folder, session=session)
+                    mydocs_subfolders = nxclient.get_subfolders(mydocs_folder)
+                    othersdocs_folder = nxclient.get_othersdocs()
+                    self._update_othersdocs(othersdocs_folder, sb.local_folder, session=session)
+
+            except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                # Ignore expected possible network related errors
+                self._log_offline(e, "get folders")
+                log.trace("Traceback of ignored network error:",
+                        exc_info=True)
+                if frontend is not None:
+                    frontend.notify_offline(sb.local_folder, e)
+                self._invalidate_client_cache(sb.server_url)
+
+#        if frontend is not None:
+#            local_folders = [sb.local_folder
+#                    for sb in session.query(ServerBinding).all()]
+#            frontend.notify_local_folders(local_folders)        
+        
     def update_roots(self, session=None, server_binding=None,
                      repository=None, frontend=None):
         """Ensure that the list of bound roots match server-side info
@@ -629,6 +794,34 @@ class Controller(object):
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
                                   rc, session, fault_tolerant=self.fault_tolerant)
 
+    def _update_mydocs(self, mydocs, local_folder, session=None):
+        if session is None:
+            session = self.get_session()
+            
+        # check if already exists
+        try:
+            folder = session.query(SyncFolders).one()
+        except MultipleResultsFound:
+            log.error("more than one 'My Docs' folder found!")
+        except NoResultFound:
+            title = Constants.MY_DOCS if mydocs[u'type'] == u'Workspace' else mydocs[u'title']
+            folder = SyncFolders(mydocs['uid'], 
+                                 title,
+                                 # parent is null for MyDocs
+                                 None,
+                                 mydocs[u'repository'],
+                                 local_folder
+                                 )
+                
+            session.add(folder)
+            
+            # get subfolders
+            
+            session.commit()
+            
+    def _update_othersdocs(self, otherdocs, local_folder, session=None):
+        pass
+        
     def scan_local(self, local_root, session=None):
         """Recursively scan the bound local folder looking for updates"""
         if session is None:
@@ -664,8 +857,13 @@ class Controller(object):
                               doc_pair, local_info):
         """Recursively scan the bound local folder looking for updates"""
         if local_info is None:
-            raise ValueError("Cannot bind %r to missing local info" %
+            log.error("Cannot bind %r to missing local info" %
                              doc_pair)
+#            raise ValueError("Cannot bind %r to missing local info" %
+#                             doc_pair)
+            # TODO: the database is corrupted or a binding root has been deleted manually
+            # What is the recovery? create another root?
+            raise RecoverableError("Cannot find %s" % doc_pair.local_root, "Verify the CloudDesk folder in Preferences...")
 
         # Update the pair state from the collected local info
         doc_pair.update_local(local_info)
@@ -1373,6 +1571,8 @@ class Controller(object):
             self.get_session().rollback()
             log.info("Interrupted synchronization on user's request.")
             #log.trace("Synchronization interruption at:", exc_info=True)
+        except RecoverableError:
+            raise
         except:
             self.get_session().rollback()
             raise

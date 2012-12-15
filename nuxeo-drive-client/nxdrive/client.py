@@ -17,7 +17,7 @@ from urllib import urlencode
 import re
 import sys
 from nxdrive.logging_config import get_logger
-
+import Constants
 
 log = get_logger(__name__)
 
@@ -375,7 +375,7 @@ class NuxeoClient(object):
             'X-Application-Name': self.application_name,
             self.auth[0]: self.auth[1],
         }
-
+        
     def request_token(self):
         """Request and return a new token for the user"""
 
@@ -451,6 +451,33 @@ class NuxeoClient(object):
     def get_roots(self):
         entries = self._execute("NuxeoDrive.GetRoots")[u'entries']
         return self._filtered_results(entries, fetch_parent_uid=False)
+    
+    def get_mydocs(self):
+        return self._execute("UserWorkspace.Get")
+        
+    def get_othersdocs(self):
+        query = """SELECT * FROM Document WHERE 
+                   sh:rootshared = 1 AND 
+                   sh:isWritePermission = 1 AND 
+                   ecm:currentLifeCycleState!= 'deleted' AND
+                   ecm:mixinType = 'Folderish' AND 
+                   dc:creator != 'system' AND 
+                   ecm:name != 'Guest Folder' AND 
+                   ecm:primaryType!='Domain' AND 
+                   ecm:primaryType!='SocialDomain' AND 
+                   ecm:mixinType != 'HiddenInNavigation' 
+                   AND ecm:mixinType!='HiddenInFacetedSearch' AND 
+                   dc:creator != '"+username+"'
+                   """
+
+        result = self._execute('Document.Query', query=query)[u'entries']
+        # TODO return result - any filtering needed?
+        print result
+        
+    def get_subfolders(self, parent):
+        input = "doc:%s" % parent[u'uid']
+        result = self._execute('Document.GetChildren', input)
+        print result
 
     def register_as_root(self, ref):
         ref = self._check_ref(ref)
