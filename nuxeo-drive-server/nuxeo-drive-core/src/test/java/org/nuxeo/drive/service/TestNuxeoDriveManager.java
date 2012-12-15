@@ -146,7 +146,7 @@ public class TestNuxeoDriveManager {
     }
 
     @After
-    public void closeSessions() throws Exception {
+    public void closeSessionsAndDeleteUsers() throws Exception {
         if (user1Session != null) {
             CoreInstance.getInstance().close(user1Session);
         }
@@ -167,8 +167,9 @@ public class TestNuxeoDriveManager {
     protected void checkRootsCount(String userName, CoreSession session,
             int expectedCount) throws ClientException {
         assertEquals(
-                nuxeoDriveManager.getSynchronizationRootReferences(true,
-                        userName, session).size(), expectedCount);
+                expectedCount,
+                nuxeoDriveManager.getSynchronizationRootReferences(userName,
+                        session).size());
     }
 
     public DocumentModel doc(String path) throws ClientException {
@@ -192,15 +193,16 @@ public class TestNuxeoDriveManager {
 
         // Check synchronization root references
         Set<IdRef> rootRefs = nuxeoDriveManager.getSynchronizationRootReferences(
-                true, "user1", user1Session);
+                "user1", user1Session);
         assertEquals(2, rootRefs.size());
         assertTrue(rootRefs.contains(user1Workspace));
         assertTrue(rootRefs.contains(new IdRef(user1Session.getDocument(
                 new PathRef("/default-domain/workspaces/workspace-2")).getId())));
 
         // Check synchronization root paths
-        Set<String> rootPaths = nuxeoDriveManager.getSynchronizationRootPaths(
+        Map<String, SynchronizationRoots> synRootMap = nuxeoDriveManager.getSynchronizationRoots(
                 true, "user1", user1Session);
+        Set<String> rootPaths = synRootMap.get("default").paths;
         assertEquals(2, rootPaths.size());
         assertTrue(rootPaths.contains("/default-domain/UserWorkspaces/user1"));
         assertTrue(rootPaths.contains("/default-domain/workspaces/workspace-2"));
@@ -266,8 +268,11 @@ public class TestNuxeoDriveManager {
         checkRootsCount("user2", session, 2);
 
         // check unsync:
+        // XXX: this does not work when fetching document with session instead
+        // of user1Session
         nuxeoDriveManager.unregisterSynchronizationRoot("user1",
-                doc("/default-domain/workspaces/workspace-2"), session);
+                doc(user1Session, "/default-domain/workspaces/workspace-2"),
+                user1Session);
         checkRootsCount("user1", session, 1);
         checkRootsCount("user2", session, 2);
 
@@ -288,6 +293,19 @@ public class TestNuxeoDriveManager {
 
         nuxeoDriveManager.unregisterSynchronizationRoot("user1",
                 session.getDocument(user1Workspace), session);
+        checkRootsCount("user1", session, 1);
+        checkRootsCount("user2", session, 2);
+
+        nuxeoDriveManager.unregisterSynchronizationRoot("user1",
+                doc("/default-domain/workspaces/workspace-2/folder-2-1"),
+                session);
+        checkRootsCount("user1", session, 0);
+        checkRootsCount("user2", session, 2);
+
+        // check re-registration
+        nuxeoDriveManager.registerSynchronizationRoot("user1",
+                doc("/default-domain/workspaces/workspace-2/folder-2-1"),
+                session);
         checkRootsCount("user1", session, 1);
         checkRootsCount("user2", session, 2);
     }

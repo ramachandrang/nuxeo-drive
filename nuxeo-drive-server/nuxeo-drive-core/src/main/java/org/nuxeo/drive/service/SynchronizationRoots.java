@@ -14,15 +14,29 @@
  * Contributors:
  *     Antoine Taillefer <ataillefer@nuxeo.com>
  */
-package org.nuxeo.drive.service.impl;
+package org.nuxeo.drive.service;
+
+import java.util.Set;
+
+import org.nuxeo.ecm.core.api.IdRef;
 
 /**
- * Enumerates the document types blacklisted for synchronization.
- *
- * @author Antoine Taillefer
+ * Data transfer object to fetch the list of references of synchronization roots
+ * for a given repo and user.
  */
-public enum BlackListedDocTypesEnum {
+public class SynchronizationRoots {
 
-    Root, ManagementRoot, AdministrativeStatusContainer, AdministrativeStatus, UserWorkspacesRoot, UserProfile, DefaultRelation, TaskRoot, DocumentRouteModelsRoot, DocumentRoute, RouteNode;
+    public final String repositoryName;
+
+    public final Set<String> paths;
+
+    public final Set<IdRef> refs;
+
+    public SynchronizationRoots(String repositoryName, Set<String> paths,
+            Set<IdRef> refs) {
+        this.repositoryName = repositoryName;
+        this.paths = paths;
+        this.refs = refs;
+    }
 
 }

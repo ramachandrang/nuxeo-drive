@@ -17,9 +17,10 @@
  */
 package org.nuxeo.drive.service;
 
+import java.util.Map;
 import java.util.Set;
 
-import org.nuxeo.drive.service.impl.DocumentChangeSummary;
+import org.nuxeo.drive.service.impl.FileSystemChangeSummary;
 import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
@@ -54,6 +55,39 @@ public interface NuxeoDriveManager {
             throws ClientException;
 
     /**
+     * Fetch the list of synchronization root ids for a given user and a given
+     * session repository. This list is assumed to be short enough (in the order
+     * of 100 folder max) so that no paging API is required.
+     *
+     * @param userName the id of the Nuxeo Drive user
+     * @param session active CoreSession instance to the repository hosting the
+     *            roots.
+     * @return the ordered set of non deleted synchronization root references
+     *         for that user
+     * @see #getSynchronizationRootPaths(String, CoreSession)
+     */
+    public Set<IdRef> getSynchronizationRootReferences(String userName,
+            CoreSession session) throws ClientException;
+
+    /**
+     * Fetch all the synchronization root references and paths for a given user.
+     * This list is assumed to be short enough (in the order of 100 folder max)
+     * so that no paging API is required.
+     *
+     * @param allRepositories if true then the synchronization root ids are
+     *            retrieved from all repositories, else only from the one
+     *            against which the given session is bound
+     * @param userName the id of the Nuxeo Drive user
+     * @param session active CoreSession instance to the repository hosting the
+     *            roots.
+     * @return the map keyed by repository names all active roots definitions
+     *         for the current user.
+     */
+    public Map<String, SynchronizationRoots> getSynchronizationRoots(
+            boolean allRepositories, String userName, CoreSession session)
+            throws ClientException;
+
+    /**
      * Fetch the list of synchronization root ids for a given user. This list is
      * assumed to be short enough (in the order of 100 folder max) so that no
      * paging API is required.
@@ -67,7 +101,9 @@ public interface NuxeoDriveManager {
      * @return the ordered set of non deleted synchronization root references
      *         for that user
      * @see #getSynchronizationRootPaths(String, CoreSession)
+     * @deprecated use getSynchronizationRoots directly
      */
+    @Deprecated
     public Set<IdRef> getSynchronizationRootReferences(boolean allRepositories,
             String userName, CoreSession session) throws ClientException;
 
@@ -85,7 +121,9 @@ public interface NuxeoDriveManager {
      * @return the ordered set of non deleted synchronization root paths for
      *         that user
      * @see #getSynchronizationRootReferences(String, CoreSession)
+     * @deprecated use getSynchronizationRoots directly
      */
+    @Deprecated
     public Set<String> getSynchronizationRootPaths(boolean allRepositories,
             String userName, CoreSession session) throws ClientException;
 
@@ -117,10 +155,17 @@ public interface NuxeoDriveManager {
      * @param session active CoreSession instance to the repository hosting the
      *            user's synchronization roots
      * @param lastSuccessfulSync the last successful synchronization date of the
-     *            user's device
+     *            user's device. This time is expected to be in milliseconds
+     *            since 1970-01-01 UTC as measured on the Nuxeo server clock,
+     *            typically set to the value returned
+     *            {@code DocumentChangeSummary#getSyncDate()} of the previous
+     *            call to
+     *            {@code NuxeoDriveManager#getDocumentChangeSummary(boolean, String, CoreSession, long)}
+     *            or 0 for catching every event since the repository
+     *            initialization.
      * @return the summary of document changes
      */
-    public DocumentChangeSummary getDocumentChangeSummary(
+    public FileSystemChangeSummary getDocumentChangeSummary(
             boolean allRepositories, String userName, CoreSession session,
             long lastSuccessfulSync) throws ClientException;
 
@@ -139,16 +184,15 @@ public interface NuxeoDriveManager {
      * @return the summary of document changes
      *
      */
-    public DocumentChangeSummary getFolderDocumentChangeSummary(
-            String folderPath, CoreSession session, long lastSuccessfulSync)
+    public FileSystemChangeSummary getFolderChangeSummary(String folderPath,
+            CoreSession session, long lastSuccessfulSync)
             throws ClientException;
 
     /**
-     * Sets the {@link DocumentChangeFinder} member.
+     * Sets the {@link FileSystemChangeFinder} member.
      * <p>
      * TODO: make it overridable with an extension point and remove setter.
      */
-    public void setDocumentChangeFinder(
-            DocumentChangeFinder documentChangeFinder);
+    public void setChangeFinder(FileSystemChangeFinder changeFinder);
 
 }

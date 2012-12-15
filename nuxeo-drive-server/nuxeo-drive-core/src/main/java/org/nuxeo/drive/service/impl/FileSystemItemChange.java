@@ -18,12 +18,15 @@ package org.nuxeo.drive.service.impl;
 
 import java.io.Serializable;
 
+import org.codehaus.jackson.annotate.JsonIgnore;
+import org.nuxeo.drive.adapter.FileSystemItem;
+
 /**
  * Representation of a document change.
  *
  * @author Antoine Taillefer
  */
-public class DocumentChange implements Serializable {
+public class FileSystemItemChange implements Serializable {
 
     private static final long serialVersionUID = -5697869523880291618L;
 
@@ -39,11 +42,13 @@ public class DocumentChange implements Serializable {
 
     protected String docUuid;
 
-    public DocumentChange() {
+    protected FileSystemItem fileSystemItem;
+
+    public FileSystemItemChange() {
         // Needed for JSON deserialization
     }
 
-    public DocumentChange(String repositoryId, String eventId,
+    public FileSystemItemChange(String repositoryId, String eventId,
             String docLifeCycleState, long eventDate, String docPath,
             String docUuid) {
         this.repositoryId = repositoryId;
@@ -100,6 +105,15 @@ public class DocumentChange implements Serializable {
 
     public void setDocUuid(String docUuid) {
         this.docUuid = docUuid;
+    }
+
+    public FileSystemItem getFileSystemItem() {
+        return fileSystemItem;
+    }
+
+    @JsonIgnore
+    public void setFileSystemItem(FileSystemItem fileSystemItem) {
+        this.fileSystemItem = fileSystemItem;
     }
 
 }

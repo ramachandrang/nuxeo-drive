@@ -26,37 +26,31 @@ import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.nuxeo.drive.service.DocumentChangeFinder;
-import org.nuxeo.drive.service.TooManyDocumentChangesException;
+import org.nuxeo.drive.service.FileSystemChangeFinder;
+import org.nuxeo.drive.service.TooManyChangesException;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.platform.audit.api.AuditReader;
 import org.nuxeo.runtime.api.Framework;
 
 /**
- * Implementation of {@link DocumentChangeFinder} using the {@link AuditReader}.
+ * Implementation of {@link FileSystemChangeFinder} using the {@link AuditReader}.
  *
  * @author Antoine Taillefer
  */
-public class AuditDocumentChangeFinder implements DocumentChangeFinder {
+public class AuditDocumentChangeFinder implements FileSystemChangeFinder {
 
     private static final long serialVersionUID = 1963018967324857522L;
 
     private static final Log log = LogFactory.getLog(AuditDocumentChangeFinder.class);
 
-    protected String blackListedDocTypes;
-
-    public AuditDocumentChangeFinder() {
-        initBlackListedDocTypes();
-    }
-
     @Override
     @SuppressWarnings("unchecked")
-    public List<DocumentChange> getDocumentChanges(boolean allRepositories,
+    public List<FileSystemItemChange> getFileSystemChanges(boolean allRepositories,
             CoreSession session, Set<String> rootPaths,
-            long lastSuccessfulSync, int limit)
-            throws TooManyDocumentChangesException {
+            long lastSuccessfulSyncDate, long syncDate, int limit)
+            throws TooManyChangesException {
 
-        List<DocumentChange> docChanges = new ArrayList<DocumentChange>();
+        List<FileSystemItemChange> changes = new ArrayList<FileSystemItemChange>();
         if (!rootPaths.isEmpty()) {
             AuditReader auditService = Framework.getLocalService(AuditReader.class);
             StringBuilder auditQuerySb = new StringBuilder();
@@ -71,29 +65,27 @@ public class AuditDocumentChangeFinder implements DocumentChangeFinder {
             auditQuerySb.append("or ");
             auditQuerySb.append("log.category = 'nuxeoDriveCategory'");
             auditQuerySb.append(") ");
-            auditQuerySb.append("and log.docType not in (%s) ");
             auditQuerySb.append("and (%s) ");
-            auditQuerySb.append("and log.eventDate > '%s' ");
+            auditQuerySb.append("and (%s) ");
             auditQuerySb.append("order by log.repositoryId asc, log.eventDate desc");
 
             String auditQuery;
             if (!allRepositories) {
                 String repositoryName = session.getRepositoryName();
                 auditQuery = String.format(auditQuerySb.toString(),
-                        repositoryName, blackListedDocTypes,
-                        getRootPathClause(rootPaths),
-                        getLastSuccessfulSyncDate(lastSuccessfulSync));
+                        repositoryName, getRootPathClause(rootPaths),
+                        getDateClause(lastSuccessfulSyncDate, syncDate));
             } else {
                 auditQuery = String.format(auditQuerySb.toString(),
-                        blackListedDocTypes, getRootPathClause(rootPaths),
-                        getLastSuccessfulSyncDate(lastSuccessfulSync));
+                        getRootPathClause(rootPaths),
+                        getDateClause(lastSuccessfulSyncDate, syncDate));
             }
             log.debug("Querying audit logs for document changes: " + auditQuery);
 
             List<Object[]> queryResult = (List<Object[]>) auditService.nativeQuery(
                     auditQuery, 1, limit);
             if (queryResult.size() >= limit) {
-                throw new TooManyDocumentChangesException(
+                throw new TooManyChangesException(
                         "Too many document changes found in the audit logs.");
             }
             for (Object[] auditEntry : queryResult) {
@@ -103,32 +95,11 @@ public class AuditDocumentChangeFinder implements DocumentChangeFinder {
                 Long eventDate = ((Timestamp) auditEntry[3]).getTime();
                 String docPath = (String) auditEntry[4];
                 String docUuid = (String) auditEntry[5];
-                docChanges.add(new DocumentChange(repositoryId, eventId,
+                changes.add(new FileSystemItemChange(repositoryId, eventId,
                         docLifeCycleState, eventDate, docPath, docUuid));
             }
         }
-        return docChanges;
-    }
-
-    public String getBlackListedDocTypes() {
-        return blackListedDocTypes;
-    }
-
-    public void setBlackListedDocTypes(String blackListedDocTypes) {
-        this.blackListedDocTypes = blackListedDocTypes;
-    }
-
-    protected void initBlackListedDocTypes() {
-        StringBuilder sb = new StringBuilder();
-        for (BlackListedDocTypesEnum blackListedDocType : BlackListedDocTypesEnum.values()) {
-            if (sb.length() > 0) {
-                sb.append(",");
-            }
-            sb.append("'");
-            sb.append(blackListedDocType.name());
-            sb.append("'");
-        }
-        blackListedDocTypes = sb.toString();
+        return changes;
     }
 
     protected String getRootPathClause(Set<String> rootPaths) {
@@ -143,9 +114,13 @@ public class AuditDocumentChangeFinder implements DocumentChangeFinder {
         return rootPathClause.toString();
     }
 
-    protected String getLastSuccessfulSyncDate(long lastSuccessfulSync) {
-        DateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-        return sdf.format(new Date(lastSuccessfulSync));
+    // Round dates to the lower second to ensure consistency
+    // in the case of databases that don't support milliseconds
+    protected String getDateClause(long lastSuccessfulSyncDate, long syncDate) {
+        DateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        return String.format("log.eventDate >= '%s' and log.eventDate < '%s'",
+                sdf.format(new Date(lastSuccessfulSyncDate)),
+                sdf.format(new Date(syncDate)));
     }
 
 }

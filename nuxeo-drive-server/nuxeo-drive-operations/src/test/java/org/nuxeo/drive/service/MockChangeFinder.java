@@ -29,7 +29,7 @@ import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.nuxeo.drive.service.impl.DocumentChange;
+import org.nuxeo.drive.service.impl.FileSystemItemChange;
 import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.ClientRuntimeException;
 import org.nuxeo.ecm.core.api.CoreInstance;
@@ -42,32 +42,32 @@ import org.nuxeo.ecm.core.api.repository.RepositoryManager;
 import org.nuxeo.runtime.api.Framework;
 
 /**
- * Mock implementation of {@link DocumentChangeFinder} using a
+ * Mock implementation of {@link FileSystemChangeFinder} using a
  * {@link CoreSession} query.
  * <p>
  * For test purpose only.
  *
  * @author Antoine Taillefer
  */
-public class MockDocumentChangeFinder implements DocumentChangeFinder {
+public class MockChangeFinder implements FileSystemChangeFinder {
 
     private static final long serialVersionUID = -8829376616919987451L;
 
-    private static final Log log = LogFactory.getLog(MockDocumentChangeFinder.class);
+    private static final Log log = LogFactory.getLog(MockChangeFinder.class);
 
     @Override
-    public List<DocumentChange> getDocumentChanges(boolean allRepositories,
+    public List<FileSystemItemChange> getFileSystemChanges(boolean allRepositories,
             CoreSession session, Set<String> rootPaths,
-            long lastSuccessfulSync, int limit)
-            throws TooManyDocumentChangesException {
+            long lastSuccessfulSyncDate, long syncDate, int limit)
+            throws TooManyChangesException {
 
-        List<DocumentChange> docChanges = new ArrayList<DocumentChange>();
+        List<FileSystemItemChange> docChanges = new ArrayList<FileSystemItemChange>();
         if (!rootPaths.isEmpty()) {
             StringBuilder querySb = new StringBuilder();
-            querySb.append("SELECT * FROM Document WHERE (%s) AND dc:modified > '%s' ORDER BY dc:modified DESC");
+            querySb.append("SELECT * FROM Document WHERE (%s) AND (%s) ORDER BY dc:modified DESC");
             String query = String.format(querySb.toString(),
                     getRootPathClause(rootPaths),
-                    getLastSuccessfulSyncDate(lastSuccessfulSync));
+                    getDateClause(lastSuccessfulSyncDate, syncDate));
             log.debug("Querying repository for document changes: " + query);
 
             if (allRepositories) {
@@ -81,7 +81,7 @@ public class MockDocumentChangeFinder implements DocumentChangeFinder {
                         repoSession = repo.open(context);
                         docChanges.addAll(getDocumentChanges(repoSession,
                                 query, limit));
-                    } catch (TooManyDocumentChangesException e) {
+                    } catch (TooManyChangesException e) {
                         throw e;
                     } catch (Exception e) {
                         throw new ClientRuntimeException(e);
@@ -110,19 +110,21 @@ public class MockDocumentChangeFinder implements DocumentChangeFinder {
         return rootPathClause.toString();
     }
 
-    protected String getLastSuccessfulSyncDate(long lastSuccessfulSync) {
-        DateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-        return sdf.format(new Date(lastSuccessfulSync));
+    protected String getDateClause(long lastSuccessfulSyncDate, long syncDate) {
+        DateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        return String.format("dc:modified >= '%s' and dc:modified < '%s'",
+                sdf.format(new Date(lastSuccessfulSyncDate)),
+                sdf.format(new Date(syncDate)));
     }
 
-    protected List<DocumentChange> getDocumentChanges(CoreSession session,
-            String query, int limit) throws TooManyDocumentChangesException {
+    protected List<FileSystemItemChange> getDocumentChanges(CoreSession session,
+            String query, int limit) throws TooManyChangesException {
 
         try {
-            List<DocumentChange> docChanges = new ArrayList<DocumentChange>();
+            List<FileSystemItemChange> docChanges = new ArrayList<FileSystemItemChange>();
             DocumentModelList queryResult = session.query(query, limit);
             if (queryResult.size() >= limit) {
-                throw new TooManyDocumentChangesException(
+                throw new TooManyChangesException(
                         "Too many document changes found in the repository.");
             }
             for (DocumentModel doc : queryResult) {
@@ -132,11 +134,11 @@ public class MockDocumentChangeFinder implements DocumentChangeFinder {
                 long eventDate = ((Calendar) doc.getPropertyValue("dc:modified")).getTimeInMillis();
                 String docPath = doc.getPathAsString();
                 String docUuid = doc.getId();
-                docChanges.add(new DocumentChange(repositoryId, eventId,
+                docChanges.add(new FileSystemItemChange(repositoryId, eventId,
                         docLifeCycleState, eventDate, docPath, docUuid));
             }
             return docChanges;
-        } catch (TooManyDocumentChangesException e) {
+        } catch (TooManyChangesException e) {
             throw e;
         } catch (ClientException e) {
             throw new ClientRuntimeException(e);

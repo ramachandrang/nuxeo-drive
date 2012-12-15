@@ -27,15 +27,15 @@ import java.lang.reflect.Proxy;
 import java.util.Calendar;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
+import java.util.TimeZone;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.nuxeo.drive.service.impl.AuditDocumentChangeFinder;
-import org.nuxeo.drive.service.impl.DocumentChange;
-import org.nuxeo.drive.service.impl.DocumentChangeSummary;
+import org.nuxeo.drive.service.impl.FileSystemChangeSummary;
+import org.nuxeo.drive.service.impl.FileSystemItemChange;
 import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
@@ -49,6 +49,7 @@ import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.test.runner.Deploy;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
+import org.nuxeo.runtime.test.runner.LocalDeploy;
 import org.nuxeo.runtime.transaction.TransactionHelper;
 
 import com.google.inject.Inject;
@@ -62,7 +63,8 @@ import com.google.inject.Inject;
 // several consecutive transactions in a test method
 @TransactionalConfig(autoStart = false)
 @Deploy("org.nuxeo.drive.core")
-public class TestAuditDocumentChangeFinder {
+@LocalDeploy("org.nuxeo.drive.core:OSGI-INF/test-nuxeodrive-types-contrib.xml")
+public class TestAuditFileSystemChangeFinder {
 
     @Inject
     protected CoreSession session;
@@ -73,7 +75,7 @@ public class TestAuditDocumentChangeFinder {
     @Inject
     protected NuxeoDriveManager nuxeoDriveManager;
 
-    protected DocumentChangeFinder documentChangeFinder;
+    protected FileSystemChangeFinder changeFinder;
 
     protected long lastSuccessfulSync;
 
@@ -86,7 +88,7 @@ public class TestAuditDocumentChangeFinder {
     @Before
     public void init() throws Exception {
 
-        documentChangeFinder = new AuditDocumentChangeFinder();
+        changeFinder = new AuditDocumentChangeFinder();
         lastSuccessfulSync = Calendar.getInstance().getTimeInMillis();
         syncRootPaths = new HashSet<String>();
         Framework.getProperties().put("org.nuxeo.drive.document.change.limit",
@@ -104,38 +106,39 @@ public class TestAuditDocumentChangeFinder {
     }
 
     @Test
-    public void testFindDocumentChanges() throws Exception {
+    public void testFindChanges() throws Exception {
 
         // No sync roots
-        List<DocumentChange> docChanges = getDocumentChanges();
-        assertNotNull(docChanges);
-        assertTrue(docChanges.isEmpty());
+        List<FileSystemItemChange> changes = getDocumentChanges();
+        assertNotNull(changes);
+        assertTrue(changes.isEmpty());
 
         // Sync roots but no changes
         syncRootPaths.add("/folder1");
         syncRootPaths.add("/folder2");
-        docChanges = getDocumentChanges();
-        assertTrue(docChanges.isEmpty());
+        changes = getDocumentChanges();
+        assertTrue(changes.isEmpty());
 
         // Create 3 documents, only 2 in sync roots
         TransactionHelper.startTransaction();
         DocumentModel doc1 = session.createDocument(session.createDocumentModel(
                 "/folder1", "doc1", "File"));
+        Thread.sleep(1000);
         DocumentModel doc2 = session.createDocument(session.createDocumentModel(
                 "/folder2", "doc2", "File"));
         DocumentModel doc3 = session.createDocument(session.createDocumentModel(
                 "/folder3", "doc3", "File"));
         commitAndWaitForAsyncCompletion();
 
-        docChanges = getDocumentChanges();
-        assertEquals(2, docChanges.size());
-        DocumentChange docChange = docChanges.get(0);
+        changes = getDocumentChanges();
+        assertEquals(2, changes.size());
+        FileSystemItemChange docChange = changes.get(0);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("documentCreated", docChange.getEventId());
         assertEquals("project", docChange.getDocLifeCycleState());
         assertEquals("/folder2/doc2", docChange.getDocPath());
         assertEquals(doc2.getId(), docChange.getDocUuid());
-        docChange = docChanges.get(1);
+        docChange = changes.get(1);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("documentCreated", docChange.getEventId());
         assertEquals("project", docChange.getDocLifeCycleState());
@@ -143,8 +146,8 @@ public class TestAuditDocumentChangeFinder {
         assertEquals(doc1.getId(), docChange.getDocUuid());
 
         // No changes since last successful sync
-        docChanges = getDocumentChanges();
-        assertTrue(docChanges.isEmpty());
+        changes = getDocumentChanges();
+        assertTrue(changes.isEmpty());
 
         // Update both synchronized documents and unsynchronize a root
         TransactionHelper.startTransaction();
@@ -157,9 +160,9 @@ public class TestAuditDocumentChangeFinder {
         commitAndWaitForAsyncCompletion();
 
         syncRootPaths.remove("/folder2");
-        docChanges = getDocumentChanges();
-        assertEquals(1, docChanges.size());
-        docChange = docChanges.get(0);
+        changes = getDocumentChanges();
+        assertEquals(1, changes.size());
+        docChange = changes.get(0);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("documentModified", docChange.getEventId());
         assertEquals("project", docChange.getDocLifeCycleState());
@@ -171,9 +174,9 @@ public class TestAuditDocumentChangeFinder {
         session.followTransition(doc1.getRef(), "delete");
         commitAndWaitForAsyncCompletion();
 
-        docChanges = getDocumentChanges();
-        assertEquals(1, docChanges.size());
-        docChange = docChanges.get(0);
+        changes = getDocumentChanges();
+        assertEquals(1, changes.size());
+        docChange = changes.get(0);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("lifecycle_transition_event", docChange.getEventId());
         assertEquals("deleted", docChange.getDocLifeCycleState());
@@ -184,19 +187,20 @@ public class TestAuditDocumentChangeFinder {
         // synchronized root
         TransactionHelper.startTransaction();
         session.followTransition(doc1.getRef(), "undelete");
+        Thread.sleep(1000);
         session.move(doc3.getRef(), folder2.getRef(), null);
         commitAndWaitForAsyncCompletion();
 
         syncRootPaths.add("/folder2");
-        docChanges = getDocumentChanges();
-        assertEquals(2, docChanges.size());
-        docChange = docChanges.get(0);
+        changes = getDocumentChanges();
+        assertEquals(2, changes.size());
+        docChange = changes.get(0);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("documentMoved", docChange.getEventId());
         assertEquals("project", docChange.getDocLifeCycleState());
         assertEquals("/folder2/doc3", docChange.getDocPath());
         assertEquals(doc3.getId(), docChange.getDocUuid());
-        docChange = docChanges.get(1);
+        docChange = changes.get(1);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("lifecycle_transition_event", docChange.getEventId());
         assertEquals("project", docChange.getDocLifeCycleState());
@@ -214,26 +218,24 @@ public class TestAuditDocumentChangeFinder {
         try {
             getDocumentChanges();
             fail("An exception of type TooManyDocumentChangesException should have been thrown since the document change limit is exceeded.");
-        } catch (TooManyDocumentChangesException e) {
+        } catch (TooManyChangesException e) {
             // Expected
         }
     }
 
     @Test
-    public void testGetDocumentChangeSummary() throws Exception {
+    public void testGetChangeSummary() throws Exception {
 
         // No sync roots => shouldn't find any changes
-        DocumentChangeSummary docChangeSummary = getDocumentChangeSummary("Administrator");
-        assertNotNull(docChangeSummary);
-        assertTrue(docChangeSummary.getSyncRootPaths().isEmpty());
-        assertTrue(docChangeSummary.getDocumentChanges().isEmpty());
-        assertTrue(docChangeSummary.getChangedDocModels().isEmpty());
-        assertEquals("no_changes", docChangeSummary.getStatusCode());
+        FileSystemChangeSummary changeSummary = getChangeSummary("Administrator");
+        assertNotNull(changeSummary);
+        assertTrue(changeSummary.getFileSystemChanges().isEmpty());
+        assertEquals(Boolean.FALSE, changeSummary.getHasTooManyChanges());
 
         // Register sync roots => should find changes: the newly
         // synchronized root folders as they are updated by the synchronization
         // registration process
-        // TODO: uncomment if not needed
+        // TODO: uncomment if needed or remove
         // TransactionHelper.startTransaction();
         nuxeoDriveManager.registerSynchronizationRoot("Administrator", folder1,
                 session);
@@ -241,38 +243,39 @@ public class TestAuditDocumentChangeFinder {
                 session);
         // commitAndWaitForAsyncCompletion();
 
-        docChangeSummary = getDocumentChangeSummary("Administrator");
-        Set<String> expectedSyncRootPaths = new HashSet<String>();
-        expectedSyncRootPaths.add("/folder1");
-        expectedSyncRootPaths.add("/folder2");
-        assertEquals(expectedSyncRootPaths, docChangeSummary.getSyncRootPaths());
-        assertEquals(2, docChangeSummary.getDocumentChanges().size());
-        assertEquals(2, docChangeSummary.getChangedDocModels().size());
-        assertEquals("found_changes", docChangeSummary.getStatusCode());
+        changeSummary = getChangeSummary("Administrator");
+        assertEquals(2, changeSummary.getFileSystemChanges().size());
+        assertEquals(Boolean.FALSE, changeSummary.getHasTooManyChanges());
 
         // Create 3 documents, only 2 in sync roots => should find 2 changes
         TransactionHelper.startTransaction();
-        DocumentModel doc1 = session.createDocument(session.createDocumentModel(
-                "/folder1", "doc1", "File"));
-        DocumentModel doc2 = session.createDocument(session.createDocumentModel(
-                "/folder2", "doc2", "File"));
+        DocumentModel doc1 = session.createDocumentModel("/folder1", "doc1",
+                "File");
+        doc1.setPropertyValue("file:content", new StringBlob(
+                "The content of file 1."));
+        doc1 = session.createDocument(doc1);
+        Thread.sleep(1000);
+        DocumentModel doc2 = session.createDocumentModel("/folder2", "doc2",
+                "File");
+        doc2.setPropertyValue("file:content", new StringBlob(
+                "The content of file 2."));
+        doc2 = session.createDocument(doc2);
         session.createDocument(session.createDocumentModel("/folder3", "doc3",
                 "File"));
         commitAndWaitForAsyncCompletion();
 
-        docChangeSummary = getDocumentChangeSummary("Administrator");
-        assertEquals(expectedSyncRootPaths, docChangeSummary.getSyncRootPaths());
+        changeSummary = getChangeSummary("Administrator");
 
-        List<DocumentChange> docChanges = docChangeSummary.getDocumentChanges();
-        assertEquals(2, docChanges.size());
-        DocumentChange docChange = docChanges.get(0);
+        List<FileSystemItemChange> changes = changeSummary.getFileSystemChanges();
+        assertEquals(2, changes.size());
+        FileSystemItemChange docChange = changes.get(0);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("documentCreated", docChange.getEventId());
         // TODO: understand why the life cycle is not good
         // assertEquals("project", docChange.getDocLifeCycleState());
         assertEquals("/folder2/doc2", docChange.getDocPath());
         assertEquals(doc2.getId(), docChange.getDocUuid());
-        docChange = docChanges.get(1);
+        docChange = changes.get(1);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("documentCreated", docChange.getEventId());
         // TODO: understand why the life cycle is not good
@@ -280,52 +283,48 @@ public class TestAuditDocumentChangeFinder {
         assertEquals("/folder1/doc1", docChange.getDocPath());
         assertEquals(doc1.getId(), docChange.getDocUuid());
 
-        Map<String, DocumentModel> changedDocModels = docChangeSummary.getChangedDocModels();
-        assertEquals(2, changedDocModels.size());
-        DocumentModel changedDoc = changedDocModels.get(doc1.getId());
-        assertNotNull(changedDoc);
-        assertEquals(doc1.getId(), changedDoc.getId());
-        assertEquals("/folder1/doc1", changedDoc.getPathAsString());
-        assertEquals("doc1", changedDoc.getName());
-        assertEquals("doc1", changedDoc.getTitle());
-        assertEquals("File", changedDoc.getType());
-        assertEquals("project", changedDoc.getCurrentLifeCycleState());
-        changedDoc = changedDocModels.get(doc2.getId());
-        assertNotNull(changedDoc);
-        assertEquals(doc2.getId(), changedDoc.getId());
-        assertEquals("/folder2/doc2", changedDoc.getPathAsString());
-        assertEquals("doc2", changedDoc.getName());
-        assertEquals("doc2", changedDoc.getTitle());
-        assertEquals("File", changedDoc.getType());
-        assertEquals("project", changedDoc.getCurrentLifeCycleState());
+        assertEquals(Boolean.FALSE, changeSummary.getHasTooManyChanges());
 
-        assertEquals("found_changes", docChangeSummary.getStatusCode());
+        // Create a document that should not be synchronized because not
+        // adaptable as a FileSystemItem (not Folderish nor a BlobHolder with a
+        // blob) => should not be considered as a change
+        TransactionHelper.startTransaction();
+        session.createDocument(session.createDocumentModel("/folder1",
+                "notSynchronizableDoc", "NotSynchronizable"));
+        commitAndWaitForAsyncCompletion();
+
+        changeSummary = getChangeSummary("Administrator");
+        assertTrue(changeSummary.getFileSystemChanges().isEmpty());
+        assertEquals(Boolean.FALSE, changeSummary.getHasTooManyChanges());
 
         // Create 2 documents in the same sync root: "/folder1" and 1 document
         // in another sync root => should find 2 changes for "/folder1"
         TransactionHelper.startTransaction();
-        session.createDocument(session.createDocumentModel("/folder1", "doc3",
-                "File"));
-        session.createDocument(session.createDocumentModel("/folder1", "doc4",
-                "File"));
-        session.createDocument(session.createDocumentModel("/folder2", "doc5",
-                "File"));
+        DocumentModel doc3 = session.createDocumentModel("/folder1", "doc3",
+                "File");
+        doc3.setPropertyValue("file:content", new StringBlob(
+                "The content of file 3."));
+        doc3 = session.createDocument(doc3);
+        DocumentModel doc4 = session.createDocumentModel("/folder1", "doc4",
+                "File");
+        doc4.setPropertyValue("file:content", new StringBlob(
+                "The content of file 4."));
+        doc4 = session.createDocument(doc4);
+        DocumentModel doc5 = session.createDocumentModel("/folder2", "doc5",
+                "File");
+        doc5.setPropertyValue("file:content", new StringBlob(
+                "The content of file 5."));
+        doc5 = session.createDocument(doc5);
         commitAndWaitForAsyncCompletion();
 
-        docChangeSummary = getFolderDocumentChangeSummary("/folder1");
-        expectedSyncRootPaths.remove("/folder2");
-        assertEquals(expectedSyncRootPaths, docChangeSummary.getSyncRootPaths());
-        assertEquals(2, docChangeSummary.getDocumentChanges().size());
-        assertEquals(2, docChangeSummary.getChangedDocModels().size());
-        assertEquals("found_changes", docChangeSummary.getStatusCode());
+        changeSummary = getFolderChangeSummary("/folder1");
+        assertEquals(2, changeSummary.getFileSystemChanges().size());
+        assertEquals(Boolean.FALSE, changeSummary.getHasTooManyChanges());
 
         // No changes since last successful sync
-        docChangeSummary = getDocumentChangeSummary("Administrator");
-        expectedSyncRootPaths.add("/folder2");
-        assertEquals(expectedSyncRootPaths, docChangeSummary.getSyncRootPaths());
-        assertTrue(docChangeSummary.getDocumentChanges().isEmpty());
-        assertTrue(docChangeSummary.getChangedDocModels().isEmpty());
-        assertEquals("no_changes", docChangeSummary.getStatusCode());
+        changeSummary = getChangeSummary("Administrator");
+        assertTrue(changeSummary.getFileSystemChanges().isEmpty());
+        assertEquals(Boolean.FALSE, changeSummary.getHasTooManyChanges());
 
         // Too many changes
         TransactionHelper.startTransaction();
@@ -335,29 +334,32 @@ public class TestAuditDocumentChangeFinder {
 
         Framework.getProperties().put("org.nuxeo.drive.document.change.limit",
                 "1");
-        docChangeSummary = getDocumentChangeSummary("Administrator");
-        assertEquals(expectedSyncRootPaths, docChangeSummary.getSyncRootPaths());
-        assertTrue(docChangeSummary.getDocumentChanges().isEmpty());
-        assertTrue(docChangeSummary.getChangedDocModels().isEmpty());
-        assertEquals("too_many_changes", docChangeSummary.getStatusCode());
+        changeSummary = getChangeSummary("Administrator");
+        assertTrue(changeSummary.getFileSystemChanges().isEmpty());
+        assertEquals(Boolean.TRUE, changeSummary.getHasTooManyChanges());
     }
 
     /**
      * Gets the document changes using the {@link AuditDocumentChangeFinder} and
      * updates the {@link #lastSuccessfulSync} date.
      */
-    protected List<DocumentChange> getDocumentChanges()
-            throws TooManyDocumentChangesException {
-        List<DocumentChange> docChanges = documentChangeFinder.getDocumentChanges(
+    protected List<FileSystemItemChange> getDocumentChanges()
+            throws TooManyChangesException, InterruptedException {
+        // Wait 1 second as the audit change finder relies on steps of 1 second
+        Thread.sleep(1000);
+        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        cal.set(Calendar.MILLISECOND, 0);
+        long syncDate = cal.getTimeInMillis();
+        List<FileSystemItemChange> changes = changeFinder.getFileSystemChanges(
                 true,
                 session,
                 syncRootPaths,
                 lastSuccessfulSync,
+                syncDate,
                 Integer.parseInt(Framework.getProperty("org.nuxeo.drive.document.change.limit")));
-        assertNotNull(docChanges);
-        lastSuccessfulSync = System.currentTimeMillis();
-        return docChanges;
-
+        assertNotNull(changes);
+        lastSuccessfulSync = syncDate;
+        return changes;
     }
 
     /**
@@ -365,13 +367,15 @@ public class TestAuditDocumentChangeFinder {
      * roots using the {@link NuxeoDriveManager} and updates the
      * {@link #lastSuccessfulSync} date.
      */
-    protected DocumentChangeSummary getDocumentChangeSummary(String userName)
-            throws ClientException {
-        DocumentChangeSummary docChangeSummary = nuxeoDriveManager.getDocumentChangeSummary(
+    protected FileSystemChangeSummary getChangeSummary(String userName)
+            throws ClientException, InterruptedException {
+        // Wait 1 second as the audit change finder relies on steps of 1 second
+        Thread.sleep(1000);
+        FileSystemChangeSummary changeSummary = nuxeoDriveManager.getDocumentChangeSummary(
                 true, userName, session, lastSuccessfulSync);
-        assertNotNull(docChangeSummary);
-        lastSuccessfulSync = docChangeSummary.getSyncDate();
-        return docChangeSummary;
+        assertNotNull(changeSummary);
+        lastSuccessfulSync = changeSummary.getSyncDate();
+        return changeSummary;
     }
 
     /**
@@ -379,13 +383,15 @@ public class TestAuditDocumentChangeFinder {
      * {@link NuxeoDriveManager} and updates the {@link #lastSuccessfulSync}
      * date.
      */
-    protected DocumentChangeSummary getFolderDocumentChangeSummary(
-            String folderPath) throws ClientException {
-        DocumentChangeSummary docChangeSummary = nuxeoDriveManager.getFolderDocumentChangeSummary(
+    protected FileSystemChangeSummary getFolderChangeSummary(
+            String folderPath) throws ClientException, InterruptedException {
+        // Wait 1 second as the audit change finder relies on steps of 1 second
+        Thread.sleep(1000);
+        FileSystemChangeSummary changeSummary = nuxeoDriveManager.getFolderChangeSummary(
                 folderPath, session, lastSuccessfulSync);
-        assertNotNull(docChangeSummary);
-        lastSuccessfulSync = docChangeSummary.getSyncDate();
-        return docChangeSummary;
+        assertNotNull(changeSummary);
+        lastSuccessfulSync = changeSummary.getSyncDate();
+        return changeSummary;
     }
 
     protected void commitAndWaitForAsyncCompletion() throws Exception {
