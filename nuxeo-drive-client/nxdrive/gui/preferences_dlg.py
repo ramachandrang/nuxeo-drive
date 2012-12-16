@@ -313,15 +313,19 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             if not plist_settings.contains('Label'):
                 # create the plist
                 plist_settings.setValue('Label', 'com.sharplabs.sla.clouddesk.sync')
-                plist_settings.setValue('KeepAlive/SuccessfulExit', False)
-                path = executable + ' ' + os.path.join(os.getcwd(), 'commandline.py')
+                # TODO change this foe the deployed version of the app
+                path = executable + ' ' + os.path.join(os.getcwd(), 'nxdrive/commandline.py')
                 plist_settings.setValue('Program', path)
                 plist_settings.setValue('ProgramArguments', [path, 'gui'])
-                plist_settings.setValue('RunAtLoad', self.autostart)
-                plist_settings.sync()
+
+            # start when it loads the agent
+            plist_settings.setValue('RunAtLoad', self.autostart)
+            # restart if app stops with a non-normal exit status, i.e. non-zero (crash?)
+            if self.autostart:
+                plist_settings.setValue('KeepAlive', {'SuccessfulExit': False})
             else:
-                # modify the key
-                plist_settings.setValue('RunAtLoad', self.autostart)
+                plist_settings.remove('KeepAlive')
+                
                         
         self.done(QDialog.Accepted)
         

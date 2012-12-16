@@ -7,7 +7,10 @@ import sys
 from datetime import datetime
 
 from distutils.core import setup
-import py2exe
+if sys.platform == 'win32':
+    import py2exe
+elif sys.platform == 'darwin':
+    import py2app
 
 scripts = ["nuxeo-drive-client/bin/ndrive"]
 freeze_options = {}
