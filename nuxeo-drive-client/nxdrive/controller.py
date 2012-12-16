@@ -5,14 +5,11 @@ from time import time
 from time import sleep
 # TOBE REMOVED
 from datetime import datetime
-import os
 import os.path
 from threading import local
 import urllib2
-import urllib
 import md5
 import suds
-from suds.client import Client
 import base64
 import socket
 import httplib
@@ -30,8 +27,9 @@ from nxdrive.model import init_db
 from nxdrive.model import DeviceConfig, ServerBinding, RootBinding, LastKnownState, SyncFolders
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
-from utils.helpers import RecoverableError
+from nxdrive.utils.helpers import RecoverableError
 #from nxdrive.utils.helpers import Notifier
+
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy import DateTime, cast
 from sqlalchemy import func

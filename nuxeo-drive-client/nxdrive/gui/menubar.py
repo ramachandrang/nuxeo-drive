@@ -15,7 +15,7 @@ import PySide
 from PySide import QtGui
 from PySide import QtCore
 from PySide.QtGui import QDialog, QMessageBox, QImage, QPainter, QIcon
-from PySide.QtCore import QTimer
+from PySide.QtCore import QTimer, QSettings
 
 from nxdrive import Constants
 from nxdrive.async.operations import SyncOperations
@@ -26,9 +26,11 @@ import nxdrive.gui.qrc_resources
 from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
+from nxdrive.utils.helpers import create_settings
 
 from preferences_dlg import PreferencesDlg
-            
+
+settings = create_settings()
 
 def default_expanded_nuxeo_drive_folder():
     # get home directory

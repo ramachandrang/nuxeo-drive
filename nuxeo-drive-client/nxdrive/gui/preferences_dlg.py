@@ -5,17 +5,19 @@ Created on Dec 13, 2012
 '''
 
 import os
+import sys
 import platform
+from sys import executable
 import shutil
 
 from PySide.QtGui import QDialog, QMessageBox, QDialogButtonBox, QFileDialog
-from PySide.QtCore import Qt
+from PySide.QtCore import Qt, QSettings
 
 from nxdrive import Constants
 from nxdrive.model import ServerBinding
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
-
+from nxdrive.utils.helpers import create_settings
 from ui_preferences import Ui_preferencesDlg
 from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
@@ -26,9 +28,12 @@ def default_expanded_nuxeo_drive_folder():
 
 log = get_logger(__name__)
 
+settings = create_settings()
+
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_EX_NX_DRIVE_FOLDER = default_expanded_nuxeo_drive_folder()
 
+settings = QSettings()
 
 class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def __init__(self, frontend=None, parent=None):
@@ -51,7 +56,16 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.txtCloudfolder.textChanged.connect(self.changeFolder)
         self.btnSelect.clicked.connect(self.selectFolders)
         self.btnProxy.clicked.connect(self.configProxy)
+        
         self.rbProxy.toggled.connect(lambda checked : self.btnProxy.setEnabled(checked))
+        self.autostart = settings.value('preferences/autostart', True)
+        self.cbAutostart.stateChanged.connect(self.setAutostart)
+        self.iconOverlays = settings.value('preferences/icon-overlays', True)
+        self.cbIconOverlays.stateChanged.connect(self.setShowIconOverlays)
+        self.notifications = settings.value('preferences/notifications', True)
+        self.cbNotifications.stateChanged.connect(self.setNotifications)
+        self.logEnabled = settings.value('preferences/log', True)
+        self.cbEnablelog.stateChanged.connect(self.enableLog)
         
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         
@@ -66,6 +80,10 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.lblComputer.setText(platform.node())
             self.lblStorage.setText("123Mb (0.03%) of 4Gb")    
             self.rbProxy.setChecked(self.proxy != None)
+            self.cbAutostart.setChecked(self.autostart)
+            self.cbIconOverlays.setChecked(self.iconOverlays)
+            self.cbNotifications.setChecked(self.notifications)
+            self.cbEnablelog.setChecked(self.logEnabled)
             
             if not self._isConnected():
                 self.txtUrl.setText(Constants.DEFAULT_CLOUDDESK_URL)
@@ -89,6 +107,18 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         dlg = ProxyDlg(frontend=self)
         if dlg.exec_() == QDialog.Rejected:
             return
+        
+    def setAutostart(self, state):
+        self.autostart = True if state == Qt.Checked else False
+        
+    def setShowIconOverlays(self, state):
+        self.iconOverlays = True if state == Qt.Checked else False
+        
+    def setNotifications(self, state):
+        self.notifications = True if state == Qt.Checked else False
+        
+    def enableLog(self, state):
+        self.logEnabled = True if state == Qt.Checked else False
         
     def changeFolder(self):
         self.move_to_folder = os.path.join(self.txtCloudfolder.text(), Constants.DEFAULT_NXDRIVE_FOLDER)
@@ -201,38 +231,37 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             previous_binding = self.controller.get_server_binding(local_folder=self.previous_local_folder, raise_if_missing=False)
         same_binding = self.server_binding == previous_binding 
         
-        if same_binding: return
-        
-        try:
-            if previous_binding is not None:
-                result = self._stopServer()
-                if result == QDialog.Rejected:
-                    return QDialog.Rejected            
-                # disconnect
-                self.controller.unbind_server(self.previous_local_folder)      
-                      
-            if self._isConnected():
-                # should not be any binding!
-                assert(len(self.controller.list_server_bindings()) == 0)
-                if not os.path.exists(self.local_folder):
-                    mbox = QMessageBox(QMessageBox.Warning, self.tr("CloudDesk"), self.tr("Folder %s does not exist.") % self.local_folder)
-                    mbox.setInformativeText(self.tr("Do you want to create it?"))
-                    mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)         
-                    if mbox.exec_() == QMessageBox.No:
-                        return QDialog.Rejected                       
-                    os.makedirs(self.local_folder)
-                    
-                self.controller.bind_server(self.server_binding.local_folder, 
-                    self.server_binding.server_url, 
-                    self.server_binding.remote_user,
-                    self.server_binding.remote_password) 
-                            
-        except Exception as ex:
-            log.debug("failed to bind or unbind: %s", str(ex))
-            self._disconnect()
-            self._updateBinding()
-            QMessageBox(QMessageBox.Critical, self.tr("CloudDesk Error"), self.tr("Failed to connect to server, please try again.")).exec_()
-            return QDialog.Rejected
+        if not same_binding:
+            try:
+                if previous_binding is not None:
+                    result = self._stopServer()
+                    if result == QDialog.Rejected:
+                        return QDialog.Rejected            
+                    # disconnect
+                    self.controller.unbind_server(self.previous_local_folder)      
+                          
+                if self._isConnected():
+                    # should not be any binding!
+                    assert(len(self.controller.list_server_bindings()) == 0)
+                    if not os.path.exists(self.local_folder):
+                        mbox = QMessageBox(QMessageBox.Warning, self.tr("CloudDesk"), self.tr("Folder %s does not exist.") % self.local_folder)
+                        mbox.setInformativeText(self.tr("Do you want to create it?"))
+                        mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)         
+                        if mbox.exec_() == QMessageBox.No:
+                            return QDialog.Rejected                       
+                        os.makedirs(self.local_folder)
+                        
+                    self.controller.bind_server(self.server_binding.local_folder, 
+                        self.server_binding.server_url, 
+                        self.server_binding.remote_user,
+                        self.server_binding.remote_password) 
+                                
+            except Exception as ex:
+                log.debug("failed to bind or unbind: %s", str(ex))
+                self._disconnect()
+                self._updateBinding()
+                QMessageBox(QMessageBox.Critical, self.tr("CloudDesk Error"), self.tr("Failed to connect to server, please try again.")).exec_()
+                return QDialog.Rejected
                         
         if self.local_folder is not None and not self.move_to_folder is not None and self.local_folder != self.move_to_folder:           
             if self._isConnected():
@@ -265,8 +294,35 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             if self.frontend is not None:
                 self.frontend.local_folder = self.local_folder = self.move_to_folder  
                               
-        #TODO Apply other changes
+        # Apply other changes
+        settings.setValue('preferences/notifications', self.notifications)
+        settings.setValue('preferences/icon-overlays', self.iconOverlays)
+        settings.setValue('preferences/autostart', self.autostart)
+        settings.setValue('preferences/log', self.logEnabled)
         
+        if sys.platform == 'win32':
+            reg_settings = QSettings("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", QSettings.NativeFormat)
+            if self.autostart:
+                path = executable + os.path.join(os.getcwd(), 'commandline.py') + ' gui'
+                reg_settings.setValue("name", path)
+            else:
+                reg_settings.remove('name')
+        elif sys.platform == 'darwin':
+            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/com.sharplabs.sla.sync.plist'), 
+                                       QSettings.NativeFormat)
+            if not plist_settings.contains('Label'):
+                # create the plist
+                plist_settings.setValue('Label', 'com.sharplabs.sla.clouddesk.sync')
+                plist_settings.setValue('KeepAlive/SuccessfulExit', False)
+                path = executable + ' ' + os.path.join(os.getcwd(), 'commandline.py')
+                plist_settings.setValue('Program', path)
+                plist_settings.setValue('ProgramArguments', [path, 'gui'])
+                plist_settings.setValue('RunAtLoad', self.autostart)
+                plist_settings.sync()
+            else:
+                # modify the key
+                plist_settings.setValue('RunAtLoad', self.autostart)
+                        
         self.done(QDialog.Accepted)
         
     def _stopServer(self, cancel=True):

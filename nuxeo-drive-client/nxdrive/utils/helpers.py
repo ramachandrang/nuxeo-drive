@@ -4,7 +4,7 @@ Created on Nov 7, 2012
 @author: mconstantin
 '''
 
-from PySide.QtCore import Signal, QObject
+from PySide.QtCore import Signal, QObject, QCoreApplication, QSettings
 from PySide.QtGui import QSystemTrayIcon, QMessageBox
 
 class Communicator(QObject):
@@ -80,3 +80,8 @@ class QApplicationSingleton( object ):
         return setattr(self._iInstance, aAttr, aValue)
  
         
+def create_settings():      
+    QCoreApplication.setOrganizationDomain('sharplabs.com')
+    QCoreApplication.setApplicationName('sla')
+    QCoreApplication.setApplicationName('CloudDesk.Sync')
+    return QSettings()

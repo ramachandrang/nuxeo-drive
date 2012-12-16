@@ -14,6 +14,8 @@ DEFAULT_ACCOUNT = "user@shiro.com"
 
 MY_DOCS = 'My Docs'
 OTHERS_DOCS = 'Others Docs'
+COMPANY = 'SharpLabs'
+APP_NAME = 'CloudDesk Sync'
 
 ICON_ANIMATION_DELAY = 200
 ICON_ANIMATION_START_DELAY = 100
