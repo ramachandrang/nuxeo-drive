@@ -8,6 +8,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import Sequence
 from sqlalchemy import String
+from sqlalchemy import Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import backref
 from sqlalchemy.ext.declarative import declarative_base
@@ -143,21 +144,24 @@ class RootBinding(Base):
 
     local_root = Column(String, primary_key=True)
     remote_repo = Column(String)
-    remote_root = Column(String)
+    remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
     local_folder = Column(String, ForeignKey('server_bindings.local_folder'))
 
     server_binding = relationship(
         'ServerBinding',
         backref=backref("roots", cascade="all, delete-orphan"))
 
-    def __init__(self, local_root, remote_repo, remote_root):
+    def __init__(self, local_root, remote_repo, remote_root, local_folder=None):
         local_root = os.path.abspath(local_root)
         self.local_root = local_root
         self.remote_repo = remote_repo
         self.remote_root = remote_root
 
-        # expected local folder should be the direct parent of the
-        local_folder = os.path.abspath(os.path.join(local_root, '..'))
+        # expected local folder should be the direct parent of the local root
+        # MC That's not always the case, example:
+        # - roots under "Others' Docs" in CloudDesk are under "Others Docs" locally
+        if local_folder is None:
+            local_folder = os.path.abspath(os.path.join(local_root, '..'))
         self.local_folder = local_folder
 
     def __repr__(self):
@@ -168,27 +172,34 @@ class RootBinding(Base):
 class SyncFolders(Base):
     __tablename__ = 'sync_folders'
     
-    remote_id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True)
+    remote_id = Column(String)
     remote_repo = Column(String)
     remote_name = Column(String)
+    remote_root = Column(Integer)
     remote_parent = Column(String, ForeignKey('sync_folders.remote_id'))
     local_folder = Column(String, ForeignKey('server_bindings.local_folder'))
+    checked = relationship('RootBinding', uselist=False, backref='folder')
+    # Temporary storage for check status
+    checked2 = Column(Boolean)
     
     server_binding = relationship(
                     'ServerBinding', backref=backref("folders", cascade="all, delete-orphan"))
     children = relationship("SyncFolders")
     
-    def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder):
+    def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder, remote_root=None, checked=False):
         self.remote_id = remote_id
         self.remote_name = remote_name
         self.remote_parent = remote_parent
         self.remote_repo = remote_repo
+        self.remote_root = remote_root
         self.local_folder = local_folder
+        self.checked2 = checked
         
     def __str__(self):
         return ("SyncFolders<remote_name=%r, remote_id=%r, remote_parent=%r, remote_repo=%r, "
-                "local_folder=%r>" % (self.remote_name, self.remote_id, self.remote_parent, 
-                                      self.remote_repo, self.local_folder))
+                "local_folder=%r, %checked>" % (self.remote_name, self.remote_id, self.remote_parent, 
+                                      self.remote_repo, self.local_folder, '' if self.checked2 else 'not '))
         
 class LastKnownState(Base):
     """Aggregate state aggregated from last collected events."""

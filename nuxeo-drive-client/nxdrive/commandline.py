@@ -283,7 +283,7 @@ class CliHandler(object):
         # 'start' is the default command if None is provided
         command = options.command = getattr(options, 'command', 'launch')
 
-        # Configure the logging frameork
+        # Configure the logging framework
         self._configure_logger(options)
 
         # Initialize a controller for this process
@@ -326,9 +326,10 @@ class CliHandler(object):
     def launch(self, options=None):
         """Launch the QT app in the main thread and sync in another thread."""
         # TODO: use the start method as default once implemented
-        from nxdrive.gui.application import Application
-        app = Application(self.controller, options)
-        app.exec_()
+#        from nxdrive.gui.application import Application
+#        app = Application(self.controller, options)
+#        app.exec_()
+        self.gui(options)
 
     def start(self, options=None):
         """Launch the synchronization in a daemonized process (under POSIX)"""
@@ -356,7 +357,7 @@ class CliHandler(object):
                              delay=getattr(options, 'delay', DEFAULT_DELAY))
         return 0
     
-    def gui(self, options):
+    def gui(self, options=None):
         from nxdrive.gui.menubar import startApp
 #        return startApp(self.controller, self.looper(options))
         return startApp(self.controller, options)

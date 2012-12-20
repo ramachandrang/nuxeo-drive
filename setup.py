@@ -4,15 +4,14 @@
 #
 
 import sys
+import os
 from datetime import datetime
 
 from distutils.core import setup
 if sys.platform == 'win32':
     import py2exe
-elif sys.platform == 'darwin':
-    import py2app
 
-scripts = ["nuxeo-drive-client/bin/ndrive"]
+scripts = ["nuxeo-drive-client/scripts/ndrive"]
 freeze_options = {}
 
 name = 'nuxeo-drive'
@@ -22,22 +21,32 @@ packages = [
     'nxdrive.gui',
     'nxdrive.protocol_handler',
     'nxdrive.data',
-#    'nxdrive.data.resources',
     'nxdrive.data.icons',
     'nxdrive.async',
     'nxdrive.utils',
 ]
 package_data = {
-    'nxdrive.data.icons': ['*.png', '*.svg', '*.ico'],
+    'nxdrive.data.icons': ['*.png', '*.svg', '*.ico', '*.icns'],
 }
-script = 'nuxeo-drive-client/bin/ndrive'
-win_icon = 'nuxeo-drive-client/nxdrive/data/icons/nuxeo_drive_icon_64.ico'
-png_icon = 'nuxeo-drive-client/nxdrive/data/icons/nuxeo_drive_icon_64.png'
+script = 'nuxeo-drive-client/scripts/ndrive'
+icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
+win_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.ico')
+png_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.png')
+osx_icon = os.path.join(icons_home, 'nuxeo_drive_app_icon_128.icns')
+
 if sys.platform == 'win32':
     icon = win_icon
+elif sys.platform == 'darwin':
+    icon = png_icon
 else:
     icon = png_icon
-
+    
+icons_files = []
+for filename in os.listdir(icons_home):
+    filepath = os.path.join(icons_home, filename)
+    if os.path.isfile(filepath):
+        icons_files.append(filepath)
+        
 version = '0.1.0'
 
 if '--dev' in sys.argv:
@@ -51,6 +60,14 @@ if '--dev' in sys.argv:
     timestamp = timestamp.replace("-", "")
     version += "b" + timestamp
 
+includes = [
+    "PySide",
+    "PySide.QtCore",
+    "PySide.QtNetwork",
+    "PySide.QtGui",
+    "atexit",  # implicitly required by PySide
+    "sqlalchemy.dialects.sqlite",
+]
 
 if '--freeze' in sys.argv:
     print "Building standalone executable..."
@@ -73,25 +90,26 @@ if '--freeze' in sys.argv:
     packages.remove('nxdrive.data')
     packages.remove('nxdrive.data.icons')
     package_data = {}
-    data_home = 'nuxeo-drive-client/nxdrive/data'
+
     include_files = [
-        (data_home + "/icons/nuxeo_drive_icon_%d.png" % i,
-         "icons/nuxeo_drive_icon_%d.png" % i)
+        (icons_home + "/nuxeo_drive_icon_%d.png" % i,
+         "/nuxeo_drive_icon_%d.png" % i)
         for i in [16, 32, 48, 64]
     ]
     
+    includes = [
+                "PySide",
+                "PySide.QtCore",
+                "PySide.QtNetwork",
+                "PySide.QtGui",
+                "atexit",  # implicitly required by PySide
+                "sqlalchemy.dialects.sqlite",
+                ]
     freeze_options = dict(
         executables=executables,
         options={
             "build_exe": {
-                "includes": [
-                    "PySide",
-                    "PySide.QtCore",
-                    "PySide.QtNetwork",
-                    "PySide.QtGui",
-                    "atexit",  # implicitly required by PySide
-                    "sqlalchemy.dialects.sqlite",
-                ],
+                "includes": includes,
                 "packages": packages + [
                     "nose",
                 ],
@@ -108,17 +126,40 @@ if '--freeze' in sys.argv:
                 "add_to_path": True,
                 "upgrade_code": '{800B7778-1B71-11E2-9D65-A0FD6088709B}',
             },
-#            "bdist_app": {
-#                "bundle_iconfile": "nuxeo-drive-client/nxdrive/data/icons/nuxeo_drive_icon_64.png",
-#            },
-            "bdist_dmg": {
-                "volume_label": "Nuxeo Drive",
-            },
         },
     )
     # TODO: investigate with esky to get an auto-updateable version but
     # then make sure that we can still have .msi and .dmg packages
     # instead of simple zip files.
+elif sys.platform == 'darwin':
+    # Under OSX we use py2app instead of cx_Freeze because we need:
+    # - argv_emulation=True for nxdrive:// URL scheme handling
+    # - easy Info.plit customization
+    import py2app  # install the py2app command
+
+    freeze_options = dict(
+        app=["nuxeo-drive-client/scripts/ndrive.py"],
+        data_files=[('icons', icons_files)],
+        options=dict(
+            py2app=dict(
+                iconfile=png_icon,
+                argv_emulation=False,  # We use QT for URL scheme handling
+                plist=dict(
+                    CFBundleDisplayName="Nuxeo Drive",
+                    CFBundleName="Nuxeo Drive",
+                    CFBundleIdentifier="org.nuxeo.drive",
+                    LSUIElement=True,  # Do not launch as a Dock application
+                    CFBundleURLTypes=[
+                        dict(
+                            CFBundleURLName='Nuxeo Drive URL',
+                            CFBundleURLSchemes=['nxdrive'],
+                        )
+                    ]
+                ),
+                includes=includes,
+            )
+        )
+    )
 
 
 setup(

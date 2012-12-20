@@ -16,6 +16,9 @@ import httplib
 import subprocess
 import psutil
 import logging
+from collections import defaultdict, Iterable
+from pprint import pprint
+import uuid
 
 import nxdrive
 from nxdrive.client import NuxeoClient
@@ -23,6 +26,7 @@ from nxdrive.client import LocalClient
 from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
 from nxdrive.client import Unauthorized
+from nxdrive.client import FolderInfo
 from nxdrive.model import init_db
 from nxdrive.model import DeviceConfig, ServerBinding, RootBinding, LastKnownState, SyncFolders
 from nxdrive.logging_config import get_logger
@@ -31,7 +35,6 @@ from nxdrive.utils.helpers import RecoverableError
 #from nxdrive.utils.helpers import Notifier
 
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
-from sqlalchemy import DateTime, cast
 from sqlalchemy import func
 from sqlalchemy import asc
 from sqlalchemy import not_
@@ -59,6 +62,16 @@ CLOUDDESK_SCOPE = 'clouddesk'
 
 log = get_logger(__name__)
 
+def tree():
+    """Tree structure for returning folder hierarchy"""
+    return defaultdict(tree)
+
+def dicts(t): 
+    """Used for printing tree structure"""
+    if isinstance(t, Iterable):
+        return {k: dicts(t[k]) for k in t}
+    else:
+        return str(t)
 
 def default_nuxeo_drive_folder():
     """Find a reasonable location for the root Nuxeo Drive folder
@@ -584,8 +597,41 @@ class Controller(object):
     def _local_bind_root(self, server_binding, remote_info, nxclient, session, fault_tolerant=False):
         # Check that this workspace does not already exist locally
         # TODO: shall we handle deduplication for root names too?
+        
+        folder_name = remote_info.name
+        # show it as a top-level folder - error!
         local_root = os.path.join(server_binding.local_folder,
-                                  safe_filename(remote_info.name))
+                  safe_filename(remote_info.name))
+ 
+        try:
+            sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_id==remote_info.uid).one()
+            if sync_folder.remote_root is None and sync_folder.remote_id == Constants.OTHERS_DOCS_UID:
+                # this binding root is Others' Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.OTHERS_DOCS))
+
+            elif sync_folder.remote_root is None :
+                # this is My Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.MY_DOCS))
+
+            elif sync_folder.remote_root == Constants.ROOT_MYDOCS:
+                # child of My Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.MY_DOCS),
+                                  safe_filename(folder_name))
+
+            elif sync_folder.remote_root == Constants.ROOT_OTHERS_DOCS:
+                # child of Others Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.OTHERS_DOCS),
+                                  safe_filename(folder_name))
+                
+        except NoResultFound:
+            log.error("binding root %s is not a synced folder", remote_info.name)
+        except MultipleResultsFound:
+            log.error("binding root %s is two or more  synced folders", remote_info.name)
+            
         repository = nxclient.repository
         if not os.path.exists(local_root):
             os.makedirs(local_root)
@@ -609,7 +655,7 @@ class Controller(object):
             log.info("Binding local root '%s' to '%s' (id=%s) on server '%s'",
                  local_root, remote_info.name, remote_info.uid,
                      server_binding.server_url)
-            session.add(RootBinding(local_root, repository, remote_info.uid))
+            session.add(RootBinding(local_root, repository, remote_info.uid, server_binding.local_folder))
 
             # Initialize the metadata info by recursive walk on the remote
             # folder structure
@@ -681,7 +727,7 @@ class Controller(object):
 
     def get_folders(self, session=None, server_binding=None,
                     repository=None, frontend=None):
-        """Retrieve all folder hierrachy from server.
+        """Retrieve all folder hierarchy from server.
         If a server is not responding it is skipped.
         """
         if session is None:
@@ -705,10 +751,33 @@ class Controller(object):
                 for repo in repositories:
                     nxclient = self.get_remote_client(sb, repository=repo)
                     mydocs_folder = nxclient.get_mydocs()
-                    self._update_mydocs(mydocs_folder, sb.local_folder, session=session)
-                    mydocs_subfolders = nxclient.get_subfolders(mydocs_folder)
-                    othersdocs_folder = nxclient.get_othersdocs()
-                    self._update_othersdocs(othersdocs_folder, sb.local_folder, session=session)
+                    mydocs_folder[u'title'] = Constants.MY_DOCS
+#                    print 'MyDocs: '
+#                    pprint(mydocs_folder, depth=2)
+
+                    nodes = tree()
+                    nxclient.get_subfolders(mydocs_folder, nodes)
+#                    pprint(dicts(nodes))
+                                                            
+                    self._update_docs(mydocs_folder, nodes, sb.local_folder, session=session)
+
+                    othersdocs_folders = nxclient.get_othersdocs()
+#                    print "Others's Docs subfolders: " 
+#                    pprint(othersdocs_folders, depth=2)
+
+                    # create a fake Others' Docs folder
+                    othersdocs_folder = {
+                                         u'uid': Constants.OTHERS_DOCS_UID,
+                                         u'title': Constants.OTHERS_DOCS,
+                                         u'repository': mydocs_folder[u'repository'],
+                                         }
+                    nodes = tree()
+                    for fld in othersdocs_folders:
+                        nodes[fld[u'title']]['value'] = FolderInfo(fld[u'uid'], fld[u'title'], othersdocs_folder[u'uid'])
+                        nxclient.get_subfolders(fld, nodes[fld[u'title']])
+                        
+#                    pprint(dicts(nodes))
+                    self._update_docs(othersdocs_folder, nodes, sb.local_folder, session=session)
 
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # Ignore expected possible network related errors
@@ -791,34 +860,58 @@ class Controller(object):
                                         base_folder=ref)
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
                                   rc, session, fault_tolerant=self.fault_tolerant)
-
-    def _update_mydocs(self, mydocs, local_folder, session=None):
+            
+    def _update_docs(self, docs, nodes, local_folder, session=None):
         if session is None:
             session = self.get_session()
             
+        repo = docs[u'repository']
+        docId = docs[u'uid']
         # check if already exists
         try:
-            folder = session.query(SyncFolders).one()
+            folder = session.query(SyncFolders).filter_by(remote_id=docId).one()
         except MultipleResultsFound:
-            log.error("more than one 'My Docs' folder found!")
+            log.error("more than one 'Others' Docs' folder found!")
         except NoResultFound:
-            title = Constants.MY_DOCS if mydocs[u'type'] == u'Workspace' else mydocs[u'title']
-            folder = SyncFolders(mydocs['uid'], 
-                                 title,
-                                 # parent is null for MyDocs
+            # Other's Doc is not a real remote folder
+            folder = SyncFolders(docId,
+                                 docs[u'title'],
+                                 # parent is null for Others' Docs
                                  None,
-                                 mydocs[u'repository'],
+                                 repo,
                                  local_folder
                                  )
-                
+
             session.add(folder)
             
-            # get subfolders
-            
-            session.commit()
-            
-    def _update_othersdocs(self, otherdocs, local_folder, session=None):
-        pass
+        # add all subfolders
+        root_folder = Constants.ROOT_OTHERS_DOCS if docId == Constants.OTHERS_DOCS_UID else Constants.ROOT_MYDOCS
+        self._add_folders(nodes, repo, local_folder, root_folder, session)        
+#        folders = session.query(SyncFolders).all()
+#        for f in folders:
+#            print str(f)    
+        session.commit()
+        
+    def _add_folders(self, t, repo, local_folder, root_folder, session=None):
+        if isinstance(t, Iterable):
+            for k in t:
+                self._add_folders(t[k], repo, local_folder, root_folder, session)
+        else:
+            self._add_folder(t, repo, local_folder, root_folder, session)
+                    
+    def _add_folder(self, folder_info, repo, local_folder, root_folder, session=None):
+        if session is None:
+            session = self.get_session()
+        folder = SyncFolders(folder_info.docId, folder_info.title, folder_info.parentId, repo, local_folder, remote_root=root_folder)
+
+        try:
+            sync_folder = session.query(SyncFolders).filter_by(remote_id=folder_info.docId).one()
+            sync_folder.remote_name = folder_info.title
+            sync_folder.remote_parent = folder_info.parentId
+            sync_folder.remote_repo = repo
+            sync_folder.remote_root = root_folder
+        except NoResultFound:
+            session.add(folder)
         
     def scan_local(self, local_root, session=None):
         """Recursively scan the bound local folder looking for updates"""
@@ -1497,6 +1590,8 @@ class Controller(object):
                     log.info("Stopping synchronization after %d loops",
                              loop_count)
                     break
+                
+                self.get_folders(session, frontend=frontend)
                 self.update_roots(session, frontend=frontend)
 
                 bindings = session.query(RootBinding).all()

@@ -196,6 +196,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionAbout.triggered.connect(self.about)
         self.actionOpenCloudDeskFolder.triggered.connect(self.openLocalFolder)  
         self.actionShowClouDeskInfo.triggered.connect(self.openCloudDesk)
+        self.messageClicked.connect(self.handle_message_clicked)
         
         # TO BE REMOVED - BEGIN
         self.actionDebug.triggered.connect(self.debug_stuff)        
@@ -223,6 +224,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
 
     def debug_stuff(self):
+        # this is not working on OS X
+#        self.communicator.message.emit(self.tr("ClouDesk Authentication"), 
+#                               self.tr('Update credentials'), 
+#                               QtGui.QSystemTrayIcon.Critical)
+        # For TEST ONLY
         self.controller.get_folders()
         
     def about(self):
@@ -278,27 +284,28 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         
     def openCloudDesk(self):
         fdtoken = self.controller.get_browser_token(self.local_folder)
+        if fdtoken is None:
+            fdtoken = ''
         server_binding = self.controller.get_server_binding(self.local_folder)
         
-        if fdtoken is not None:
-            try:
-                new = 2 #open in a new tab if possible
-                url = server_binding.server_url
-                if url[-1] != '/': url += '/'
-                query_params = {
-                                'user_name': '<SharpToken>',
-                                'user_password': fdtoken,
-                                'language': 'en_US',
-                                'requestedUrl': '',
-                                'form_submitted_marker': '',
-                                'Submit': 'Log in'
-                                }
-                
+        try:
+            new = 2 #open in a new tab if possible
+            url = server_binding.server_url
+            if url[-1] != '/': url += '/'
+            query_params = {
+                            'user_name': '<SharpToken>',
+                            'user_password': fdtoken,
+                            'language': 'en_US',
+                            'requestedUrl': '',
+                            'form_submitted_marker': '',
+                            'Submit': 'Log in'
+                            }
+            
 #                url += 'nxstartup.faces?token=' + fdtoken     
-                url += 'nxstartup.faces?' + urllib.urlencode(query_params)
-                webbrowser.open(url, new=new)
-            except Exception as e:
-                log.error('failed to open CloudDesk at %s: %s', server_binding.server_url, str(e))
+            url += 'nxstartup.faces?' + urllib.urlencode(query_params)
+            webbrowser.open(url, new=new)
+        except Exception as e:
+            log.error('failed to open CloudDesk at %s: %s', server_binding.server_url, str(e))
                 
             
     @QtCore.Slot(str)
@@ -579,8 +586,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             return
         
         # copy to local binding
+        self.binding_info.clear()
         for sb in self.controller.list_server_bindings():
-            self.get_binding_info(sb.local_folder)
+            # assume online until connecting to server proves otherwise
+            self.get_binding_info(sb.local_folder).online = True
        
 
     def setupProcessing(self):
@@ -689,11 +698,28 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         sb = self.controller.get_server_binding(local_folder)
         sb.invalidate_credentials()
         self.controller.get_session().commit()
-        self.communicator.menu.emit()
+        # menu is updated when is activated 
+#        self.communicator.menu.emit()
+        # show a notification
+        self.communicator.message.emit(self.tr("ClouDesk Authentication"), 
+                                       self.tr('Update credentials'), 
+                                       QtGui.QSystemTrayIcon.Critical)
                 
     @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
     def handle_message(self, title, message, icon_type):
         self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
+        
+    def handle_message_clicked(self):
+        # handle only the click for entering credentials
+#        if not self.get_binding_info(self.local_folder).online:
+        # For TEST ONLY
+        if self.get_binding_info(self.local_folder).online: 
+            # Launch the GUI to create a binding
+            from nxdrive.gui.authentication import prompt_authentication
+            ok = prompt_authentication(self.controller, self.local_folder,
+                                       url=self.server_binding.server_url,
+                                       username=self.server_binding.remote_user)
+            
                 
     def _getUserName(self):
 #        local_folder = default_nuxeo_drive_folder()

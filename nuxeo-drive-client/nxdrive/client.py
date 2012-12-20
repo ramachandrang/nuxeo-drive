@@ -16,6 +16,7 @@ import urllib2
 from urllib import urlencode
 import re
 import sys
+
 from nxdrive.logging_config import get_logger
 import Constants
 
@@ -41,8 +42,7 @@ def safe_filename(name, replacement='-'):
     """Replace invalid character in candidate filename"""
     return re.sub(r'(/|\\|\*)', replacement, name)
 
-
-
+    
 class Unauthorized(Exception):
 
     def __init__(self, server_url, user_id, code=403):
@@ -99,8 +99,18 @@ class FileInfo(object):
                     break
                 h.update(buffer)
         return h.hexdigest()
-
-
+    
+class FolderInfo(object):
+    """Folder node for retrieving folder hierarchy"""
+    
+    def __init__(self, docId, title, parentId):
+        self.docId = docId
+        self.title = title
+        self.parentId = parentId
+        
+    def __str__(self):
+        return "folder '%s', docId=%s, parentId=%s" % (self.title, self.docId, self.parentId)
+    
 
 BaseNuxeoDocumentInfo = namedtuple('NuxeoDocumentInfo', [
     'root',  # ref of the document that serves as sync root
@@ -454,7 +464,7 @@ class NuxeoClient(object):
     
     def get_mydocs(self):
         return self._execute("UserWorkspace.Get")
-        
+    
     def get_othersdocs(self):
         query = """SELECT * FROM Document WHERE 
                    sh:rootshared = 1 AND 
@@ -470,14 +480,22 @@ class NuxeoClient(object):
                    dc:creator != '"+username+"'
                    """
 
-        result = self._execute('Document.Query', query=query)[u'entries']
+        return self._execute('Document.Query', query=query)[u'entries']
         # TODO return result - any filtering needed?
-        print result
         
-    def get_subfolders(self, parent):
-        input = "doc:%s" % parent[u'uid']
-        result = self._execute('Document.GetChildren', input)
-        print result
+    def get_subfolders(self, parent, nodes):
+        docId = parent[u'uid']
+        query = """SELECT * FROM Document WHERE
+                ecm:parentId = '%s' AND 
+                ecm:currentLifeCycleState != 'deleted' AND
+                ecm:mixinType = 'Folderish' and 
+                ecm:mixinType != 'HiddenInNavigation' AND
+                ecm:isCheckedInVersion = 0""" % docId
+                
+        subfolders = result = self._execute('Document.Query', query=query)[u'entries']
+        for sf in subfolders:
+            nodes[sf[u'title']]['value'] = FolderInfo(sf[u'uid'], sf[u'title'], docId)
+            self.get_subfolders(sf, nodes[sf[u'title']])
 
     def register_as_root(self, ref):
         ref = self._check_ref(ref)

@@ -70,7 +70,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         
     def _isConnected(self):
-        return self.server_binding is not None
+        return (self.server_binding is not None and
+                (self.server_binding.remote_password is not None or self.server_binding.remote_token is not None))
         
     def _getDisconnectText(self):
         return self.tr("Connect...") if not self._isConnected() else self.tr("Disconnect")
@@ -241,8 +242,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                     self.controller.unbind_server(self.previous_local_folder)      
                           
                 if self._isConnected():
-                    # should not be any binding!
-                    assert(len(self.controller.list_server_bindings()) == 0)
+                    # the binding may exist but credentials are invalid
+#                    assert(len(self.controller.list_server_bindings()) == 0)
                     if not os.path.exists(self.local_folder):
                         mbox = QMessageBox(QMessageBox.Warning, self.tr("CloudDesk"), self.tr("Folder %s does not exist.") % self.local_folder)
                         mbox.setInformativeText(self.tr("Do you want to create it?"))
@@ -303,6 +304,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if sys.platform == 'win32':
             reg_settings = QSettings("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", QSettings.NativeFormat)
             if self.autostart:
+                # TODO change this for the deployed version of the exe
                 path = executable + os.path.join(os.getcwd(), 'commandline.py') + ' gui'
                 reg_settings.setValue("name", path)
             else:
@@ -313,10 +315,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             if not plist_settings.contains('Label'):
                 # create the plist
                 plist_settings.setValue('Label', 'com.sharplabs.sla.clouddesk.sync')
-                # TODO change this foe the deployed version of the app
-                path = executable + ' ' + os.path.join(os.getcwd(), 'nxdrive/commandline.py')
+                path = '/Applications/%s.app/Contents/MacOS/%s' % (Constants.OSX_APP_NAME, Constants.OSX_APP_NAME)
                 plist_settings.setValue('Program', path)
-                plist_settings.setValue('ProgramArguments', [path, 'gui'])
+                plist_settings.setValue('ProgramArguments', [path, 'gui', '--log-level-console DEBUG'])
 
             # start when it loads the agent
             plist_settings.setValue('RunAtLoad', self.autostart)
