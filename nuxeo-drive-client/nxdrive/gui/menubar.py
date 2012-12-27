@@ -718,12 +718,13 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # handle only the click for entering credentials
 #        if not self.get_binding_info(self.local_folder).online:
         # For TEST ONLY
-        if self.get_binding_info(self.local_folder).online: 
+        if not self.get_binding_info(self.local_folder).online: 
             # Launch the GUI to create a binding
             from nxdrive.gui.authentication import prompt_authentication
-            ok = prompt_authentication(self.controller, self.local_folder,
-                                       url=self.server_binding.server_url,
-                                       username=self.server_binding.remote_user)
+            server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing=False)
+            prompt_authentication(self.controller, self.local_folder,
+                                   url=server_binding.server_url,
+                                   username=server_binding.remote_user)
             
                 
     def _getUserName(self):

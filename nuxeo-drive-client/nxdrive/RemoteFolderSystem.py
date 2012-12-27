@@ -4,12 +4,10 @@ Created on Dec 21, 2012
 @author: mconstantin
 '''
 
+import os
 from PySide.QtGui import QStandardItemModel, QStandardItem, QIcon
 from PySide.QtCore import Qt
-from collections import Iterable
-from pprint import pprint
 
-from logging_config import get_logger
 from nxdrive.model import SyncFolders
 from nxdrive import Constants
 import nxdrive.gui.qrc_resources
@@ -23,19 +21,28 @@ ID_ROLE = Qt.UserRole + 1
 CHECKED_ROLE = Qt.UserRole + 2
         
     
-def get_model(session):
+def get_model(session, controller=None):
     model = QStandardItemModel()
     rootItem = model.invisibleRootItem()
     
     # get the root CloudDesk item
-    try:
-        sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).one()
-    except NoResultFound:
-        log.error("root does not exist.")
-        raise ValueError('invalid db')
-    except MultipleResultsFound:
-        log.error("multiple roots exist.")
-        raise ValueError('invalid db')
+    attempts = 0
+    while attempts < 2:
+        try:
+            sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).one()
+            break
+        except NoResultFound:
+            log.warn("root does not exist.")
+            if controller is None:
+                raise RuntimeError(tr("An internal error occurred: Please restart the program"))
+            controller.get_folders()
+            attempts += 1
+        except MultipleResultsFound:
+            log.error("multiple roots exist.")
+            config_folder = os.path.expanduser(r'~\.nuxeo_drive')
+            if controller is not None:
+                config_folder = controller.config_folder
+            raise ValueError(tr('An internal error occurred: Please delete %s' % os.path.join(config_folder, 'nxdrive.db')))
         
     item = QStandardItem(sync_folder.remote_name)
     item.setCheckable(False)

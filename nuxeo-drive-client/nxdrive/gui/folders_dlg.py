@@ -4,7 +4,7 @@ Created on Dec 13, 2012
 @author: mconstantin
 '''
 
-from PySide.QtGui import QDialog, QStandardItem
+from PySide.QtGui import QDialog, QStandardItem, QLabel, QDialogButtonBox
 from PySide.QtCore import Qt, QObject, Signal, Slot, QModelIndex
 from nxdrive.model import SyncFolders
 
@@ -31,22 +31,28 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         if frontend is None: return
         
 #        model = CheckedRemoteFileSystem(frontend.local_folder, frontend.controller.get_session())
-        self.model = get_model(frontend.controller.get_session())
-        self.treeView.setModel(self.model)
-        root = self.model.invisibleRootItem().child(0)
-        self.clear_all(root)
-        self.set_checked_state(root)
-        self.expand()
-        # hide header and all columns but first one
-        self.treeView.setHeaderHidden(True)
-        self.treeView.resizeColumnToContents(0)
-
-        # connect the click event
-        self.treeView.clicked[QModelIndex].connect(self.item_clicked)
-        # connect event to set the ancestors accordingly
-        # TO DO this crashes the Python interpreter!!!
-        self.communicator = Communicator()
-        self.communicator.ancestorChanged.connect(self.set_ascendant_state)
+        try:
+            self.model = get_model(frontend.controller.get_session(), controller=self.frontend.controller)
+            self.treeView.setModel(self.model)
+            root = self.model.invisibleRootItem().child(0)
+            self.clear_all(root)
+            self.set_checked_state(root)
+            self.expand()
+            # hide header and all columns but first one
+            self.treeView.setHeaderHidden(True)
+            self.treeView.resizeColumnToContents(0)
+    
+            # connect the click event
+            self.treeView.clicked[QModelIndex].connect(self.item_clicked)
+            # connect event to set the ancestors accordingly
+            # TO DO this crashes the Python interpreter!!!
+            self.communicator = Communicator()
+            self.communicator.ancestorChanged.connect(self.set_ascendant_state)
+        except Exception as ex:
+            label = self.lblHelp
+            label.setText("<font size='4' color='red'><bold>%s</bold></font>" % str(ex))
+            label.setAlignment(Qt.AlignHCenter)
+            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
         
     def set_checked_state(self, parent):
         """Initialize the state of all checkboxes based on the model"""

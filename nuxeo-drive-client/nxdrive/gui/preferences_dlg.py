@@ -56,16 +56,46 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.txtCloudfolder.textChanged.connect(self.changeFolder)
         self.btnSelect.clicked.connect(self.selectFolders)
         self.btnProxy.clicked.connect(self.configProxy)
-        
-        self.rbProxy.toggled.connect(lambda checked : self.btnProxy.setEnabled(checked))
-        self.autostart = settings.value('preferences/autostart', True)
-        self.cbAutostart.stateChanged.connect(self.setAutostart)
-        self.iconOverlays = settings.value('preferences/icon-overlays', True)
-        self.cbIconOverlays.stateChanged.connect(self.setShowIconOverlays)
-        self.notifications = settings.value('preferences/notifications', True)
-        self.cbNotifications.stateChanged.connect(self.setNotifications)
-        self.logEnabled = settings.value('preferences/log', True)
         self.cbEnablelog.stateChanged.connect(self.enableLog)
+        self.cbNotifications.stateChanged.connect(self.setNotifications)
+        self.rbProxy.toggled.connect(lambda checked : self.btnProxy.setEnabled(checked))
+        self.cbAutostart.stateChanged.connect(self.setAutostart)
+        
+        self.cbIconOverlays.stateChanged.connect(self.setShowIconOverlays)
+        if sys.platform == 'win32':
+            autostart = settings.value('preferences/autostart', 'true')
+            if autostart.lower() == 'true':
+                self.autostart = True
+            elif autostart.lower() == 'false':
+                self.autostart = False
+            else:
+                self.autostart = True
+            iconOverlays = settings.value('preferences/icon-overlays', 'true')
+            if iconOverlays.lower() == 'true':
+                self.iconOverlays = True
+            elif iconOverlays.lower() == 'false':
+                self.iconOverlays = False
+            else:
+                self.iconOverlays = True
+            notifications = settings.value('preferences/notifications', 'true')
+            if notifications.lower() == 'true':
+                self.notifications = True
+            elif notifications.lower() == 'false':
+                self.notifications = False
+            else:
+                self.notifications = True
+            logEnabled = settings.value('preferences/log', 'true')   
+            if logEnabled.lower() == 'true':
+                self.logEnabled = True
+            elif logEnabled.lower() == 'false':
+                self.logEnabled = False
+            else:
+                self.logEnabled = True
+        else:
+            self.autostart = settings.value('preferences/autostart', True)
+            self.iconOverlays = settings.value('preferences/icon-overlays', True)
+            self.notifications = settings.value('preferences/notifications', True)
+            self.logEnabled = settings.value('preferences/log', True)
         
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         

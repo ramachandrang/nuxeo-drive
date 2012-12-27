@@ -9,6 +9,7 @@ APP_STATE_STOPPED = 'stopped'
 APP_STATE_QUITTING = 'quitting'
 
 DEFAULT_NXDRIVE_FOLDER = "CloudDesk"
+# TODO replace with CloudDesk url and admin(?) account
 DEFAULT_CLOUDDESK_URL = "http://ec2-50-112-198-72.us-west-2.compute.amazonaws.com:8080/app1"
 DEFAULT_ACCOUNT = "user@shiro.com"
 
@@ -25,7 +26,7 @@ OSX_APP_NAME = 'Nuxeo Drive'
 
 ICON_ANIMATION_DELAY = 200
 ICON_ANIMATION_START_DELAY = 100
-NOTIFICATION_MESSAGE_DELAY = 2 #in seconds
+NOTIFICATION_MESSAGE_DELAY = 3 #in seconds
 FDTOKEN_DURATION = 15 * 60
 SYNC_STATUS_STOP = 1
 SYNC_STATUS_START = 2
