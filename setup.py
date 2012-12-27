@@ -92,9 +92,8 @@ if '--freeze' in sys.argv:
     package_data = {}
 
     include_files = [
-        (icons_home + "/nuxeo_drive_icon_%d.png" % i,
-         "/nuxeo_drive_icon_%d.png" % i)
-        for i in [16, 32, 48, 64]
+                    icons_home + "/nuxeo_drive_icon_%d.png" % i
+                        for i in [16, 32, 48, 64]
     ]
     
     includes = [
