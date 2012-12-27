@@ -19,6 +19,7 @@ from sqlalchemy.ext.declarative import declared_attr
 
 from nxdrive.client import NuxeoClient
 from nxdrive.client import LocalClient
+from nxdrive import Constants
 
 WindowsError = None
 try:
@@ -172,22 +173,20 @@ class RootBinding(Base):
 class SyncFolders(Base):
     __tablename__ = 'sync_folders'
     
-    id = Column(Integer, primary_key=True)
-    remote_id = Column(String)
+    remote_id = Column(String, primary_key=True)
     remote_repo = Column(String)
     remote_name = Column(String)
     remote_root = Column(Integer)
     remote_parent = Column(String, ForeignKey('sync_folders.remote_id'))
+    state = Column(Boolean)
     local_folder = Column(String, ForeignKey('server_bindings.local_folder'))
     checked = relationship('RootBinding', uselist=False, backref='folder')
-    # Temporary storage for check status
-    checked2 = Column(Boolean)
     
     server_binding = relationship(
                     'ServerBinding', backref=backref("folders", cascade="all, delete-orphan"))
     children = relationship("SyncFolders")
     
-    def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder, remote_root=None, checked=False):
+    def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder, remote_root=Constants.ROOT_CLOUDDESK, checked=False):
         self.remote_id = remote_id
         self.remote_name = remote_name
         self.remote_parent = remote_parent

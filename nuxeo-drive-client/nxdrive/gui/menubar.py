@@ -229,7 +229,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 #                               self.tr('Update credentials'), 
 #                               QtGui.QSystemTrayIcon.Critical)
         # For TEST ONLY
-        self.controller.get_folders()
+#        self.controller.get_folders()
+
+        from folders_dlg import SyncFoldersDlg
+        dlg = SyncFoldersDlg(frontend=self)
+        if dlg.exec_() == QDialog.Rejected:
+            return
         
     def about(self):
         msgbox = QMessageBox()

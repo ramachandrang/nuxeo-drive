@@ -44,7 +44,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.values = None
         self.stop_on_apply = False
         self.local_folder = frontend._get_local_folder() if frontend is not None else DEFAULT_EX_NX_DRIVE_FOLDER
-        self.previous_local_folder = None
+        self.previous_local_folder = self.local_folder
         self.move_to_folder = self.local_folder
         self.server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing=False)
         self.proxy = None
@@ -103,6 +103,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         dlg = SyncFoldersDlg(frontend=self)
         if dlg.exec_() == QDialog.Rejected:
             return
+        # set the synchronized roots
+        self.controller.set_roots()
+        
         
     def configProxy(self):
         dlg = ProxyDlg(frontend=self)
@@ -256,6 +259,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                         self.server_binding.server_url, 
                         self.server_binding.remote_user,
                         self.server_binding.remote_password) 
+                    
+                    self.controller.get_folders(frontend=self.frontend)
                                 
             except Exception as ex:
                 log.debug("failed to bind or unbind: %s", str(ex))
@@ -294,6 +299,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             shutil.copytree(self.local_folder, self.move_to_folder)                    
             if self.frontend is not None:
                 self.frontend.local_folder = self.local_folder = self.move_to_folder  
+            #TODO Update the database
+            pass
                               
         # Apply other changes
         settings.setValue('preferences/notifications', self.notifications)

@@ -605,12 +605,12 @@ class Controller(object):
  
         try:
             sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_id==remote_info.uid).one()
-            if sync_folder.remote_root is None and sync_folder.remote_id == Constants.OTHERS_DOCS_UID:
+            if sync_folder.remote_root == Constants.ROOT_CLOUDDESK and sync_folder.remote_id == Constants.OTHERS_DOCS_UID:
                 # this binding root is Others' Docs
                 local_root = os.path.join(server_binding.local_folder,
                                   safe_filename(Constants.OTHERS_DOCS))
 
-            elif sync_folder.remote_root is None :
+            elif sync_folder.remote_root == Constants.ROOT_CLOUDDESK:
                 # this is My Docs
                 local_root = os.path.join(server_binding.local_folder,
                                   safe_filename(Constants.MY_DOCS))
@@ -750,6 +750,7 @@ class Controller(object):
                     repositories = nxclient.get_repository_names()
                 for repo in repositories:
                     nxclient = self.get_remote_client(sb, repository=repo)
+                    self._update_clouddesk_root(repo, sb.local_folder)
                     mydocs_folder = nxclient.get_mydocs()
                     mydocs_folder[u'title'] = Constants.MY_DOCS
 #                    print 'MyDocs: '
@@ -861,6 +862,52 @@ class Controller(object):
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
                                   rc, session, fault_tolerant=self.fault_tolerant)
             
+    def set_roots(self, session=None, frontend=None):
+        """Update binding roots based on client folders selection"""
+        
+        if session is None:
+            session = self.get_session()
+            
+        roots_to_register = session.query(SyncFolders, ServerBinding).\
+                            filter(SyncFolders.state == True).\
+                            filter(SyncFolders.checked == None).\
+                            filter(ServerBinding.local_folder == SyncFolders.local_folder).\
+                            all()
+                            
+        roots_to_unregister = session.query(SyncFolders, ServerBinding).\
+                            filter(SyncFolders.state == False).\
+                            filter(SyncFolders.checked != None).\
+                            filter(ServerBinding.local_folder == SyncFolders.local_folder).\
+                            all()
+                            
+        for tuple in roots_to_register:
+            remote_client = self.get_remote_client(tuple[1], base_folder=tuple[0].remote_id, repository=tuple[0].remote_repo)
+            remote_client.register_as_root(tuple[0].remote_id)
+            
+        for tuple in roots_to_unregister:
+            remote_client = self.get_remote_client(tuple[1], base_folder=tuple[0].remote_id, repository=tuple[0].remote_repo)
+            remote_client.unregister_as_root(tuple[0].remote_id)            
+        
+            
+    def _update_clouddesk_root(self, repo, local_folder, session=None):
+        if session is None:
+            session = self.get_session()
+        try:
+            folder = session.query(SyncFolders).filter_by(remote_id=Constants.CLOUDDESK_UID).one()
+        except MultipleResultsFound:
+            log.error("more than one CloudDesk folder found!")
+        except NoResultFound:
+            # Other's Doc is not a real remote folder
+            folder = SyncFolders(Constants.CLOUDDESK_UID,
+                                 Constants.DEFAULT_NXDRIVE_FOLDER,
+                                 None,
+                                 repo,
+                                 local_folder
+                                 )
+
+            session.add(folder)
+            session.commit()
+        
     def _update_docs(self, docs, nodes, local_folder, session=None):
         if session is None:
             session = self.get_session()
@@ -871,13 +918,12 @@ class Controller(object):
         try:
             folder = session.query(SyncFolders).filter_by(remote_id=docId).one()
         except MultipleResultsFound:
-            log.error("more than one 'Others' Docs' folder found!")
+            log.error("more than one of 'My Docs' or 'Others' Docs' folder each found!")
         except NoResultFound:
             # Other's Doc is not a real remote folder
             folder = SyncFolders(docId,
                                  docs[u'title'],
-                                 # parent is null for Others' Docs
-                                 None,
+                                 Constants.CLOUDDESK_UID,
                                  repo,
                                  local_folder
                                  )
