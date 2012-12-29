@@ -200,6 +200,21 @@ class SyncFolders(Base):
                 "local_folder=%r, %checked>" % (self.remote_name, self.remote_id, self.remote_parent, 
                                       self.remote_repo, self.local_folder, '' if self.checked2 else 'not '))
         
+class RecentFiles(Base):
+    __tablename__ = 'recent_files'
+    
+    id = Column(Integer, Sequence('file_id_seq'), primary_key=True)
+    local_name = Column(String)
+    local_root = Column(String)
+    local_update = Column(DateTime, index=True)
+    pair_state = Column(String)
+    
+    def __init__(self, local_name, local_root, pair_state):
+        self.local_name = local_name
+        self.local_root = local_root
+        self.pair_state = pair_state
+        self.local_update = datetime.datetime.now()
+    
 class LastKnownState(Base):
     """Aggregate state aggregated from last collected events."""
     __tablename__ = 'last_known_states'
@@ -269,15 +284,13 @@ class LastKnownState(Base):
         if remote_state is not None:
             self.remote_state = remote_state
         pair = (self.local_state, self.remote_state)
+        
         if status is not None and self.folderish == 0:
             try:
-                status_item = status[self.pair_state]
-                status_item[0] += 1
-                if status_item[1] is not None: status_item[1] = self.local_name
-                status[self.pair_state] = status_item
+                status[self.pair_state].append(self.local_name)                
             except KeyError:
-                status[self.pair_state] = [1, self.local_name]
- 
+                status[self.pair_state] = [self.local_name]
+                
         self.pair_state = PAIR_STATES.get(pair, 'unknown')
 
     def __repr__(self):

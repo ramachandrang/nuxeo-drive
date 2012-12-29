@@ -28,7 +28,7 @@ from nxdrive.client import NotFound
 from nxdrive.client import Unauthorized
 from nxdrive.client import FolderInfo
 from nxdrive.model import init_db
-from nxdrive.model import DeviceConfig, ServerBinding, RootBinding, LastKnownState, SyncFolders
+from nxdrive.model import DeviceConfig, ServerBinding, RootBinding, LastKnownState, SyncFolders, RecentFiles
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
 from nxdrive.utils.helpers import RecoverableError
@@ -39,6 +39,7 @@ from sqlalchemy import func
 from sqlalchemy import asc
 from sqlalchemy import not_
 from sqlalchemy import or_
+from sqlalchemy import desc
 
 WindowsError = None
 try:
@@ -482,6 +483,9 @@ class Controller(object):
             return None    
         except suds.WebFault as fault:
             log.error('error connecting to %s: %s', service_url, fault)
+            return None
+        except Exception as e:
+            log.error('error retrieving CloudDeskk token: %s', str(e))
             return None
                
     def _request_clouddesk_token(self, username, password):
@@ -1321,6 +1325,7 @@ class Controller(object):
                 try:
                     local_client.update_content(doc_pair.path, content)
                     doc_pair.refresh_local(local_client)
+                    self.update_recent_files(doc_pair, session=session)
                     doc_pair.update_state('synchronized', 'synchronized', status=status)
                 except (IOError, WindowsError):
                     log.debug("Delaying update for remotely modified "
@@ -1393,6 +1398,7 @@ class Controller(object):
                 log.debug("Creating local document '%s' in '%s'", name,
                           parent_pair.get_local_abspath())
             doc_pair.update_local(local_client.get_info(path))
+            self.update_recent_files(doc_pair, session=session)
             doc_pair.update_state('synchronized', 'synchronized', status=status)
 
         elif doc_pair.pair_state == 'locally_deleted':
@@ -1417,6 +1423,7 @@ class Controller(object):
                     # TODO: handle OS-specific trash management?
                     log.debug("Deleting local doc '%s'",
                               doc_pair.get_local_abspath())
+                    self.update_recent_files(doc_pair, session=session)
                     local_client.delete(doc_pair.path)
                     doc_pair.update_state(status=status)
                     session.delete(doc_pair)
@@ -1436,6 +1443,7 @@ class Controller(object):
 
         elif doc_pair.pair_state == 'deleted':
             # No need to store this information any further
+            self.update_recent_files(doc_pair, session=session)
             session.delete(doc_pair)
             session.commit()
 
@@ -1698,6 +1706,7 @@ class Controller(object):
                 # show notifications
                 if frontend is not None:
                     frontend.notify_sync_completed(status)
+                # update recent files
                     
                 if spent < delay:
                     sleep(delay - spent)
@@ -1748,6 +1757,24 @@ class Controller(object):
                     return state
         except NoResultFound:
             return None
+        
+    def update_recent_files(self, doc_pair, session=None):
+        if doc_pair.folderish == 1:
+            return
+        if session is None:
+            session = self.get_session()
+            
+        session.add(RecentFiles(doc_pair.local_name, doc_pair.local_root, doc_pair.pair_state))
+        to_be_deleted = session.query(RecentFiles).\
+                                order_by(RecentFiles.local_update.desc()).\
+                                offset(Constants.RECENT_FILES_COUNT).all()
+        map(session.delete, to_be_deleted)
+        # if the same file appears as created, modified, etc. AND delete, keep only the deleted one
+        stmt = session.query(RecentFiles).filter(RecentFiles.pair_state == 'remotely_deleted').subquery()
+        duplicate_files = session.query(RecentFiles).filter(RecentFiles.local_name == stmt.c.local_name).\
+                                        filter(RecentFiles.pair_state != 'remotely_deleted').all()
+        map(session.delete, duplicate_files)
+#        session.commit()
 
     def launch_file_editor(self, server_url, remote_repo, remote_ref):
         """Find the local file if any and start OS editor on it."""

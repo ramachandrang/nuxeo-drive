@@ -14,7 +14,7 @@ import urllib
 import PySide
 from PySide import QtGui
 from PySide import QtCore
-from PySide.QtGui import QDialog, QMessageBox, QImage, QPainter, QIcon
+from PySide.QtGui import QDialog, QMessageBox, QImage, QPainter, QIcon, QAction
 from PySide.QtCore import QTimer, QSettings
 
 from nxdrive import Constants
@@ -27,6 +27,7 @@ from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
+from nxdrive.model import RecentFiles
 
 from preferences_dlg import PreferencesDlg
 
@@ -145,8 +146,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionOpenCloudDeskFolder.setObjectName("actionOpenCloudDeskFolder")
         self.actionShowClouDeskInfo = QtGui.QAction(self.tr("Open ClouDesk"), self)
         self.actionShowClouDeskInfo.setObjectName("actionShowClouDeskInfo")
-        self.actionViewSharedDocuments = QtGui.QAction(self.tr("View others shared documents"), self)
-        self.actionViewSharedDocuments.setObjectName("actionViewSharedDocuments")
+        self.menuViewRecentFiles = QtGui.QMenu(self.tr("Recently Changed Files"), self.menuCloudDesk)
+        self.menuViewRecentFiles.setObjectName("menuViewRecentFiles")
         self.actionUsername = QtGui.QAction(self.tr("login_name"), self)
         self.actionUsername.setObjectName("actionUsername")
         self.actionUsedStorage = QtGui.QAction(self.tr("used storage"), self)
@@ -168,7 +169,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionOpenCloudDeskFolder)
         self.menuCloudDesk.addAction(self.actionShowClouDeskInfo)
-        self.menuCloudDesk.addAction(self.actionViewSharedDocuments)
+        self.menuCloudDesk.addMenu(self.menuViewRecentFiles)
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionUsername)
         self.menuCloudDesk.addAction(self.actionUsedStorage)
@@ -497,29 +498,31 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                        QtGui.QSystemTrayIcon.Information)
 
     def notify_sync_completed(self, status):
-        """Create a notification message"""
-        if not status: return
+        """Update menu and create a notification message"""
+        self.communicator.menu.emit()
         
+        if not status: return
         multiple_pattern = {u'remotely_created':'%d%s%s added', u'remotely_modified':'%d%s%s updated', u'remotely_deleted':'%d%s%s deleted', u'conflicted':'%d%s%s conflicted' }
         single_pattern = {u'remotely_created':'%s added', u'remotely_modified':'%s updated', u'remotely_deleted':'%s deleted', u'conflicted':'%s conflicted' }
         msg = ''
         
-        nonzero_items = dict(filter(lambda (k,v): v[0] > 0, status.iteritems()))
-        allzero_items = [(k,v) for (k,v) in status.iteritems() if v[0] == 0] 
-        allone_items = [(k,v) for (k,v) in status.iteritems() if v[0] == 1]   
+#        nonzero_items = dict(filter(lambda (k,v): v[0] > 0, status.iteritems()))
+#        allzero_items = [(k,v) for (k,v) in status.iteritems() if v[0] == 0] 
+        allone_items = [(k,v) for (k,v) in status.iteritems() if len(v) == 1]   
         
-        if len(allzero_items) + len(allone_items) == len(status) and len(allone_items) == 1:
+#        if len(allzero_items) + len(allone_items) == len(status) and len(allone_items) == 1:
+        if len(allone_items) == len(status) and len(allone_items) == 1:
             # only 1 file present
-            k,fn = allone_items[0][0], allone_items[0][1][1]
+            k,fn = allone_items[0][0], allone_items[0][1][0]
             try:
                 msg = single_pattern[k] % fn 
             except KeyError:
                 return
         else:
             l = []; i=0
-            for k in nonzero_items.keys():
+            for k in status.keys():
                 try:
-                    l.append(multiple_pattern[k] % (nonzero_items[k][0], ' file' if i==0 else '', 's' if i == 0 and nonzero_items[k][0] > 1 else ''))
+                    l.append(multiple_pattern[k] % (len(status[k]), ' file' if i==0 else '', 's' if i == 0 and len(status[k]) > 1 else ''))
                     i += 1
                 except KeyError:
                     continue
@@ -581,6 +584,19 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionCommand.setText(self._syncCommand())   
         self.actionOpenCloudDeskFolder.setText('Open %s folder' % os.path.basename(self._get_local_folder())) 
         self.actionQuit.setEnabled(self.state != Constants.APP_STATE_QUITTING)       
+        
+        self.menuViewRecentFiles.clear()
+        session = self.controller.get_session()
+        recent_files = session.query(RecentFiles).all()
+        for recent_file in recent_files:
+            open_folder = lambda: self.controller.open_local_file(recent_file.local_root)
+            file_msg = recent_file.local_name
+            open_folder_action = QtGui.QAction(
+                file_msg, self.menuViewRecentFiles, triggered=open_folder)
+            # TODO setEnabled(False) does not work!!
+            if (recent_file.pair_state == 'remotely_deleted'):
+                open_folder_action.setVisible(False)
+            self.menuViewRecentFiles.addAction(open_folder_action)
             
     def update_menu(self):
         pass
