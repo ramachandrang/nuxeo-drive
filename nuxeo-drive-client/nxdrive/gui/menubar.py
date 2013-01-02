@@ -560,6 +560,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.communicator.menu.emit()
             self.update_running_icon()
                     
+    def notify_folders_changed(self):
+        self.communicator.folders.emit()
+        
     def quit(self):
         self.communicator.icon.emit('stopping')
         self.state = 'quitting'

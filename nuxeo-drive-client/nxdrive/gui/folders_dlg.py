@@ -12,7 +12,7 @@ from nxdrive.model import SyncFolders
 #from nxdrive.CheckedRemoteFileSystem import CheckedRemoteFileSystem
 #from nxdrive.CheckedFileSystem import CheckedFileSystem
 from ui_sync_folders import Ui_Dialog
-from nxdrive.RemoteFolderSystem import get_model
+from nxdrive.RemoteFolderSystem import get_model, update_model
 from nxdrive.RemoteFolderSystem import ID_ROLE, CHECKED_ROLE
 from nxdrive import Constants
 from nxdrive.logging_config import get_logger
@@ -30,7 +30,6 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         self.frontend = frontend
         if frontend is None: return
         
-#        model = CheckedRemoteFileSystem(frontend.local_folder, frontend.controller.get_session())
         try:
             self.model = get_model(frontend.controller.get_session(), controller=self.frontend.controller)
             self.treeView.setModel(self.model)
@@ -48,11 +47,17 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
             # TO DO this crashes the Python interpreter!!!
             self.communicator = Communicator()
             self.communicator.ancestorChanged.connect(self.set_ascendant_state)
+            frontend.communicator.folders.connect(self.folders_changed)
         except Exception as ex:
             label = self.lblHelp
             label.setText("<font size='4' color='red'><bold>%s</bold></font>" % str(ex))
             label.setAlignment(Qt.AlignHCenter)
             self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+        
+    def folders_changed(self):
+        session = self.frontend.controller.get_session()
+        root = self.model.invisibleRootItem().child(0)
+        update_model(session, root)
         
     def set_checked_state(self, parent):
         """Initialize the state of all checkboxes based on the model"""
@@ -180,7 +185,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         self.set_ascendant_state(parent)
         
     def accept(self):
-        # ypadte the sync_folders db table
+        # update the sync_folders db table
         root = self.model.invisibleRootItem().child(0)
         self._update_state(root)
         super(SyncFoldersDlg, self).accept()

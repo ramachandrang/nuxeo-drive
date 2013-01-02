@@ -598,7 +598,8 @@ class Controller(object):
             self._local_bind_root(server_binding, remote_info, nxclient,
                                   session, fault_tolerant=self.fault_tolerant)
 
-    def _local_bind_root(self, server_binding, remote_info, nxclient, session, fault_tolerant=False):
+    def _local_bind_root(self, server_binding, remote_info, nxclient, session, 
+                         fault_tolerant=False, frontend=None):
         # Check that this workspace does not already exist locally
         # TODO: shall we handle deduplication for root names too?
         
@@ -659,12 +660,16 @@ class Controller(object):
             log.info("Binding local root '%s' to '%s' (id=%s) on server '%s'",
                  local_root, remote_info.name, remote_info.uid,
                      server_binding.server_url)
-            session.add(RootBinding(local_root, repository, remote_info.uid, server_binding.local_folder))
+            binding = RootBinding(local_root, repository, remote_info.uid, server_binding.local_folder)
+            session.add(binding)
 
             # Initialize the metadata info by recursive walk on the remote
             # folder structure
             self._recursive_init(lcclient, local_info, nxclient, remote_info)
             session.commit()
+            if frontend is not None:
+                frontend.notify_folders_changed()            
+
 
     def _recursive_init(self, local_client, local_info, remote_client,
                         remote_info):
@@ -724,16 +729,22 @@ class Controller(object):
             # manual bounding: the server is not aware
             self._local_unbind_root(binding, session)
 
-    def _local_unbind_root(self, binding, session):
+    def _local_unbind_root(self, binding, session, frontend=None):
         log.info("Unbinding local root '%s'.", binding.local_root)
         session.delete(binding)
         session.commit()
+        if frontend is not None:
+            frontend.notify_folders_changed()
 
     def get_folders(self, session=None, server_binding=None,
                     repository=None, frontend=None):
         """Retrieve all folder hierarchy from server.
         If a server is not responding it is skipped.
         """
+        
+        dirty= {}
+        dirty['add'] = 0
+        dirty['del'] = 0
         if session is None:
             session = self.get_session()
         if server_binding is not None:
@@ -764,7 +775,7 @@ class Controller(object):
                     nxclient.get_subfolders(mydocs_folder, nodes)
 #                    pprint(dicts(nodes))
                                                             
-                    self._update_docs(mydocs_folder, nodes, sb.local_folder, session=session)
+                    self._update_docs(mydocs_folder, nodes, sb.local_folder, session=session, dirty=dirty)
 
                     othersdocs_folders = nxclient.get_othersdocs()
 #                    print "Others's Docs subfolders: " 
@@ -782,7 +793,7 @@ class Controller(object):
                         nxclient.get_subfolders(fld, nodes[fld[u'title']])
                         
 #                    pprint(dicts(nodes))
-                    self._update_docs(othersdocs_folder, nodes, sb.local_folder, session=session)
+                    self._update_docs(othersdocs_folder, nodes, sb.local_folder, session=session, dirty=dirty)
 
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # Ignore expected possible network related errors
@@ -793,10 +804,14 @@ class Controller(object):
                     frontend.notify_offline(sb.local_folder, e)
                 self._invalidate_client_cache(sb.server_url)
 
-#        if frontend is not None:
-#            local_folders = [sb.local_folder
-#                    for sb in session.query(ServerBinding).all()]
-#            frontend.notify_local_folders(local_folders)        
+        if frontend is not None:
+            # session is being flushed by queries
+#            if len(session.new) > 0 or len(session.deleted) > 0:  
+            try:
+                if dirty['add'] > 0 or dirty['del'] > 0:               
+                    frontend.notify_folders_changed()
+            except KeyError:
+                pass
         
     def update_roots(self, session=None, server_binding=None,
                      repository=None, frontend=None):
@@ -828,7 +843,7 @@ class Controller(object):
                     local_roots = [r for r in sb.roots
                                    if r.remote_repo == repo]
                     self._update_roots(sb, session, local_roots, remote_roots,
-                                       repo)
+                                       repo, frontend=frontend)
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # Ignore expected possible network related errors
                 self._log_offline(e, "update roots")
@@ -844,7 +859,7 @@ class Controller(object):
             frontend.notify_local_folders(local_folders)
 
     def _update_roots(self, server_binding, session, local_roots,
-                      remote_roots, repository):
+                      remote_roots, repository, frontend=None):
         """Align the roots for a given server and repository"""
         local_roots_by_id = dict((r.remote_root, r) for r in local_roots)
         local_root_ids = set(local_roots_by_id.keys())
@@ -856,7 +871,8 @@ class Controller(object):
         to_add = remote_root_ids - local_root_ids
 
         for ref in to_remove:
-            self._local_unbind_root(local_roots_by_id[ref], session)
+            self._local_unbind_root(local_roots_by_id[ref], session, 
+                                    frontend=frontend)
 
         for ref in to_add:
             # get a client with the right base folder
@@ -864,7 +880,8 @@ class Controller(object):
                                         repository=repository,
                                         base_folder=ref)
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
-                                  rc, session, fault_tolerant=self.fault_tolerant)
+                                  rc, session, fault_tolerant=self.fault_tolerant, 
+                                  frontend=frontend)
             
     def set_roots(self, session=None, frontend=None):
         """Update binding roots based on client folders selection"""
@@ -912,7 +929,7 @@ class Controller(object):
             session.add(folder)
             session.commit()
         
-    def _update_docs(self, docs, nodes, local_folder, session=None):
+    def _update_docs(self, docs, nodes, local_folder, session=None, dirty=None):
         if session is None:
             session = self.get_session()
             
@@ -936,32 +953,44 @@ class Controller(object):
             
         # add all subfolders
         root_folder = Constants.ROOT_OTHERS_DOCS if docId == Constants.OTHERS_DOCS_UID else Constants.ROOT_MYDOCS
-        self._add_folders(nodes, repo, local_folder, root_folder, session)        
-#        folders = session.query(SyncFolders).all()
-#        for f in folders:
-#            print str(f)    
+        self._remove_folders(nodes, docId, session, dirty=dirty)
+        self._add_folders(nodes, repo, local_folder, root_folder, session, dirty=dirty)        
         session.commit()
         
-    def _add_folders(self, t, repo, local_folder, root_folder, session=None):
+    def _add_folders(self, t, repo, local_folder, root_folder, session=None, dirty=None):
         if isinstance(t, Iterable):
             for k in t:
-                self._add_folders(t[k], repo, local_folder, root_folder, session)
+                self._add_folders(t[k], repo, local_folder, root_folder, session, dirty)
         else:
-            self._add_folder(t, repo, local_folder, root_folder, session)
+            self._add_folder(t, repo, local_folder, root_folder, session, dirty)
                     
-    def _add_folder(self, folder_info, repo, local_folder, root_folder, session=None):
+    def _add_folder(self, folder_info, repo, local_folder, root_folder, session=None, dirty=None):
         if session is None:
             session = self.get_session()
         folder = SyncFolders(folder_info.docId, folder_info.title, folder_info.parentId, repo, local_folder, remote_root=root_folder)
 
         try:
             sync_folder = session.query(SyncFolders).filter_by(remote_id=folder_info.docId).one()
-            sync_folder.remote_name = folder_info.title
-            sync_folder.remote_parent = folder_info.parentId
-            sync_folder.remote_repo = repo
-            sync_folder.remote_root = root_folder
+#            sync_folder.remote_name = folder_info.title
+#            sync_folder.remote_parent = folder_info.parentId
+#            sync_folder.remote_repo = repo
+#            sync_folder.remote_root = root_folder
         except NoResultFound:
             session.add(folder)
+            if dirty is not None:
+                dirty['add'] += 1
+                
+        
+    def _remove_folders(self, t, docId, session=None, dirty=None):
+        if session is None:
+            session = self.get_session()
+        for folder in session.query(SyncFolders).filter(SyncFolders.remote_parent == docId).all():
+            if not t.has_key(folder.remote_name):
+                session.delete(folder)
+                if dirty is not None:
+                    dirty['del'] += 1
+            else:
+                self._remove_folders(t[folder.remote_name], folder.remote_id, session, dirty)
         
     def scan_local(self, local_root, session=None):
         """Recursively scan the bound local folder looking for updates"""

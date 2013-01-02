@@ -38,6 +38,10 @@ APP_ICON_STOPPING = ':/indicator_icon_stopping.png'
 APP_ICON_PATTERN = ':/indicator_icon_%s.png'
 APP_ICON_PATTERN_ANIMATION = ':/indicator_icon_%s_%s.png'
 APP_ICON_ABOUT = ':/about_icon.png'
+APP_ICON_TAB_GENERAL = ':/general.png'
+APP_ICON_TAB_ACCOUNT = ':/account.png'
+APP_ICON_TAB_NETWORK =':/network.png'
+APP_ICON_TAB_ADVANCED = ':/advanced.png'
 
 COPYRIGHT_FILE = 'nxdrive/data/COPYING.txt'
 

@@ -21,6 +21,7 @@ class Communicator(QObject):
     invalid_credentials = Signal(str)
     message = Signal(str, str, QSystemTrayIcon.MessageIcon)
     error = Signal(str, str, QMessageBox.StandardButton)
+    folders = Signal()
 
 class ProxyInfo(QObject):
     PROXY_TYPE_HTTP = 1
