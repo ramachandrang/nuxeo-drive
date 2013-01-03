@@ -14,7 +14,7 @@ import urllib
 import PySide
 from PySide import QtGui
 from PySide import QtCore
-from PySide.QtGui import QDialog, QMessageBox, QImage, QPainter, QIcon, QAction
+from PySide.QtGui import QDialog, QMessageBox, QImage, QPainter, QIcon
 from PySide.QtCore import QTimer, QSettings
 
 from nxdrive import Constants
@@ -224,6 +224,17 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.startDelay = False
         self.stop = False
         self.proxyDlg = None
+        
+        if sys.platform == 'win32':
+            notifications = settings.value('preferences/notifications', 'true')
+            if notifications.lower() == 'true':
+                self.notifications = True
+            elif notifications.lower() == 'false':
+                self.notifications = False
+            else:
+                self.notifications = True
+        else:
+            self.notifications = settings.value('preferences/notifications', True)
 
 
     def debug_stuff(self):
@@ -617,6 +628,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if dlg.exec_() == QDialog.Rejected:
             return
         
+        self.notifications = dlg.notifications
+        
         # copy to local binding
         self.binding_info.clear()
         for sb in self.controller.list_server_bindings():
@@ -753,7 +766,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         
     @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
     def handle_message(self, title, message, icon_type):
-        self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
+        if self.notifications:
+            self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
         
     def handle_message_clicked(self):
         # handle only the click for entering credentials

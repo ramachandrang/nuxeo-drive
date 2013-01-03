@@ -9,5 +9,9 @@
      <file alias="indicator_icon_transferring_4.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R270.png</file>
      <file alias="about_icon.png">nxdrive/data/icons/nuxeo_drive_icon_48.png</file>
      <file alias="wheel.gif">nxdrive/data/icons/animation.gif</file>
+     <file alias="general.png">nxdrive/data/icons/general-configuration.png</file>
+     <file alias="account.png">nxdrive/data/icons/user-account.png</file>
+     <file alias="network.png">nxdrive/data/icons/network-proxy.png</file>
+     <file alias="advanced.png">nxdrive/data/icons/advanced.png</file>
 </qresource>
 </RCC>
