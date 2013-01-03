@@ -19,23 +19,25 @@ class Communicator(QObject):
     menu = Signal()
     stop = Signal()
     invalid_credentials = Signal(str)
+    invalid_proxy = Signal()
     message = Signal(str, str, QSystemTrayIcon.MessageIcon)
     error = Signal(str, str, QMessageBox.StandardButton)
     folders = Signal()
 
-class ProxyInfo(QObject):
-    PROXY_TYPE_HTTP = 1
-    PROXY_TYPE_SOCKS4 = 2
-    PROXY_TYPE_SOCKS5 = 3
-    
-    proxy_url = None
-    proxy_port = None
-    username = None
-    password = None
-    
-    def __init__(self):
-        self.proxy_type = ProxyInfo.PROXY_TYPE_HTTP
-        self.proxy_use_authn = False
+# TO BE DELETED
+#class ProxyInfo(QObject):
+#    PROXY_TYPE_HTTP = 1
+#    PROXY_TYPE_SOCKS4 = 2
+#    PROXY_TYPE_SOCKS5 = 3
+#    
+#    proxy_url = None
+#    proxy_port = None
+#    username = None
+#    password = None
+#    
+#    def __init__(self):
+#        self.proxy_type = ProxyInfo.PROXY_TYPE_HTTP
+#        self.proxy_use_authn = False
         
 class RecoverableError(Exception):
     def __init__(self, text, info, buttons=QMessageBox.Ok):
@@ -46,6 +48,15 @@ class RecoverableError(Exception):
         
     def __str__(self):
         return ("%s (%s)" % (self.text, self.info))
+    
+class ProxyError(Exception):
+    def __init__(self, urlerror):
+        self.code = urlerror.reason.args[0]
+        self.text = urlerror.reason.args[1]
+        
+    def __str__(self):
+        return ('%d (%s)' % (self.code, self.text))
+    
     
 class QApplicationSingleton( object ):
     ## Stores the unique Singleton instance-
@@ -81,6 +92,11 @@ class QApplicationSingleton( object ):
         return setattr(self._iInstance, aAttr, aValue)
  
         
+class classproperty(property):
+    def __get__(self, cls, owner):
+        return classmethod(self.fget).__get__(None, owner)()
+    
+    
 def create_settings():      
     QCoreApplication.setOrganizationDomain('sharplabs.com')
     QCoreApplication.setApplicationName('sla')

@@ -18,6 +18,9 @@ import re
 import sys
 
 from nxdrive.logging_config import get_logger
+from nxdrive.utils.helpers import create_settings
+from nxdrive.utils.helpers import classproperty
+from nxdrive.utils.helpers import ProxyError
 import Constants
 
 log = get_logger(__name__)
@@ -148,7 +151,64 @@ DEFAULT_IGNORED_SUFFIXES = [
     '.part',  # partially downloaded files
 ]
 
-
+class ProxyInfo(object):
+    """Holder class for proxy information"""
+    
+    PORT = '8090'
+    PORT_INTEGER = int(PORT)
+    TYPES = ['HTTP','SOCKS4', 'SOCKS5']
+    PROXY_SERVER = 'server'
+    PROXY_AUTODETECT = 'autodetect'
+    PROXY_DIRECT = 'direct'
+    
+    def __init__(self, type='HTTP', server_url=None, port=None, user=None, pwd=None):
+        self.type = type
+        self.autodetect = False
+        if not server_url:
+            self.autodetect = True
+        self.authn_required = True
+        if not user:
+            self.authn_required = False
+        self.server_url = server_url
+        self.port = port
+        self.user = user
+        self.pwd = pwd
+        
+    @staticmethod
+    def get_proxy():
+        settings = create_settings()
+        if settings is None:
+            return None
+        
+        useProxy = settings.value('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
+        if useProxy == ProxyInfo.PROXY_DIRECT:
+            return None
+        
+        proxyType = settings.value('preferences/proxyType', 'HTTP')
+        server = settings.value('preferences/proxyServer')
+        user = settings.value('preferences/proxyUser')
+        pwd = settings.value('preferences/proxyPwd')
+        
+        if sys.platform == 'win32':
+            authnAsString = settings.value('preferences/proxyAuthN', 'false')
+            if authnAsString.lower() == 'true':
+                authN = True
+            elif authnAsString.lower() == 'false':
+                authN = False
+            else:
+                authN = False
+            try:
+                port = settings.value('preferences/proxyPort', ProxyInfo.PORT)
+                port = int(port)
+            except ValueError:
+                port = 0
+            
+        else:
+            authN = settings.value('preferences/proxyAuthN', False)
+            port = settings.value('preferences/proxyPort', 0)
+            
+        return ProxyInfo(proxyType, server, port, user, pwd)
+    
 class LocalClient(object):
     """Client API implementation for the local file system"""
 
@@ -314,13 +374,21 @@ class NuxeoClient(object):
     # Parameters used when negotiating authentication token:
 
     application_name = 'Nuxeo Drive'
+    
+    _proxy = None
+    @classproperty
+    def proxy(cls):
+        if cls._proxy is None:
+            cls._proxy = ProxyInfo.get_proxy()
+        return cls._proxy
 
     permission = 'ReadWrite'
 
     def __init__(self, server_url, user_id, device_id,
                  password=None, token=None,
                  base_folder=None, repository="default",
-                 ignored_prefixes=None, ignored_suffixes=None, fault_tolerant=True):
+                 ignored_prefixes=None, ignored_suffixes=None, 
+                 fault_tolerant=True):
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -344,8 +412,21 @@ class NuxeoClient(object):
         self._update_auth(password=password, token=token)
 
         cookie_processor = urllib2.HTTPCookieProcessor()
-        self.opener = urllib2.build_opener(cookie_processor)
         self.automation_url = server_url + 'site/automation/'
+
+        if NuxeoClient.proxy is not None:
+            if not NuxeoClient.proxy.autodetect and NuxeoClient.proxy.type == 'HTTP':
+                proxy_url = '%s:%d' % (NuxeoClient.proxy.server_url, NuxeoClient.proxy.port)
+                proxy_support = urllib2.ProxyHandler({NuxeoClient.proxy.type.lower() : proxy_url})
+                self.opener = urllib2.build_opener(cookie_processor, proxy_support)
+            else:
+                # autodetect uses the default ProxyServer
+                self.opener = urllib2.build_opener(cookie_processor)
+        else:    
+            # direct connection - disable autodetect
+            proxy_support = urllib2.ProxyHandler({})
+            self.opener = urllib2.build_opener(cookie_processor, proxy_support)
+#        urllib2.install_opener(opener)
 
         self.fetch_api()
 
@@ -836,6 +917,10 @@ class NuxeoClient(object):
         req = urllib2.Request(url, data, headers)
         try:
             resp = self.opener.open(req)
+        except urllib2.URLError, e:
+            log.error('execution error: %s', str(e))
+            if urllib2.getproxies().has_key('http'):
+                raise ProxyError(e)
         except Exception, e:
             self._log_details(e)
             raise

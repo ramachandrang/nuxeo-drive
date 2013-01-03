@@ -214,6 +214,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.communicator.stop.connect(self.handle_stop)
         self.communicator.message.connect(self.handle_message)
         self.communicator.invalid_credentials.connect(self.handle_invalid_credentials)
+        self.communicator.invalid_proxy.connect(self.handle_invalid_proxy)
         self.communicator.error.connect(self.handle_recoverable_error)
         
         # Show 'up-to-date' notification message only once
@@ -444,6 +445,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if code == 401:
             log.debug('Detected invalid credentials for: %s', local_folder)
             self.communicator.invalid_credentials.emit(local_folder)
+            
+        if code == 61:
+            log.debug('Detected invalid proxy server settings')
+            self.communicator.invalid_proxy.emit()
             
     def notify_pending(self, local_folder, n_pending, or_more=False):
         info = self.get_info(local_folder)
@@ -728,7 +733,15 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.communicator.message.emit(self.tr("ClouDesk Authentication"), 
                                        self.tr('Update credentials'), 
                                        QtGui.QSystemTrayIcon.Critical)
+        # TODO Pop authentication dialog
                 
+    @QtCore.Slot()
+    def handle_invalid_proxy(self):
+        self.communicator.message.emit(self.tr("ClouDesk Configuration"), 
+                                       self.tr('Check proxy settings'), 
+                                       QtGui.QSystemTrayIcon.Critical)
+        # TODO Pop proxy configuration dialog
+        
     @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
     def handle_message(self, title, message, icon_type):
         self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)

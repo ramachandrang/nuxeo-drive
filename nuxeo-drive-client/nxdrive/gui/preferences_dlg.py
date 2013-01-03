@@ -10,7 +10,7 @@ import platform
 from sys import executable
 import shutil
 
-from PySide.QtGui import QDialog, QMessageBox, QDialogButtonBox, QFileDialog
+from PySide.QtGui import QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QIcon
 from PySide.QtCore import Qt, QSettings
 
 from nxdrive import Constants
@@ -18,10 +18,13 @@ from nxdrive.model import ServerBinding
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
-from ui_preferences import Ui_preferencesDlg
+from nxdrive.client import NuxeoClient, ProxyInfo
+from ui_preferences import Ui_preferencesDlg 
 from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
 from folders_dlg import SyncFoldersDlg
+import nxdrive.gui.qrc_resources
+import nxdrive.Constants 
 
 def default_expanded_nuxeo_drive_folder():
     return os.path.expanduser(DEFAULT_NX_DRIVE_FOLDER)
@@ -48,7 +51,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.move_to_folder = self.local_folder
         self.server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing=False)
         self.proxy = None
-        self.rbProxy.setChecked(False)
+        self.rbProxy.setCheckable(True)
+        self.rbDirect.setCheckable(True)
         applyBtn = self.buttonBox.button(QDialogButtonBox.Apply)
         applyBtn.clicked.connect(self.applyChanges)
         self.btnDisconnect.clicked.connect(self.manageBinding)
@@ -58,8 +62,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.btnProxy.clicked.connect(self.configProxy)
         self.cbEnablelog.stateChanged.connect(self.enableLog)
         self.cbNotifications.stateChanged.connect(self.setNotifications)
-        self.rbProxy.toggled.connect(lambda checked : self.btnProxy.setEnabled(checked))
         self.cbAutostart.stateChanged.connect(self.setAutostart)
+        self.rbProxy.toggled.connect(self.setProxy)
+        self.rbAutodetect.toggled.connect(self.setProxy)
         
         self.cbIconOverlays.stateChanged.connect(self.setShowIconOverlays)
         if sys.platform == 'win32':
@@ -96,8 +101,25 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.iconOverlays = settings.value('preferences/icon-overlays', True)
             self.notifications = settings.value('preferences/notifications', True)
             self.logEnabled = settings.value('preferences/log', True)
-        
+            self.useProxy = settings.value('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
+            
+        self.rbProxy.setChecked(self.useProxy == ProxyInfo.PROXY_SERVER)
+        self.rbDirect.setChecked(self.useProxy == ProxyInfo.PROXY_DIRECT)
+        self.rbAutodetect.setChecked(self.useProxy == ProxyInfo.PROXY_AUTODETECT)
+        self.btnProxy.setEnabled(self.useProxy == ProxyInfo.PROXY_SERVER)
+#        if self.useProxy == ProxyInfo.PROXY_SERVER or self.useProxy == ProxyInfo.PROXY_AUTODETECT:
+#            NuxeoClient.proxy =  ProxyInfo.get_proxy()
+#        else:
+#            NuxeoClient.proxy = None
+            
         self.setAttribute(Qt.WA_DeleteOnClose, False)
+        
+        self.tabWidget.currentChanged.connect(self.tab_changed)
+        # set tabs icons
+        self.tabWidget.setTabIcon(0, QIcon(Constants.APP_ICON_TAB_GENERAL))
+        self.tabWidget.setTabIcon(1, QIcon(Constants.APP_ICON_TAB_ACCOUNT))
+        self.tabWidget.setTabIcon(2, QIcon(Constants.APP_ICON_TAB_NETWORK))
+        self.tabWidget.setTabIcon(3, QIcon(Constants.APP_ICON_TAB_ADVANCED))
         
     def _isConnected(self):
         return (self.server_binding is not None and
@@ -120,6 +142,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 self.txtUrl.setText(Constants.DEFAULT_CLOUDDESK_URL)
                 self.txtAccount.setText(Constants.DEFAULT_ACCOUNT)
                 self.txtCloudfolder.setText(os.path.dirname(self.local_folder))
+                self.lblCloudFolder.setText(self.txtCloudfolder.text())
                 # Launch the GUI to create a binding
 #                ok = self._connect()
 #                if not ok:
@@ -128,9 +151,14 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
             self._updateBinding()
             super(PreferencesDlg, self).showEvent(evt)
+            
+    def tab_changed(self, index):
+        pass
+#        if index != -1:
+#            self.tabWidget.setTabIcon(index, QIcon(Constants.APP_ICON_ABOUT))
     
     def selectFolders(self):
-        dlg = SyncFoldersDlg(frontend=self)
+        dlg = SyncFoldersDlg(frontend=self.frontend)
         if dlg.exec_() == QDialog.Rejected:
             return
         # set the synchronized roots
@@ -138,6 +166,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         
         
     def configProxy(self):
+        self.useProxy = ProxyInfo.PROXY_SERVER
         dlg = ProxyDlg(frontend=self)
         if dlg.exec_() == QDialog.Rejected:
             return
@@ -153,6 +182,15 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         
     def enableLog(self, state):
         self.logEnabled = True if state == Qt.Checked else False
+        
+    def setProxy(self, state):
+        # ignore state as is called from multiple toggle events
+        if self.rbProxy.isChecked():
+            self.btnProxy.setEnabled(True)
+        elif self.rbAutodetect.isChecked():
+            self.btnProxy.setEnabled(False)
+        else:
+            self.btnProxy.setEnabled(False)
         
     def changeFolder(self):
         self.move_to_folder = os.path.join(self.txtCloudfolder.text(), Constants.DEFAULT_NXDRIVE_FOLDER)
@@ -190,6 +228,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if (len(selectedFld) == 0):
             selectedFld = defaultFld
         self.txtCloudfolder.setText(selectedFld)
+        self.lblCloudFolder.setText(selectedFld)
     
     def accept(self):
         pass
@@ -214,6 +253,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtUrl.setCursorPosition(0)
             self.txtUrl.setToolTip(self.server_binding.server_url)
             self.txtCloudfolder.setText(os.path.dirname(self.server_binding.local_folder))
+            self.lblCloudFolder.setText(self.txtCloudfolder.text())
             self.txtCloudfolder.setCursorPosition(0)
             self.txtCloudfolder.setToolTip(self.server_binding.local_folder)
             self.txtAccount.setReadOnly(True)
@@ -328,15 +368,47 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             
             shutil.copytree(self.local_folder, self.move_to_folder)                    
             if self.frontend is not None:
-                self.frontend.local_folder = self.local_folder = self.move_to_folder  
+                self.frontend.local_folder = self.local_folder = self.move_to_folder
+                  
             #TODO Update the database
-            pass
-                              
+        
         # Apply other changes
+        if self.rbProxy.isChecked():
+            useProxy = ProxyInfo.PROXY_SERVER
+        elif self.rbAutodetect.isChecked():
+            useProxy = ProxyInfo.PROXY_AUTODETECT
+        else:
+            useProxy = ProxyInfo.PROXY_DIRECT
+        
+        if useProxy != self.useProxy:
+            if useProxy == ProxyInfo.PROXY_SERVER:
+                dlg = ProxyDlg(frontend=self)
+                if dlg.exec_() == QDialog.Rejected:
+                    return
+            self.useProxy = useProxy  
+            # invalidate remote client cache if necessary
+            if self.frontend is not None:
+                cache = self.frontend.controller._get_client_cache()
+                cache.clear()
+            settings.setValue('preferences/useProxy', self.useProxy)
+            if self.useProxy == ProxyInfo.PROXY_AUTODETECT or self.useProxy == ProxyInfo.PROXY_DIRECT:
+                settings.setValue('preferences/proxyServer', '')
+                settings.setValue('preferences/proxyPort', '')
+            if self.useProxy == ProxyInfo.PROXY_DIRECT:
+                settings.setValue('preferences/proxyUser', '')
+                settings.setValue('preferences/proxyPwd', '')
+                settings.setValue('preferences/proxyAuthN', False)
+            
         settings.setValue('preferences/notifications', self.notifications)
         settings.setValue('preferences/icon-overlays', self.iconOverlays)
         settings.setValue('preferences/autostart', self.autostart)
         settings.setValue('preferences/log', self.logEnabled)
+            
+        settings.sync()
+        # TEST: useProxy is not saved!
+        result = settings.status()
+        if result != QSettings.NoError:
+            log.error('settings saving error: %s', str(result))
         
         if sys.platform == 'win32':
             reg_settings = QSettings("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", QSettings.NativeFormat)
