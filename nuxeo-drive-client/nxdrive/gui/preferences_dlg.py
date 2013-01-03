@@ -107,10 +107,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.rbDirect.setChecked(self.useProxy == ProxyInfo.PROXY_DIRECT)
         self.rbAutodetect.setChecked(self.useProxy == ProxyInfo.PROXY_AUTODETECT)
         self.btnProxy.setEnabled(self.useProxy == ProxyInfo.PROXY_SERVER)
-#        if self.useProxy == ProxyInfo.PROXY_SERVER or self.useProxy == ProxyInfo.PROXY_AUTODETECT:
-#            NuxeoClient.proxy =  ProxyInfo.get_proxy()
-#        else:
-#            NuxeoClient.proxy = None
             
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         
@@ -166,8 +162,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         
         
     def configProxy(self):
+        # Proxy... button is only enable in this case
         self.useProxy = ProxyInfo.PROXY_SERVER
-        dlg = ProxyDlg(frontend=self)
+        dlg = ProxyDlg(frontend=self.frontend)
         if dlg.exec_() == QDialog.Rejected:
             return
         

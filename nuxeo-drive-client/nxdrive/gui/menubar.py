@@ -28,8 +28,8 @@ from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
 from nxdrive.model import RecentFiles
-
-from preferences_dlg import PreferencesDlg
+from nxdrive.gui.proxy_dlg import ProxyDlg
+from nxdrive.gui.preferences_dlg import PreferencesDlg
 
 settings = create_settings()
 
@@ -223,6 +223,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.timer.timeout.connect(self._onTimer)
         self.startDelay = False
         self.stop = False
+        self.proxyDlg = None
 
 
     def debug_stuff(self):
@@ -446,9 +447,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             log.debug('Detected invalid credentials for: %s', local_folder)
             self.communicator.invalid_credentials.emit(local_folder)
             
-        if code == 61:
-            log.debug('Detected invalid proxy server settings')
-            self.communicator.invalid_proxy.emit()
+        if code == 61 or code == 600 or code == 601:
+            text = getattr(exception, 'text', None)
+            msg = 'Detected invalid proxy server settings' if text is None else 'Detected invalid proxy server settings: %s' % text
+            log.debug(msg)
+            self.communicator.invalid_proxy.emit(msg)
             
     def notify_pending(self, local_folder, n_pending, or_more=False):
         info = self.get_info(local_folder)
@@ -724,23 +727,29 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             
     @QtCore.Slot(str)
     def handle_invalid_credentials(self, local_folder):
-        sb = self.controller.get_server_binding(local_folder)
-        sb.invalidate_credentials()
-        self.controller.get_session().commit()
+        sb = self.controller.get_server_binding(local_folder, raise_if_missing=False)
+        if sb is not None:
+            sb.invalidate_credentials()
+            self.controller.get_session().commit()
         # menu is updated when is activated 
 #        self.communicator.menu.emit()
         # show a notification
-        self.communicator.message.emit(self.tr("ClouDesk Authentication"), 
-                                       self.tr('Update credentials'), 
-                                       QtGui.QSystemTrayIcon.Critical)
+        for_server = '' if sb is None else ' for server: %s' % sb.server_url
+        detail = 'Update credentials%s' % for_server
+        self.handle_message(self.tr("CloudDesk Authentication"), 
+                           detail, 
+                           QtGui.QSystemTrayIcon.Critical)
         # TODO Pop authentication dialog
                 
     @QtCore.Slot()
-    def handle_invalid_proxy(self):
-        self.communicator.message.emit(self.tr("ClouDesk Configuration"), 
-                                       self.tr('Check proxy settings'), 
-                                       QtGui.QSystemTrayIcon.Critical)
-        # TODO Pop proxy configuration dialog
+    def handle_invalid_proxy(self, message):
+        self.handle_message(self.tr("CloudDesk Configuration"), 
+                           message, 
+                           QtGui.QSystemTrayIcon.Critical)
+        if self.proxyDlg is None:
+            self.proxyDlg = ProxyDlg(frontend=self)
+            self.proxyDlg.exec_()
+            self.proxyDlg = None
         
     @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
     def handle_message(self, title, message, icon_type):

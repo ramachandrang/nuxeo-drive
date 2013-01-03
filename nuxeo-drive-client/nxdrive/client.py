@@ -20,7 +20,7 @@ import sys
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
 from nxdrive.utils.helpers import classproperty
-from nxdrive.utils.helpers import ProxyError
+from nxdrive.utils.helpers import ProxyConnectionError, ProxyConfigurationError
 import Constants
 
 log = get_logger(__name__)
@@ -161,16 +161,20 @@ class ProxyInfo(object):
     PROXY_AUTODETECT = 'autodetect'
     PROXY_DIRECT = 'direct'
     
-    def __init__(self, type='HTTP', server_url=None, port=None, user=None, pwd=None):
+    def __init__(self, type='HTTP', server_url=None, port=None, authn_required=False, user=None, pwd=None):
         self.type = type
+        if type != ProxyInfo.TYPES[0]:
+            raise ProxyConfigurationError('protocol type not supported')
         self.autodetect = False
         if not server_url:
             self.autodetect = True
-        self.authn_required = True
-        if not user:
-            self.authn_required = False
+        self.authn_required = authn_required
+        if not user and authn_required:
+            raise ProxyConfigurationError('missing username')
         self.server_url = server_url
         self.port = port
+        if server_url is None or port is None:
+            raise ProxyConfigurationError('missing server or port')
         self.user = user
         self.pwd = pwd
         
@@ -207,7 +211,7 @@ class ProxyInfo(object):
             authN = settings.value('preferences/proxyAuthN', False)
             port = settings.value('preferences/proxyPort', 0)
             
-        return ProxyInfo(proxyType, server, port, user, pwd)
+        return ProxyInfo(proxyType, server, port, authN, user, pwd)
     
 class LocalClient(object):
     """Client API implementation for the local file system"""
@@ -376,11 +380,20 @@ class NuxeoClient(object):
     application_name = 'Nuxeo Drive'
     
     _proxy = None
+    _proxy_error_count = 0
+    MAX_PROXY_ERROR_COUNT = 3
+    MAX_CREDENTIAL_ERROR_COUNT = 2
+    
     @classproperty
     def proxy(cls):
         if cls._proxy is None:
             cls._proxy = ProxyInfo.get_proxy()
         return cls._proxy
+    
+    @classproperty
+    def proxy_error_count(cls):
+        cls._proxy_error_count += 1
+        return cls._proxy_error_count
 
     permission = 'ReadWrite'
 
@@ -440,6 +453,8 @@ class NuxeoClient(object):
             
         self.fault_tolerant = fault_tolerant
 
+        self.credential_error_count = 0
+
     def _update_auth(self, password=None, token=None):
         """Select the most appropriate authentication heads based on credentials"""
         if token is not None:
@@ -491,6 +506,7 @@ class NuxeoClient(object):
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers=headers)
             token = self.opener.open(req).read()
+            NuxeoClient._proxy_error_count = 1
         except urllib2.HTTPError as e:
             if e.code == 401 or e.code == 403:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
@@ -500,6 +516,14 @@ class NuxeoClient(object):
             else:
                 e.msg = base_error_message + ": HTTP error %d" % e.code
                 raise e
+        except urllib2.URLError, e:
+            self._log_details(e)
+            # NOTE the Proxy handler not always shown in the dictionary
+#            if urllib2.getproxies().has_key('http'):
+            if NuxeoClient.proxy is not None and NuxeoClient.proxy_error_count < NuxeoClient.MAX_PROXY_ERROR_COUNT:
+                raise ProxyConnectionError(e)
+            else:
+                raise
         except Exception as e:
             if hasattr(e, 'msg'):
                 e.msg = base_error_message + ": " + e.msg
@@ -517,12 +541,21 @@ class NuxeoClient(object):
         try:
             req = urllib2.Request(self.automation_url, headers=headers)
             response = json.loads(self.opener.open(req).read())
+            NuxeoClient._proxy_error_count = 1
         except urllib2.HTTPError as e:
             if e.code == 401 or e.code == 403:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
             else:
                 e.msg = base_error_message + ": HTTP error %d" % e.code
                 raise e
+        except urllib2.URLError, e:
+            self._log_details(e)
+            # NOTE the Proxy handler not always shown in the dictionary
+#            if urllib2.getproxies().has_key('http'):
+            if NuxeoClient.proxy is not None and NuxeoClient.proxy_error_count < NuxeoClient.MAX_PROXY_ERROR_COUNT:
+                raise ProxyConnectionError(e)
+            else:
+                raise
         except Exception as e:
             if hasattr(e, 'msg'):
                 e.msg = base_error_message + ": " + e.msg
@@ -877,6 +910,15 @@ class NuxeoClient(object):
         req = urllib2.Request(url, data, headers)
         try:
             resp = self.opener.open(req)
+            NuxeoClient._proxy_error_count = 1
+        except urllib2.URLError, e:
+            self._log_details(e)
+            # NOTE the Proxy handler not always shown in the dictionary
+#            if urllib2.getproxies().has_key('http'):
+            if NuxeoClient.proxy is not None and NuxeoClient.proxy_error_count < NuxeoClient.MAX_PROXY_ERROR_COUNT:
+                raise ProxyConnectionError(e)
+            else:
+                raise
         except Exception as e:
             self._log_details(e)
             raise
@@ -917,10 +959,15 @@ class NuxeoClient(object):
         req = urllib2.Request(url, data, headers)
         try:
             resp = self.opener.open(req)
+            NuxeoClient._proxy_error_count = 1
         except urllib2.URLError, e:
-            log.error('execution error: %s', str(e))
-            if urllib2.getproxies().has_key('http'):
-                raise ProxyError(e)
+            self._log_details(e)
+            # NOTE the Proxy handler not always shown in the dictionary
+#            if urllib2.getproxies().has_key('http'):
+            if NuxeoClient.proxy is not None and NuxeoClient.proxy_error_count < NuxeoClient.MAX_PROXY_ERROR_COUNT:
+                raise ProxyConnectionError(e)
+            else:
+                raise
         except Exception, e:
             self._log_details(e)
             raise

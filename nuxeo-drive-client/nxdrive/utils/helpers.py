@@ -4,8 +4,10 @@ Created on Nov 7, 2012
 @author: mconstantin
 '''
 
+import urllib2
 from PySide.QtCore import Signal, QObject, QCoreApplication, QSettings
 from PySide.QtGui import QSystemTrayIcon, QMessageBox
+
 
 class Communicator(QObject):
     """Handle communication between sync and main GUI thread
@@ -19,25 +21,10 @@ class Communicator(QObject):
     menu = Signal()
     stop = Signal()
     invalid_credentials = Signal(str)
-    invalid_proxy = Signal()
+    invalid_proxy = Signal(str)
     message = Signal(str, str, QSystemTrayIcon.MessageIcon)
     error = Signal(str, str, QMessageBox.StandardButton)
     folders = Signal()
-
-# TO BE DELETED
-#class ProxyInfo(QObject):
-#    PROXY_TYPE_HTTP = 1
-#    PROXY_TYPE_SOCKS4 = 2
-#    PROXY_TYPE_SOCKS5 = 3
-#    
-#    proxy_url = None
-#    proxy_port = None
-#    username = None
-#    password = None
-#    
-#    def __init__(self):
-#        self.proxy_type = ProxyInfo.PROXY_TYPE_HTTP
-#        self.proxy_use_authn = False
         
 class RecoverableError(Exception):
     def __init__(self, text, info, buttons=QMessageBox.Ok):
@@ -49,14 +36,25 @@ class RecoverableError(Exception):
     def __str__(self):
         return ("%s (%s)" % (self.text, self.info))
     
-class ProxyError(Exception):
+class ProxyConnectionError(Exception):
     def __init__(self, urlerror):
-        self.code = urlerror.reason.args[0]
-        self.text = urlerror.reason.args[1]
+        if isinstance(urlerror, urllib2.URLError):
+            self.code = urlerror.reason.args[0]
+            self.text = urlerror.reason.args[1]
+        else:
+            self.code = 600
+            self.text = ','.join(self.args)
         
     def __str__(self):
         return ('%d (%s)' % (self.code, self.text))
     
+class ProxyConfigurationError(Exception):
+    def __init__(self, msg):
+        self.code = 601
+        self.text = msg
+        
+    def __str__(self):
+        return ('%d (%s)' % (self.code, self.text))
     
 class QApplicationSingleton( object ):
     ## Stores the unique Singleton instance-
@@ -95,6 +93,9 @@ class QApplicationSingleton( object ):
 class classproperty(property):
     def __get__(self, cls, owner):
         return classmethod(self.fget).__get__(None, owner)()
+    
+#    def __set__(self, cls, owner, value):
+#        return classmethod(self.fset).__set__(None, owner, value)()
     
     
 def create_settings():      

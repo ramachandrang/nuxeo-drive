@@ -31,7 +31,7 @@ from nxdrive.model import init_db
 from nxdrive.model import DeviceConfig, ServerBinding, RootBinding, LastKnownState, SyncFolders, RecentFiles
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
-from nxdrive.utils.helpers import RecoverableError, ProxyError
+from nxdrive.utils.helpers import RecoverableError, ProxyConnectionError, ProxyConfigurationError
 #from nxdrive.utils.helpers import Notifier
 
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
@@ -54,7 +54,8 @@ POSSIBLE_NETWORK_ERROR_TYPES = (
     urllib2.HTTPError,
     httplib.HTTPException,
     socket.error,
-    ProxyError,
+    ProxyConnectionError,
+    ProxyConfigurationError,
 )
 
 schema_url = 'nxdrive/data/federatedloginservices.xml'

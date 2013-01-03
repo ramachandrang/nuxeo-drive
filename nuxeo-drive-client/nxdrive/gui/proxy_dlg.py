@@ -149,6 +149,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
         settings.setValue('preferences/proxyPwd', self.pwd)
         settings.setValue('preferences/proxyAuthN', self.AuthN)
         settings.setValue('preferences/proxyPort', self.port)
+        settings.sync()
         
         # invalidate remote client cache if necessary
         if invalidate and self.frontend is not None:
