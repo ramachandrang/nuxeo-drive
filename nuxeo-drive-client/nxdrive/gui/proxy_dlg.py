@@ -37,7 +37,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
         self.port = None
         self.user = None
         self.pwd = None
-        self.AuthN = None
+        self.AuthN = False
         
         proxy = ProxyInfo.get_proxy()
         if proxy is None:
@@ -53,7 +53,8 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
             self.port = proxy.port
             self.user = proxy.user
             self.pwd = proxy.pwd
-            self.AuthN = proxy.authn_required
+            if proxy.authn_required is not None:
+                self.AuthN = proxy.authn_required
                 
             self.txtServer.setText(self.server)
             self.txtPort.setText(str(self.port))

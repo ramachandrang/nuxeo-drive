@@ -387,7 +387,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             if self.frontend is not None:
                 cache = self.frontend.controller._get_client_cache()
                 cache.clear()
-            settings.setValue('preferences/useProxy', self.useProxy)
+            
             if self.useProxy == ProxyInfo.PROXY_AUTODETECT or self.useProxy == ProxyInfo.PROXY_DIRECT:
                 settings.setValue('preferences/proxyServer', '')
                 settings.setValue('preferences/proxyPort', '')
@@ -396,6 +396,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 settings.setValue('preferences/proxyPwd', '')
                 settings.setValue('preferences/proxyAuthN', False)
             
+        settings.setValue('preferences/useProxy', self.useProxy)
         settings.setValue('preferences/notifications', self.notifications)
         settings.setValue('preferences/icon-overlays', self.iconOverlays)
         settings.setValue('preferences/autostart', self.autostart)
