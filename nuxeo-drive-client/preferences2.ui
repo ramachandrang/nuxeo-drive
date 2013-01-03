@@ -13,6 +13,10 @@
   <property name="windowTitle">
    <string>Preferences</string>
   </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>nxdrive/data/icons/advanced.png</normaloff>nxdrive/data/icons/advanced.png</iconset>
+  </property>
   <widget class="QTabWidget" name="tabWidget">
    <property name="geometry">
     <rect>
@@ -23,7 +27,7 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>3</number>
+    <number>2</number>
    </property>
    <property name="iconSize">
     <size>
@@ -32,6 +36,10 @@
     </size>
    </property>
    <widget class="QWidget" name="tabGeneral">
+    <attribute name="icon">
+     <iconset>
+      <normaloff>nxdrive/data/icons/general-configuration.png</normaloff>nxdrive/data/icons/general-configuration.png</iconset>
+    </attribute>
     <attribute name="title">
      <string>General</string>
     </attribute>
@@ -112,15 +120,19 @@
     </widget>
    </widget>
    <widget class="QWidget" name="tabAccount">
+    <attribute name="icon">
+     <iconset>
+      <normaloff>nxdrive/data/icons/user-account.png</normaloff>nxdrive/data/icons/user-account.png</iconset>
+    </attribute>
     <attribute name="title">
      <string>Account</string>
     </attribute>
-    <widget class="QWidget" name="">
+    <widget class="QWidget" name="layoutWidget">
      <property name="geometry">
       <rect>
        <x>10</x>
        <y>4</y>
-       <width>498</width>
+       <width>502</width>
        <height>127</height>
       </rect>
      </property>
@@ -243,21 +255,31 @@
     </widget>
    </widget>
    <widget class="QWidget" name="tabNetwork">
+    <attribute name="icon">
+     <iconset>
+      <normaloff>nxdrive/data/icons/network-proxy.png</normaloff>nxdrive/data/icons/network-proxy.png</iconset>
+    </attribute>
     <attribute name="title">
      <string>Network</string>
     </attribute>
-    <widget class="QWidget" name="layoutWidget_2">
+    <widget class="QWidget" name="">
      <property name="geometry">
       <rect>
        <x>10</x>
        <y>0</y>
-       <width>311</width>
-       <height>62</height>
+       <width>308</width>
+       <height>110</height>
       </rect>
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
       <item row="0" column="0">
        <widget class="QRadioButton" name="rbProxy">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>32</height>
+         </size>
+        </property>
         <property name="text">
          <string>Use Proxy Server</string>
         </property>
@@ -270,8 +292,8 @@
         </property>
         <property name="sizeHint" stdset="0">
          <size>
-          <width>278</width>
-          <height>20</height>
+          <width>18</width>
+          <height>17</height>
          </size>
         </property>
        </spacer>
@@ -284,21 +306,40 @@
        </widget>
       </item>
       <item row="1" column="0">
+       <widget class="QRadioButton" name="rbAutodetect">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>32</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>Auto-detect</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
        <widget class="QRadioButton" name="rbDirect">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>32</height>
+         </size>
+        </property>
         <property name="text">
          <string>Direct connection</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1" colspan="2">
+      <item row="2" column="1" colspan="2">
        <spacer name="horizontalSpacer_2">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
-          <width>398</width>
-          <height>20</height>
+          <width>156</width>
+          <height>17</height>
          </size>
         </property>
        </spacer>
@@ -307,10 +348,14 @@
     </widget>
    </widget>
    <widget class="QWidget" name="tabAdvanced">
+    <attribute name="icon">
+     <iconset>
+      <normaloff>nxdrive/data/icons/advanced.png</normaloff>nxdrive/data/icons/advanced.png</iconset>
+    </attribute>
     <attribute name="title">
      <string>Advanced</string>
     </attribute>
-    <widget class="QWidget" name="">
+    <widget class="QWidget" name="layoutWidget">
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -450,7 +495,7 @@
     </widget>
    </widget>
   </widget>
-  <widget class="QWidget" name="">
+  <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
     <rect>
      <x>6</x>
