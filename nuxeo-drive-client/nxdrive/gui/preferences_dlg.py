@@ -96,6 +96,13 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 self.logEnabled = False
             else:
                 self.logEnabled = True
+            useProxy = settings.value('preferences/useProxy', 'true')   
+            if useProxy.lower() == 'true':
+                self.useProxy = True
+            elif useProxy.lower() == 'false':
+                self.useProxy = False
+            else:
+                self.useProxy = True
         else:
             self.autostart = settings.value('preferences/autostart', True)
             self.iconOverlays = settings.value('preferences/icon-overlays', True)
