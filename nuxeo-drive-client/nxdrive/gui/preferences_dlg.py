@@ -42,6 +42,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def __init__(self, frontend=None, parent=None):
         super(PreferencesDlg, self).__init__(parent)
         self.setupUi(self)
+        self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
         self.frontend = frontend
         self.controller = frontend.controller
         self.values = None

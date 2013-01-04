@@ -15,7 +15,7 @@ class Ui_preferencesDlg(object):
         Dialog.resize(520, 220)
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap("nxdrive/data/icons/advanced.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        Dialog.setWindowIcon(icon)
+#        Dialog.setWindowIcon(icon)
         self.tabWidget = QtGui.QTabWidget(Dialog)
         self.tabWidget.setGeometry(QtCore.QRect(0, 5, 521, 171))
         self.tabWidget.setIconSize(QtCore.QSize(48, 48))

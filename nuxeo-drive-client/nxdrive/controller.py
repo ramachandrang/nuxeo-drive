@@ -18,7 +18,6 @@ import psutil
 import logging
 from collections import defaultdict, Iterable
 from pprint import pprint
-import uuid
 
 import nxdrive
 from nxdrive.client import NuxeoClient
@@ -1608,6 +1607,8 @@ class Controller(object):
                 if self.should_stop_synchronization():
                     return True
                 log.debug("resuming synchronization")
+                if frontend is not None:
+                    frontend.notify_sync_started()
                 paused = False
                 with sync_operation.lock:
                     if sync_operation.pause:
@@ -1683,7 +1684,7 @@ class Controller(object):
                 status = {}
                 for rb in bindings:
                     try:
-                        if self.should_pause_synchronization(sync_operation):
+                        if self.should_pause_synchronization(sync_operation, frontend=frontend):
                             break;
                         # the alternative to local full scan is the watchdog
                         # thread
@@ -1801,9 +1802,11 @@ class Controller(object):
                                 offset(Constants.RECENT_FILES_COUNT).all()
         map(session.delete, to_be_deleted)
         # if the same file appears as created, modified, etc. AND delete, keep only the deleted one
-        stmt = session.query(RecentFiles).filter(RecentFiles.pair_state == 'remotely_deleted').subquery()
-        duplicate_files = session.query(RecentFiles).filter(RecentFiles.local_name == stmt.c.local_name).\
-                                        filter(RecentFiles.pair_state != 'remotely_deleted').all()
+        stmt = session.query(RecentFiles).\
+            filter(or_(RecentFiles.pair_state == 'remotely_deleted', RecentFiles.pair_state == 'deleted')).subquery()
+        duplicate_files = session.query(RecentFiles).\
+            filter(RecentFiles.local_name == stmt.c.local_name).\
+            filter(or_(RecentFiles.pair_state != 'remotely_deleted', RecentFiles.pair_state != 'deleted')).all()
         map(session.delete, duplicate_files)
 #        session.commit()
 

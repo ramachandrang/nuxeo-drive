@@ -4,7 +4,7 @@ Created on Dec 13, 2012
 @author: mconstantin
 '''
 
-from PySide.QtGui import QDialog, QStandardItem, QLabel, QDialogButtonBox
+from PySide.QtGui import QDialog, QStandardItem, QIcon, QDialogButtonBox
 from PySide.QtCore import Qt, QObject, Signal, Slot, QModelIndex
 from nxdrive.model import SyncFolders
 
@@ -27,6 +27,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
     def __init__(self, frontend=None, parent=None):
         super(SyncFoldersDlg, self).__init__(parent)
         self.setupUi(self)
+        self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
         self.frontend = frontend
         if frontend is None: return
         

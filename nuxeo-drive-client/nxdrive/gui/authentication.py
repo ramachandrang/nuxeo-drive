@@ -3,6 +3,7 @@ import os
 from nxdrive.client import Unauthorized
 from nxdrive.gui.resources import find_icon
 from nxdrive.logging_config import get_logger
+from nxdrive import Constants
 
 log = get_logger(__name__)
 
@@ -48,6 +49,7 @@ class Dialog(QDialog):
         super(Dialog, self).__init__(parent)
         if QtGui is None:
             raise RuntimeError("PySide is not installed.")
+        self.setWindowIcon(QtGui.QIcon(Constants.APP_ICON_ENABLED))
         self.create_authentication_box(fields_spec)
         self.callback = callback
         buttonBox = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok

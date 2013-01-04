@@ -144,8 +144,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionCommand.setObjectName("actionCommand")
         self.actionOpenCloudDeskFolder = QtGui.QAction(self.tr("Open CloudDesk folder"), self)
         self.actionOpenCloudDeskFolder.setObjectName("actionOpenCloudDeskFolder")
-        self.actionShowClouDeskInfo = QtGui.QAction(self.tr("Open ClouDesk"), self)
-        self.actionShowClouDeskInfo.setObjectName("actionShowClouDeskInfo")
+        self.actionShowCloudDeskInfo = QtGui.QAction(self.tr("Open CloudDesk"), self)
+        self.actionShowCloudDeskInfo.setObjectName("actionShowCloudDeskInfo")
         self.menuViewRecentFiles = QtGui.QMenu(self.tr("Recently Changed Files"), self.menuCloudDesk)
         self.menuViewRecentFiles.setObjectName("menuViewRecentFiles")
         self.actionUsername = QtGui.QAction(self.tr("login_name"), self)
@@ -168,7 +168,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addAction(self.actionCommand)
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionOpenCloudDeskFolder)
-        self.menuCloudDesk.addAction(self.actionShowClouDeskInfo)
+        self.menuCloudDesk.addAction(self.actionShowCloudDeskInfo)
         self.menuCloudDesk.addMenu(self.menuViewRecentFiles)
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionUsername)
@@ -196,7 +196,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionCommand.triggered.connect(self.doWork)
         self.actionAbout.triggered.connect(self.about)
         self.actionOpenCloudDeskFolder.triggered.connect(self.openLocalFolder)  
-        self.actionShowClouDeskInfo.triggered.connect(self.openCloudDesk)
+        self.actionShowCloudDeskInfo.triggered.connect(self.openCloudDesk)
         self.messageClicked.connect(self.handle_message_clicked)
         
         # TO BE REMOVED - BEGIN
@@ -239,7 +239,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def debug_stuff(self):
         # this is not working on OS X
-#        self.communicator.message.emit(self.tr("ClouDesk Authentication"), 
+#        self.communicator.message.emit(self.tr("CloudDesk Authentication"), 
 #                               self.tr('Update credentials'), 
 #                               QtGui.QSystemTrayIcon.Critical)
         # For TEST ONLY
@@ -382,7 +382,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.stop = True
         else:
             self.timer.stop()
-            self._set_icon_enabled()
+            self._set_icon_stopping()
         
     def _startAnimationDelay(self):
         assert not self.startDelay
@@ -417,7 +417,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.setIcon(icon)
                 
     def update_running_icon(self):
-        if self.state != 'running':
+        if self.state != Constants.APP_STATE_RUNNING:
             self.communicator.icon.emit('disabled')
             return
         infos = self.binding_info.values()
@@ -460,11 +460,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             
         if code == 61 or code == 600 or code == 601:
             text = getattr(exception, 'text', None)
-            msg = 'Detected invalid proxy server settings' if text is None else 'Detected invalid proxy server settings: %s' % text
+            msg = 'Detected invalid proxy server settings' + '' if text is None else ': %s' % text
             log.debug(msg)
             self.communicator.invalid_proxy.emit(msg)
             
     def notify_pending(self, local_folder, n_pending, or_more=False):
+        if self.state == Constants.APP_STATE_QUITTING:
+            return
+        
         info = self.get_info(local_folder)
         if n_pending != info.n_pending:
             log.debug("%d pending operations for: %s", n_pending, local_folder)
@@ -475,19 +478,22 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if not info.online:
             log.debug("Switching to online mode for: %s", local_folder)
             # Mark binding as online and update UI
+            info.online = True
             self.update_running_icon()
             self.communicator.menu.emit()
             
-        info.online = True
         # show message notification - DO NOT SHOW THIS
 #        if n_pending > 0 or info.online_status_change():
-#            self.communicator.message.emit(self.tr("ClouDesk Operation"), 
+#            self.communicator.message.emit(self.tr("CloudDesk Operation"), 
 #                                           info.get_status_message(), 
 #                                           QtGui.QSystemTrayIcon.Information)     
                    
             
     def notify_pending_details(self, status):
         """NOT USED"""
+        if self.state == Constants.APP_STATE_QUITTING:
+            return
+        
         local_folder = self._get_local_folder()
 
         if len(status) == 0: return
@@ -512,12 +518,15 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msg += msg1 % conflicted if conflicted > 0 else ''
         
         # show message notification
-        self.communicator.message.emit(self.tr("ClouDesk Operation"), 
+        self.communicator.message.emit(self.tr("CloudDesk Operation"), 
                                        msg, 
                                        QtGui.QSystemTrayIcon.Information)
 
     def notify_sync_completed(self, status):
         """Update menu and create a notification message"""
+        if self.state == Constants.APP_STATE_QUITTING:
+            return
+        
         self.communicator.menu.emit()
         
         if not status: return
@@ -551,19 +560,25 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if len(msg) == 0: return
         
         # show message notification
-        self.communicator.message.emit(self.tr("ClouDesk Operation"), 
+        self.communicator.message.emit(self.tr("CloudDesk Operation"), 
                                        msg, 
                                        QtGui.QSystemTrayIcon.Information)
         
         
     def notify_start_transfer(self):
-        self.communicator.icon.emit('enabled_start')
+        if self.state != Constants.APP_STATE_QUITTING:
+            self.communicator.icon.emit('enabled_start')
         
     def notify_stop_transfer(self):
-        self.communicator.icon.emit('enabled_stop')
+        if self.state != Constants.APP_STATE_QUITTING:
+            self.communicator.icon.emit('enabled_stop')
         
     def notify_local_folders(self, local_folders):
         """Cleanup unbound server bindings if any"""
+        
+        if self.state == Constants.APP_STATE_QUITTING:
+            return
+        
         refresh = False
         for registered_folder in self.binding_info.keys():
             if registered_folder not in local_folders:
@@ -580,13 +595,18 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.update_running_icon()
                     
     def notify_folders_changed(self):
-        self.communicator.folders.emit()
+        if self.state != Constants.APP_STATE_QUITTING:
+            self.communicator.folders.emit()
         
     def quit(self):
-        self.communicator.icon.emit('stopping')
-        self.state = 'quitting'
-        self.quit_on_stop = True
-        self.communicator.menu.emit()
+        if self.state != Constants.APP_STATE_QUITTING:
+            self.state = Constants.APP_STATE_QUITTING
+            self.quit_on_stop = True
+            self.communicator.menu.emit()
+            
+        if self.state != Constants.APP_STATE_STOPPED:
+            self.communicator.icon.emit('stopping')
+            
         if self.worker is not None and self.worker.isAlive():
             # Ask the controller to stop: the synchronization loop will in turn
             # call notify_sync_stopped and finally handle_stop
@@ -601,7 +621,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         #TO DO retrieve storage used
         self.actionUsedStorage.setText("123Mb (0.03%) of 4Gb")
         
-        self.actionShowClouDeskInfo.setEnabled(len(self.binding_info.values()) > 0)
+        self.actionShowCloudDeskInfo.setEnabled(len(self.binding_info.values()) > 0)
         self.actionStatus.setText(self._syncStatus())
         self.actionCommand.setText(self._syncCommand())   
         self.actionOpenCloudDeskFolder.setText('Open %s folder' % os.path.basename(self._get_local_folder())) 
@@ -616,7 +636,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             open_folder_action = QtGui.QAction(
                 file_msg, self.menuViewRecentFiles, triggered=open_folder)
             # TODO setEnabled(False) does not work!!
-            if (recent_file.pair_state == 'remotely_deleted'):
+            if recent_file.pair_state == 'remotely_deleted' or recent_file.pair_state == 'deleted':
                 open_folder_action.setVisible(False)
             self.menuViewRecentFiles.addAction(open_folder_action)
             
@@ -727,11 +747,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         
     def _pauseSync(self):
         self.worker.pause()
-#        self._updateOperationStatus(Constants.SYNC_STATUS_STOP)
             
     def _resumeSync(self):
         self.worker.resume()
-#        self._updateOperationStatus(Constants.SYNC_STATUS_START)
 
     @QtCore.Slot()
     def handle_stop(self):

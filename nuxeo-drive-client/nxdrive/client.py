@@ -381,7 +381,7 @@ class NuxeoClient(object):
     
     _proxy = None
     _proxy_error_count = 0
-    MAX_PROXY_ERROR_COUNT = 3
+    MAX_PROXY_ERROR_COUNT = 2
     MAX_CREDENTIAL_ERROR_COUNT = 2
     
     @classproperty
@@ -506,7 +506,7 @@ class NuxeoClient(object):
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers=headers)
             token = self.opener.open(req).read()
-            NuxeoClient._proxy_error_count = 1
+            NuxeoClient._proxy_error_count = 0
         except urllib2.HTTPError as e:
             if e.code == 401 or e.code == 403:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
@@ -541,7 +541,7 @@ class NuxeoClient(object):
         try:
             req = urllib2.Request(self.automation_url, headers=headers)
             response = json.loads(self.opener.open(req).read())
-            NuxeoClient._proxy_error_count = 1
+            NuxeoClient._proxy_error_count = 0
         except urllib2.HTTPError as e:
             if e.code == 401 or e.code == 403:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
@@ -907,10 +907,23 @@ class NuxeoClient(object):
         )
         url = self.automation_url.encode('ascii') + "Blob.Attach"
         log.trace("Calling '%s' for file '%s'", url, filename)
+        base_error_message = (
+            "Failed not connect to Nuxeo Content Automation on server %r"
+            " with user %r"
+        ) % (self.server_url, self.user_id)
         req = urllib2.Request(url, data, headers)
         try:
             resp = self.opener.open(req)
-            NuxeoClient._proxy_error_count = 1
+            NuxeoClient._proxy_error_count = 0
+        except urllib2.HTTPError as e:
+            if e.code == 401 or e.code == 403:
+                raise Unauthorized(self.server_url, self.user_id, e.code)
+            elif e.code == 404:
+                # Token based auth is not supported by this server
+                return None
+            else:
+                e.msg = base_error_message + ": HTTP error %d" % e.code
+                raise e
         except urllib2.URLError, e:
             self._log_details(e)
             # NOTE the Proxy handler not always shown in the dictionary
@@ -956,10 +969,23 @@ class NuxeoClient(object):
 
         url = self.automation_url + command
         log.trace("Calling '%s' with json payload: %r", url, data)
+        base_error_message = (
+            "Failed not connect to Nuxeo Content Automation on server %r"
+            " with user %r"
+        ) % (self.server_url, self.user_id)
         req = urllib2.Request(url, data, headers)
         try:
             resp = self.opener.open(req)
-            NuxeoClient._proxy_error_count = 1
+            NuxeoClient._proxy_error_count = 0
+        except urllib2.HTTPError as e:
+            if e.code == 401 or e.code == 403:
+                raise Unauthorized(self.server_url, self.user_id, e.code)
+            elif e.code == 404:
+                # Token based auth is not supported by this server
+                return None
+            else:
+                e.msg = base_error_message + ": HTTP error %d" % e.code
+                raise e
         except urllib2.URLError, e:
             self._log_details(e)
             # NOTE the Proxy handler not always shown in the dictionary

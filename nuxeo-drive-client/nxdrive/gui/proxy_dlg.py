@@ -5,13 +5,13 @@ Created on Dec 13, 2012
 '''
 
 import socket
-from PySide.QtGui import QDialog, QDialogButtonBox, QMessageBox
+from PySide.QtGui import QDialog, QDialogButtonBox, QMessageBox, QIcon
 
 from nxdrive.gui.ui_proxy import Ui_ProxyDialog
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
 from nxdrive.client import ProxyInfo
-
+from nxdrive import Constants
 
 settings = create_settings()
 PORT = '8090'
@@ -22,6 +22,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
     def __init__(self, frontend=None, parent=None):
         super(ProxyDlg, self).__init__(parent)
         self.setupUi(self)
+        self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
         self.frontend = frontend
         self.controller = frontend.controller
         

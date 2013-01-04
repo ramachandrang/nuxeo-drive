@@ -38,7 +38,7 @@ class RecoverableError(Exception):
     
 class ProxyConnectionError(Exception):
     def __init__(self, urlerror):
-        if isinstance(urlerror, urllib2.URLError):
+        if type(urlerror) == urllib2.URLError:
             self.code = urlerror.reason.args[0]
             self.text = urlerror.reason.args[1]
         else:
