@@ -250,9 +250,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if dlg.exec_() == QDialog.Rejected:
             return
         
-    def about(self):
+    def about(self): 
         msgbox = QMessageBox()
-#        msgbox.setTitle(self.tr("CloudDesk Sync"))
         msgbox.setText(self.tr("About CloudDesk Sync"))
         msgbox.setStandardButtons(QMessageBox.Ok)
         msgbox.setInformativeText("""version<b>%s</b>

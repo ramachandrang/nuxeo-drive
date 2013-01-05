@@ -47,6 +47,13 @@ for filename in os.listdir(icons_home):
     if os.path.isfile(filepath):
         icons_files.append(filepath)
         
+others_home = 'nuxeo-drive-client/nxdrive/data'
+others_files = []
+for filename in os.listdir(others_home):
+    filepath = os.path.join(others_home, filename)
+    if os.path.isfile(filepath) and os.path.splitext(filename)[1] != '.py':
+        others_files.append(filepath)
+
 version = '0.1.0'
 
 if '--dev' in sys.argv:
@@ -138,7 +145,8 @@ elif sys.platform == 'darwin':
 
     freeze_options = dict(
         app=["nuxeo-drive-client/scripts/ndrive.py"],
-        data_files=[('icons', icons_files)],
+        data_files=[('icons', icons_files), 
+                    ('nxdrive/data', others_files)],
         options=dict(
             py2app=dict(
                 iconfile=png_icon,
@@ -166,7 +174,7 @@ setup(
     version=version,
     description="Desktop synchronization client for Nuxeo.",
     author="Nuxeo",
-    author_email="contact@nuxeo.com",
+    author_email="contact@sharplabs.com",
     url='http://github.com/nuxeo/nuxeo-drive',
     packages=packages,
     package_dir={'nxdrive': 'nuxeo-drive-client/nxdrive'},
