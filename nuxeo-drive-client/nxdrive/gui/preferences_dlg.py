@@ -18,13 +18,15 @@ from nxdrive.model import ServerBinding
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
-from nxdrive.client import NuxeoClient, ProxyInfo
+from nxdrive.client import ProxyInfo
 from ui_preferences import Ui_preferencesDlg 
 from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
 from folders_dlg import SyncFoldersDlg
 import nxdrive.gui.qrc_resources
 import nxdrive.Constants 
+# Under ZOL license - add license in documentation
+from icemac.truncatetext import truncate
 
 def default_expanded_nuxeo_drive_folder():
     return os.path.expanduser(DEFAULT_NX_DRIVE_FOLDER)
@@ -43,6 +45,16 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         super(PreferencesDlg, self).__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
+        self.setWindowTitle('%s Preferences' % Constants.APP_NAME)
+        # fix text that uses the long product name
+        product_name_10 = truncate(Constants.APP_NAME, 10)
+        s = self.tr('Start %s automatically when starting this computer') % product_name_10
+        s = truncate(s, 60)
+        self.cbAutostart.setText(s)
+        product_name_12 = truncate(Constants.APP_NAME, 12)
+        self.label_3.setText(product_name_12 + self.tr(' Url'))
+        product_name_5 = truncate(Constants.APP_NAME, 5)
+        self.label_7.setText(product_name_5 + self.tr(' location'))
         self.frontend = frontend
         self.controller = frontend.controller
         self.values = None
@@ -281,7 +293,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         server_url = self.txtUrl.text()
         #validate at least the folder since it could have been entered directly
         if (not os.path.exists(local_folder)):
-            mbox = QMessageBox(QMessageBox.Warning, self.tr("CloudDesk"), self.tr("Folder %s does not exist.") % local_folder)
+            mbox = QMessageBox(QMessageBox.Warning, Constants.APP_NAME, self.tr("Folder %s does not exist.") % local_folder)
             mbox.setInformativeText(self.tr("Do you want to create it?"))
             mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)         
             if mbox.exec_() == QMessageBox.No:
@@ -323,7 +335,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                     # the binding may exist but credentials are invalid
 #                    assert(len(self.controller.list_server_bindings()) == 0)
                     if not os.path.exists(self.local_folder):
-                        mbox = QMessageBox(QMessageBox.Warning, self.tr("CloudDesk"), self.tr("Folder %s does not exist.") % self.local_folder)
+                        mbox = QMessageBox(QMessageBox.Warning, Constants.APP_NAME, self.tr("Folder %s does not exist.") % self.local_folder)
                         mbox.setInformativeText(self.tr("Do you want to create it?"))
                         mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)         
                         if mbox.exec_() == QMessageBox.No:
@@ -341,7 +353,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 log.debug("failed to bind or unbind: %s", str(ex))
                 self._disconnect()
                 self._updateBinding()
-                QMessageBox(QMessageBox.Critical, self.tr("CloudDesk Error"), self.tr("Failed to connect to server, please try again.")).exec_()
+                QMessageBox(QMessageBox.Critical, self.tr("%s Error") % Constants.APP_NAME, self.tr("Failed to connect to server, please try again.")).exec_()
                 return QDialog.Rejected
                         
         if self.local_folder is not None and not self.move_to_folder is not None and self.local_folder != self.move_to_folder:           

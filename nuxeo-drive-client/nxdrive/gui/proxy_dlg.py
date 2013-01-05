@@ -23,6 +23,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
         super(ProxyDlg, self).__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
+        self.setWindowTitle(Constants.APP_NAME + self.tr(' Proxy Configuration'))
         self.frontend = frontend
         self.controller = frontend.controller
         
@@ -97,7 +98,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
         try:
             port = int(self.txtPort.text())
             if port < 1024 or port > 65535:
-                mbox = QMessageBox(QMessageBox.Critical, self.tr("CloudDesk"), self.tr('port %s is invalid.') % self.txtPort.text())
+                mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, self.tr('port %s is invalid.') % self.txtPort.text())
                 mbox.setInformativeText(self.tr('Must be between 1024 and 65535.'))        
                 mbox.exec_()
                 return
@@ -107,7 +108,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
                 s.connect((host, port))
                 s.shutdown(2)
             except:
-                mbox = QMessageBox(QMessageBox.Critical, self.tr("CloudDesk"),\
+                mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME,\
                                    self.tr('port %s is in use.') % self.txtPort.text(),\
                                    QMessageBox.Yes | QMessageBox.No)
                 mbox.setInformativeText(self.tr('If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.'))        
@@ -118,14 +119,14 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
                 s.connect((host, port))
                 s.shutdown(2)
             except:
-                mbox = QMessageBox(QMessageBox.Critical, self.tr("CloudDesk"),\
+                mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME,\
                                    self.tr('port %s is in use.') % self.txtPort.text(),\
                                    QMessageBox.Yes | QMessageBox.No)
                 mbox.setInformativeText(self.tr('If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.'))        
                 if mbox.exec_() == QMessageBox.No:
                     return
         except ValueError:
-            mbox = QMessageBox(QMessageBox.Critical, self.tr("CloudDesk"), self.tr('port %s is invalid.') % self.txtPort.text())
+            mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, self.tr('port %s is invalid.') % self.txtPort.text())
             mbox.setInformativeText(self.tr('Must be a numeric value.'))        
             mbox.exec_()
             return

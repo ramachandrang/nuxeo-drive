@@ -15,7 +15,7 @@ import PySide
 from PySide import QtGui
 from PySide import QtCore
 from PySide.QtGui import QDialog, QMessageBox, QImage, QPainter, QIcon
-from PySide.QtCore import QTimer, QSettings
+from PySide.QtCore import QTimer
 
 from nxdrive import Constants
 from nxdrive.async.operations import SyncOperations
@@ -142,9 +142,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionStatus.setObjectName("actionStatus")
         self.actionCommand = QtGui.QAction(self.tr("action"), self)
         self.actionCommand.setObjectName("actionCommand")
-        self.actionOpenCloudDeskFolder = QtGui.QAction(self.tr("Open CloudDesk folder"), self)
+        self.actionOpenCloudDeskFolder = QtGui.QAction(self.tr("Open %s Folder") % Constants.PRODUCT_NAME, self)
         self.actionOpenCloudDeskFolder.setObjectName("actionOpenCloudDeskFolder")
-        self.actionShowCloudDeskInfo = QtGui.QAction(self.tr("Open CloudDesk"), self)
+        self.actionShowCloudDeskInfo = QtGui.QAction(self.tr("Open %s Website") % Constants.PRODUCT_NAME, self)
         self.actionShowCloudDeskInfo.setObjectName("actionShowCloudDeskInfo")
         self.menuViewRecentFiles = QtGui.QMenu(self.tr("Recently Changed Files"), self.menuCloudDesk)
         self.menuViewRecentFiles.setObjectName("menuViewRecentFiles")
@@ -162,7 +162,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionDebug = QtGui.QAction(self.tr("Debug"),self)
         self.actionDebug.setObjectName("actionDebug")        
         # TO BE REMOVED - END
-        self.actionQuit = QtGui.QAction(self.tr("Quit CloudDesk Sync"), self)
+        self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
         self.menuCloudDesk.addAction(self.actionStatus)
         self.menuCloudDesk.addAction(self.actionCommand)
@@ -252,7 +252,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         
     def about(self): 
         msgbox = QMessageBox()
-        msgbox.setText(self.tr("About CloudDesk Sync"))
+        msgbox.setText(self.tr("About %s") % Constants.APP_NAME)
         msgbox.setStandardButtons(QMessageBox.Ok)
         msgbox.setInformativeText("""version<b>%s</b>
                 <p>Copyright &copy; 2012 SHARP CORPORATION
@@ -517,7 +517,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msg += msg1 % conflicted if conflicted > 0 else ''
         
         # show message notification
-        self.communicator.message.emit(self.tr("CloudDesk Operation"), 
+        self.communicator.message.emit(Constants.APP_NAME, 
                                        msg, 
                                        QtGui.QSystemTrayIcon.Information)
 
@@ -559,7 +559,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if len(msg) == 0: return
         
         # show message notification
-        self.communicator.message.emit(self.tr("CloudDesk Operation"), 
+        self.communicator.message.emit(Constants.APP_NAME, 
                                        msg, 
                                        QtGui.QSystemTrayIcon.Information)
         
@@ -623,7 +623,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionShowCloudDeskInfo.setEnabled(len(self.binding_info.values()) > 0)
         self.actionStatus.setText(self._syncStatus())
         self.actionCommand.setText(self._syncCommand())   
-        self.actionOpenCloudDeskFolder.setText('Open %s folder' % os.path.basename(self._get_local_folder())) 
+        self.actionOpenCloudDeskFolder.setText('Open %s Folder' % os.path.basename(self._get_local_folder())) 
         self.actionQuit.setEnabled(self.state != Constants.APP_STATE_QUITTING)       
         
         self.menuViewRecentFiles.clear()
@@ -766,14 +766,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # show a notification
         for_server = '' if sb is None else ' for server: %s' % sb.server_url
         detail = 'Update credentials%s' % for_server
-        self.handle_message(self.tr("CloudDesk Authentication"), 
+        self.handle_message(self.tr("%s Authentication") % Constants.APP_NAME, 
                            detail, 
                            QtGui.QSystemTrayIcon.Critical)
         # TODO Pop authentication dialog
                 
     @QtCore.Slot()
     def handle_invalid_proxy(self, message):
-        self.handle_message(self.tr("CloudDesk Configuration"), 
+        self.handle_message(self.tr("%s Configuration") % Constants.APP_NAME, 
                            message, 
                            QtGui.QSystemTrayIcon.Critical)
         if self.proxyDlg is None:

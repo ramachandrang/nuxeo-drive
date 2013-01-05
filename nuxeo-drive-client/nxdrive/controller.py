@@ -486,7 +486,7 @@ class Controller(object):
             log.error('error connecting to %s: %s', service_url, fault)
             return None
         except Exception as e:
-            log.error('error retrieving CloudDeskk token: %s', str(e))
+            log.error('error retrieving %s token: %s', Constants.APP_NAME, str(e))
             return None
                
     def _request_clouddesk_token(self, username, password):
@@ -917,7 +917,7 @@ class Controller(object):
         try:
             folder = session.query(SyncFolders).filter_by(remote_id=Constants.CLOUDDESK_UID).one()
         except MultipleResultsFound:
-            log.error("more than one CloudDesk folder found!")
+            log.error("more than one %s folder found!" % Constants.APP_NAME)
         except NoResultFound:
             # Other's Doc is not a real remote folder
             folder = SyncFolders(Constants.CLOUDDESK_UID,
@@ -1034,7 +1034,7 @@ class Controller(object):
 #                             doc_pair)
             # TODO: the database is corrupted or a binding root has been deleted manually
             # What is the recovery? create another root?
-            raise RecoverableError("Cannot find %s" % doc_pair.local_root, "Verify the CloudDesk folder in Preferences...")
+            raise RecoverableError("Cannot find %s" % doc_pair.local_root, "Verify the %s folder in Preferences..." % Constants.APP_NAME)
 
         # Update the pair state from the collected local info
         doc_pair.update_local(local_info)

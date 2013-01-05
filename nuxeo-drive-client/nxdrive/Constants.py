@@ -4,11 +4,12 @@ Created on Oct 28, 2012
 @author: mconstantin
 '''
 
+PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
 APP_STATE_RUNNING = 'running'
 APP_STATE_STOPPED = 'stopped'
 APP_STATE_QUITTING = 'quitting'
 
-DEFAULT_NXDRIVE_FOLDER = "CloudDesk"
+DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 # TODO replace with CloudDesk url and admin(?) account
 DEFAULT_CLOUDDESK_URL = "http://ec2-50-112-198-72.us-west-2.compute.amazonaws.com:8080/app1"
 DEFAULT_ACCOUNT = "user@shiro.com"
@@ -23,8 +24,8 @@ ROOT_OTHERS_DOCS = 2
 RECENT_FILES_COUNT = 5
 
 COMPANY = 'SharpLabs'
-APP_NAME = 'CloudDesk Sync'
-OSX_APP_NAME = 'Nuxeo Drive'
+APP_NAME = PRODUCT_NAME + ' Desktop'
+OSX_APP_NAME = APP_NAME
 
 ICON_ANIMATION_DELAY = 200
 ICON_ANIMATION_START_DELAY = 100

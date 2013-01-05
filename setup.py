@@ -11,6 +11,10 @@ from distutils.core import setup
 if sys.platform == 'win32':
     import py2exe
 
+PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
+APP_NAME = PRODUCT_NAME + ' Desktop'
+version = '0.1.1'
+
 scripts = ["nuxeo-drive-client/scripts/ndrive"]
 freeze_options = {}
 
@@ -54,8 +58,6 @@ for filename in os.listdir(others_home):
     if os.path.isfile(filepath) and os.path.splitext(filename)[1] != '.py':
         others_files.append(filepath)
 
-version = '0.1.0'
-
 if '--dev' in sys.argv:
     # timestamp the dev artifacts for continuous integration
     # distutils only accepts "b" + digit
@@ -91,7 +93,7 @@ if '--freeze' in sys.argv:
         executables.append(
             Executable(script, targetName="ndrivew.exe", base="Win32GUI",
                        icon=icon, shortcutDir="ProgramMenuFolder",
-                       shortcutName="Nuxeo Drive"))
+                       shortcutName=APP_NAME))
     scripts = []
     # special handling for data files
     packages.remove('nxdrive.data')
@@ -118,6 +120,7 @@ if '--freeze' in sys.argv:
                 "includes": includes,
                 "packages": packages + [
                     "nose",
+                    "icemac.truncatetext",
                 ],
                 "excludes": [
                     "ipdb",
@@ -152,13 +155,13 @@ elif sys.platform == 'darwin':
                 iconfile=png_icon,
                 argv_emulation=False,  # We use QT for URL scheme handling
                 plist=dict(
-                    CFBundleDisplayName="Nuxeo Drive",
-                    CFBundleName="Nuxeo Drive",
-                    CFBundleIdentifier="org.nuxeo.drive",
+                    CFBundleDisplayName=APP_NAME,
+                    CFBundleName=APP_NAME,
+                    CFBundleIdentifier="com.sharpb2bcloud.cpo.desktop",
                     LSUIElement=True,  # Do not launch as a Dock application
                     CFBundleURLTypes=[
                         dict(
-                            CFBundleURLName='Nuxeo Drive URL',
+                            CFBundleURLName='%s URL' % APP_NAME,
                             CFBundleURLSchemes=['nxdrive'],
                         )
                     ]
@@ -172,10 +175,10 @@ elif sys.platform == 'darwin':
 setup(
     name=name,
     version=version,
-    description="Desktop synchronization client for Nuxeo.",
-    author="Nuxeo",
+    description="Desktop synchronization client for %." % PRODUCT_NAME,
+    author="SHARP",
     author_email="contact@sharplabs.com",
-    url='http://github.com/nuxeo/nuxeo-drive',
+    url='https://github.com/SharpCD/clouddesk_drive.git',
     packages=packages,
     package_dir={'nxdrive': 'nuxeo-drive-client/nxdrive'},
     package_data=package_data,

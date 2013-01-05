@@ -13,10 +13,6 @@
   <property name="windowTitle">
    <string>Preferences</string>
   </property>
-  <property name="windowIcon">
-   <iconset>
-    <normaloff>nxdrive/data/icons/advanced.png</normaloff>nxdrive/data/icons/advanced.png</iconset>
-  </property>
   <widget class="QTabWidget" name="tabWidget">
    <property name="geometry">
     <rect>
@@ -27,7 +23,7 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>2</number>
+    <number>0</number>
    </property>
    <property name="iconSize">
     <size>
@@ -43,18 +39,21 @@
     <attribute name="title">
      <string>General</string>
     </attribute>
-    <widget class="QWidget" name="layoutWidget">
+    <widget class="QWidget" name="">
      <property name="geometry">
       <rect>
        <x>20</x>
        <y>0</y>
-       <width>430</width>
-       <height>64</height>
+       <width>491</width>
+       <height>70</height>
       </rect>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout" stretch="1,1,0">
-      <property name="spacing">
-       <number>6</number>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="sizeConstraint">
+       <enum>QLayout::SetMinimumSize</enum>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
       </property>
       <item>
        <widget class="QCheckBox" name="cbNotifications">
@@ -93,7 +92,7 @@
          </size>
         </property>
         <property name="text">
-         <string>Start CloudDesk sync automatically when starting this computer</string>
+         <string>Start %s automatically when starting this computer</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -262,7 +261,7 @@
     <attribute name="title">
      <string>Network</string>
     </attribute>
-    <widget class="QWidget" name="">
+    <widget class="QWidget" name="layoutWidget">
      <property name="geometry">
       <rect>
        <x>10</x>

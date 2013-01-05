@@ -186,7 +186,7 @@ def prompt_authentication(controller, local_folder, url=None, username=None,
         QApplicationSingleton()
 #        QtGui.QApplication([])
 
-    dialog = Dialog(fields_spec, title="Nuxeo Drive - Authentication",
+    dialog = Dialog(fields_spec, title="%s Authentication" % Constants.APP_NAME,
                     callback=bind_server)
     is_dialog_open = True
     try:
