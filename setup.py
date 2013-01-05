@@ -175,7 +175,7 @@ elif sys.platform == 'darwin':
 setup(
     name=name,
     version=version,
-    description="Desktop synchronization client for %." % PRODUCT_NAME,
+    description="Desktop synchronization client for %s." % PRODUCT_NAME,
     author="SHARP",
     author_email="contact@sharplabs.com",
     url='https://github.com/SharpCD/clouddesk_drive.git',
