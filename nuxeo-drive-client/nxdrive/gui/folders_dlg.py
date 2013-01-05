@@ -6,11 +6,8 @@ Created on Dec 13, 2012
 
 from PySide.QtGui import QDialog, QStandardItem, QIcon, QDialogButtonBox
 from PySide.QtCore import Qt, QObject, Signal, Slot, QModelIndex
+
 from nxdrive.model import SyncFolders
-
-
-#from nxdrive.CheckedRemoteFileSystem import CheckedRemoteFileSystem
-#from nxdrive.CheckedFileSystem import CheckedFileSystem
 from ui_sync_folders import Ui_Dialog
 from nxdrive.RemoteFolderSystem import get_model, update_model
 from nxdrive.RemoteFolderSystem import ID_ROLE, CHECKED_ROLE

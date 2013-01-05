@@ -753,6 +753,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     @QtCore.Slot()
     def handle_stop(self):
         if self.quit_on_stop:
+            log.info("application quit.")
             self.quit()
             
     @QtCore.Slot(str)

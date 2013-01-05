@@ -1551,12 +1551,10 @@ class Controller(object):
                 pid = int(f.read().strip())
                 try:
                     p = psutil.Process(pid)
-                    # Check that this is a nxdrive process by looking at the
-                    # process name and commandline
-                    # TODO: be more specific using the p.exe attribute
-                    if 'ndrive' in p.name:
-                        return pid
-                    if 'Nuxeo Drive' in p.name:
+                    # Check that this is the right process by looking at the
+                    # process exe and commandline
+                    # (cmdline is used for running from Eclipse with the current project structure)
+                    if Constants.APP_NAME in p.exe:
                         return pid
                     for component in p.cmdline:
                         if 'ndrive' in component:
