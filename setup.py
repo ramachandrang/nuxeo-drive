@@ -13,12 +13,12 @@ if sys.platform == 'win32':
 
 PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
 APP_NAME = PRODUCT_NAME + ' Desktop'
+SHORT_APP_NAME = 'CpoDesktop'
 version = '0.1.1'
 
 scripts = ["nuxeo-drive-client/scripts/ndrive"]
 freeze_options = {}
 
-name = 'nuxeo-drive'
 packages = [
     'nxdrive',
     'nxdrive.tests',
@@ -31,6 +31,7 @@ packages = [
 ]
 package_data = {
     'nxdrive.data.icons': ['*.png', '*.svg', '*.ico', '*.icns'],
+    'nsdrive.data': ['*.txt', '*.xml'],
 }
 script = 'nuxeo-drive-client/scripts/ndrive'
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
@@ -91,14 +92,14 @@ if '--freeze' in sys.argv:
     if sys.platform == "win32":
         # Windows GUI program that can be launched without a cmd console
         executables.append(
-            Executable(script, targetName="ndrivew.exe", base="Win32GUI",
+            Executable(script, targetName="CpoDesktop.exe", base="Win32GUI",
                        icon=icon, shortcutDir="ProgramMenuFolder",
                        shortcutName=APP_NAME))
     scripts = []
     # special handling for data files
     packages.remove('nxdrive.data')
     packages.remove('nxdrive.data.icons')
-    package_data = {}
+#    package_data = {}
 
     include_files = [
                     icons_home + "/nuxeo_drive_icon_%d.png" % i
@@ -115,6 +116,8 @@ if '--freeze' in sys.argv:
                 ]
     freeze_options = dict(
         executables=executables,
+        data_files=[('icons', icons_files), 
+            ('nxdrive/data', others_files)],
         options={
             "build_exe": {
                 "includes": includes,
@@ -162,7 +165,7 @@ elif sys.platform == 'darwin':
                     CFBundleURLTypes=[
                         dict(
                             CFBundleURLName='%s URL' % APP_NAME,
-                            CFBundleURLSchemes=['nxdrive'],
+                            CFBundleURLSchemes=[SHORT_APP_NAME],
                         )
                     ]
                 ),
@@ -173,7 +176,7 @@ elif sys.platform == 'darwin':
 
 
 setup(
-    name=name,
+    name=APP_NAME,
     version=version,
     description="Desktop synchronization client for %s." % PRODUCT_NAME,
     author="SHARP",

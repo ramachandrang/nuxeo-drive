@@ -1,5 +1,6 @@
 import os
 from nxdrive.logging_config import get_logger
+from nxdrive import Constants
 log = get_logger(__name__)
 
 
@@ -7,9 +8,9 @@ def find_exe_path():
     """Introspect the Python runtime to find the frozen Windows exe"""
     import nxdrive
     nxdrive_path = os.path.dirname(nxdrive.__file__)
-    frozen_suffix = os.path.join('library.zip', 'nxdrive')
+    frozen_suffix = os.path.join('library.zip', Constants.SHORT_APP_NAME)
     if nxdrive_path.endswith(frozen_suffix):
-        exe_path = nxdrive_path.replace(frozen_suffix, 'ndrivew.exe')
+        exe_path = nxdrive_path.replace(frozen_suffix, Constants.SHORT_APP_NAME)
         if os.path.exists(exe_path):
             return exe_path
     # TODO: handle the python.exe + python script as sys.argv[0] case as well
@@ -43,27 +44,27 @@ def register_protocol_handlers(controller):
     # Register Nuxeo Drive as a software as a protocol command provider
     command = '"' + exe_path + '" "%1"'
     update_key(
-        reg, 'Software\\Nuxeo Drive',
-        [('', _winreg.REG_SZ, 'Nuxeo Drive')],
+        reg, 'Software\\%s\\%s' % (Constants.COMPANY_NAME, Constants.APP_NAME),
+        [('', _winreg.REG_SZ, Constants.SHORT_APP_NAME)],
     )
     # TODO: add an icon for Nuxeo Drive too
     update_key(
-        reg, 'Software\\Nuxeo Drive\\Protocols\\nxdrive',
+        reg, 'Software\\%s\\%s\\Protocols\\%s' % (Constants.COMPANY_NAME, Constants.APP_NAME, Constants.SHORT_APP_NAME),
         [('URL Protocol', _winreg.REG_SZ, '')],
     )
     # TODO: add an icon for the nxdrive protocol too
     update_key(
         reg,
-        'Software\\Nuxeo Drive\\Protocols\\nxdrive\\shell\\open\\command',
+        'Software\\%s\\%s\\Protocols\\%s\\shell\\open\\command' % (Constants.COMPANY_NAME, Constants.APP_NAME, Constants.SHORT_APP_NAME),
         [('', _winreg.REG_SZ, command)],
     )
     # Create the nxdrive protocol key
-    nxdrive_class_path = 'Software\\Classes\\nxdrive'
+    nxdrive_class_path = 'Software\\Classes\\%s' % Constants.SHORT_APP_NAME
     update_key(
         reg, nxdrive_class_path,
         [
             ('EditFlags', _winreg.REG_DWORD, 2),
-            ('', _winreg.REG_SZ, 'URL:nxdrive Protocol'),
+            ('', _winreg.REG_SZ, 'URL:%s Protocol' % Constants.SHORT_APP_NAME),
             ('URL Protocol', _winreg.REG_SZ, ''),
         ],
     )

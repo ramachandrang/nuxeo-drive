@@ -437,11 +437,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             else:
                 reg_settings.remove('name')
         elif sys.platform == 'darwin':
-            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/com.sharplabs.sla.sync.plist'), 
+            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/%s.sla.sync.plist') % Constants.COMPANY_NAME, 
                                        QSettings.NativeFormat)
             if not plist_settings.contains('Label'):
                 # create the plist
-                plist_settings.setValue('Label', 'com.sharplabs.sla.clouddesk.sync')
+                plist_settings.setValue('Label', '%s.%s' % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME))
                 path = '/Applications/%s.app/Contents/MacOS/%s' % (Constants.OSX_APP_NAME, Constants.OSX_APP_NAME)
                 plist_settings.setValue('Program', path)
                 plist_settings.setValue('ProgramArguments', [path, 'gui', '--log-level-console DEBUG'])

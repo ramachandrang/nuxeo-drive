@@ -7,6 +7,7 @@ Created on Nov 7, 2012
 import urllib2
 from PySide.QtCore import Signal, QObject, QCoreApplication, QSettings
 from PySide.QtGui import QSystemTrayIcon, QMessageBox
+from nxdrive import Constants
 
 
 class Communicator(QObject):
@@ -99,7 +100,6 @@ class classproperty(property):
     
     
 def create_settings():      
-    QCoreApplication.setOrganizationDomain('sharplabs.com')
-    QCoreApplication.setApplicationName('sla')
-    QCoreApplication.setApplicationName('CloudDesk.Sync')
+    QCoreApplication.setOrganizationDomain(Constants.COMPANY_NAME)
+    QCoreApplication.setApplicationName(Constants.SHORT_APP_NAME)
     return QSettings()
