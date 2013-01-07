@@ -610,6 +610,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             # Ask the controller to stop: the synchronization loop will in turn
             # call notify_sync_stopped and finally handle_stop
             self.controller.stop()
+            if self.worker.isPaused():
+                self._resumeSync()
         else:
             # quit directly
             QtGui.QApplication.quit()

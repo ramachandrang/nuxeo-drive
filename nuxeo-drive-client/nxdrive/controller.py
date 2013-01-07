@@ -1576,11 +1576,12 @@ class Controller(object):
                 return None
         return None
 
-    def should_stop_synchronization(self):
+    def should_stop_synchronization(self, delete_stop_file=True):
         """Check whether another process has told the synchronizer to stop"""
         stop_file = os.path.join(self.config_folder, "stop_%d" % os.getpid())
         if os.path.exists(stop_file):
-            os.unlink(stop_file)
+            if delete_stop_file:
+                os.unlink(stop_file)
             return True
         return False
 
@@ -1602,7 +1603,7 @@ class Controller(object):
                     frontend.notify_stop_transfer()
                 sync_operation.event.wait()
                 #check whether should stop instead of resuming
-                if self.should_stop_synchronization():
+                if self.should_stop_synchronization(delete_stop_file=False):
                     return True
                 log.debug("resuming synchronization")
                 if frontend is not None:
