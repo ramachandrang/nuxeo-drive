@@ -31,7 +31,7 @@ packages = [
 ]
 package_data = {
     'nxdrive.data.icons': ['*.png', '*.svg', '*.ico', '*.icns'],
-    'nsdrive.data': ['*.txt', '*.xml'],
+    'nxdrive.data': ['*.txt', '*.xml'],
 }
 script = 'nuxeo-drive-client/scripts/ndrive'
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
@@ -99,7 +99,7 @@ if '--freeze' in sys.argv:
     # special handling for data files
     packages.remove('nxdrive.data')
     packages.remove('nxdrive.data.icons')
-#    package_data = {}
+    package_data = {}
 
     include_files = [
                     icons_home + "/nuxeo_drive_icon_%d.png" % i

@@ -49,6 +49,7 @@ class Dialog(QDialog):
         super(Dialog, self).__init__(parent)
         if QtGui is None:
             raise RuntimeError("PySide is not installed.")
+
         self.setWindowIcon(QtGui.QIcon(Constants.APP_ICON_ENABLED))
         self.create_authentication_box(fields_spec)
         self.callback = callback
@@ -66,9 +67,9 @@ class Dialog(QDialog):
         self.setLayout(mainLayout)
         if title is not None:
             self.setWindowTitle(title)
-        icon = find_icon('nuxeo_drive_icon_64.png')
-        if icon is not None:
-            self.setWindowIcon(QtGui.QIcon(icon))
+#        icon = find_icon('nuxeo_drive_icon_64.png')
+#        if icon is not None:
+#            self.setWindowIcon(QtGui.QIcon(icon))
         self.resize(600, -1)
         self.accepted = False
         self.values = None
