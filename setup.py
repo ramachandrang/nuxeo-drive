@@ -6,16 +6,49 @@
 import sys
 import os
 from datetime import datetime
+from win32com.client import Dispatch
 
 from distutils.core import setup
 if sys.platform == 'win32':
     import py2exe
+    
 
 PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
 APP_NAME = PRODUCT_NAME + ' Desktop'
 SHORT_APP_NAME = 'CpoDesktop'
+DEFAULT_ROOT_FOLDER = PRODUCT_NAME
 version = '0.1.1'
 
+def create_shortcut(path, target, wDir='', icon=''):
+    shell = Dispatch('WScript.Shell')
+    shortcut = shell.CreateShortCut(path)
+    shortcut.Targetpath = target
+    shortcut.WorkingDirectory = wDir
+    if icon == '':
+        pass
+    else:
+        shortcut.iconLocation = icon
+    shortcut.save()
+    
+def default_nuxeo_drive_folder():
+    """Find a reasonable location for the root Nuxeo Drive folder
+    This folder is user specific, typically under the home folder.
+    """
+    path = None
+    if sys.platform == "win32":
+        if os.path.exists(os.path.expanduser(r'~\My Documents')):
+            # Compat for Windows XP
+            path = os.path.join(r'~\My Documents', PRODUCT_NAME)
+        else:
+            # Default Documents folder with navigation shortcuts in Windows 7
+            # and up.
+            path = os.path.join(r'~\Documents', PRODUCT_NAME)
+    else:
+        path = os.path.join('~', PRODUCT_NAME)
+        
+    return os.path.expanduser(path)
+    
+    
 scripts = ["nuxeo-drive-client/scripts/ndrive"]
 freeze_options = {}
 
@@ -79,6 +112,7 @@ includes = [
     "sqlalchemy.dialects.sqlite",
 ]
 
+
 if '--freeze' in sys.argv:
     print "Building standalone executable..."
     sys.argv.remove('--freeze')
@@ -95,6 +129,21 @@ if '--freeze' in sys.argv:
             Executable(script, targetName="CpoDesktop.exe", base="Win32GUI",
                        icon=icon, shortcutDir="ProgramMenuFolder",
                        shortcutName=APP_NAME))
+        
+        # NOTE creating the Favorites link here presents an issue with the icon.
+        # User may change the default installation directory
+#        user_home = os.path.expanduser('~')
+#        target_path = default_nuxeo_drive_folder()
+#        
+#        # create the Favorites shortcut
+#        win_version = sys.getwindowsversion()
+#        if win_version.major == 6 and win_version.minor == 1:
+#            shortcut = os.path.join(user_home, 'Links', PRODUCT_NAME + '.lnk')
+#            create_shortcut(shortcut, target_path)
+#        else:
+#            # TODO find the Favorites location for other Windows versions
+#            pass
+    
     scripts = []
     # special handling for data files
     packages.remove('nxdrive.data')

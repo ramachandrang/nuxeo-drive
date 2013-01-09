@@ -21,6 +21,7 @@ from nxdrive import Constants
 from nxdrive.async.operations import SyncOperations
 #from utils.helpers import Communicator, ProxyInfo, RecoverableError
 from nxdrive.utils.helpers import Communicator, RecoverableError
+from nxdrive.protocol_handler import win32
 # this import is flagged erroneously as unused import - do not remove
 import nxdrive.gui.qrc_resources
 from nxdrive.async.worker import Worker
@@ -134,6 +135,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.setupMenu()
         self.setupMisc()
         self.update_running_icon()
+        self.preferencesDlg = None
         
     def setupMenu(self):
         self.menuCloudDesk = QtGui.QMenu()
@@ -201,6 +203,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         
         # TO BE REMOVED - BEGIN
         self.actionDebug.triggered.connect(self.debug_stuff)        
+        # TO BE REMOVED - END
         
         # copy to local binding
         for sb in self.controller.list_server_bindings():
@@ -226,6 +229,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.proxyDlg = None
         
         if sys.platform == 'win32':
+            # create the Favorites shortcut
+            shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
+            win32.create_or_replace_shortcut(shortcut, self.local_folder)
+            
             notifications = settings.value('preferences/notifications', 'true')
             if notifications.lower() == 'true':
                 self.notifications = True
@@ -235,7 +242,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 self.notifications = True
         else:
             self.notifications = settings.value('preferences/notifications', True)
-
+            
 
     def debug_stuff(self):
         # this is not working on OS X
@@ -645,11 +652,16 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         pass
     
     def showPreferences(self):
-        dlg = PreferencesDlg(frontend=self)
-        if dlg.exec_() == QDialog.Rejected:
+        if self.preferencesDlg is not None:
             return
         
-        self.notifications = dlg.notifications
+        self.preferencesDlg = PreferencesDlg(frontend=self)
+        if self.preferencesDlg.exec_() == QDialog.Rejected:
+            self.preferencesDlg = None
+            return
+        
+        self.notifications = self.preferencesDlg.notifications
+        self.preferencesDlg = None
         
         # copy to local binding
         self.binding_info.clear()

@@ -90,6 +90,10 @@ class ServerBinding(Base):
     __fdtoken = Column('fdtoken', String)
     password_hash = Column(String)
     fdtoken_creation_date = Column(DateTime)
+    # passive_updates=False *only* needed if the database
+    # does not implement ON UPDATE CASCADE
+    roots = relationship("RootBinding", passive_updates=False)
+    folders = relationship("SyncFolders", passive_updates=False)
 
     def __init__(self, local_folder, server_url, remote_user,
                  remote_password=None, remote_token=None, 
@@ -146,11 +150,12 @@ class RootBinding(Base):
     local_root = Column(String, primary_key=True)
     remote_repo = Column(String)
     remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
-    local_folder = Column(String, ForeignKey('server_bindings.local_folder'))
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate="cascade"))
 
-    server_binding = relationship(
-        'ServerBinding',
-        backref=backref("roots", cascade="all, delete-orphan"))
+#    server_binding = relationship(
+#        'ServerBinding',
+#        backref=backref("roots", cascade="all, delete-orphan"))
+    server_binding = relationship('ServerBinding')
 
     def __init__(self, local_root, remote_repo, remote_root, local_folder=None):
         local_root = os.path.abspath(local_root)
@@ -179,11 +184,12 @@ class SyncFolders(Base):
     remote_root = Column(Integer)
     remote_parent = Column(String, ForeignKey('sync_folders.remote_id'))
     state = Column(Boolean)
-    local_folder = Column(String, ForeignKey('server_bindings.local_folder'))
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate="cascade"))
     checked = relationship('RootBinding', uselist=False, backref='folder')
     
-    server_binding = relationship(
-                    'ServerBinding', backref=backref("folders", cascade="all, delete-orphan"))
+#    server_binding = relationship(
+#                    'ServerBinding', backref=backref("folders", cascade="all, delete-orphan"))
+    server_binding = relationship('ServerBinding')
     children = relationship("SyncFolders")
     
     def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder, remote_root=Constants.ROOT_CLOUDDESK, checked=False):

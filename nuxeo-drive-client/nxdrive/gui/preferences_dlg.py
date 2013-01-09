@@ -7,18 +7,20 @@ Created on Dec 13, 2012
 import os
 import sys
 import platform
-from sys import executable
 import shutil
+from win32com.shell import shell
+import pythoncom
 
 from PySide.QtGui import QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QIcon
 from PySide.QtCore import Qt, QSettings
 
 from nxdrive import Constants
-from nxdrive.model import ServerBinding
+from nxdrive.model import ServerBinding, RootBinding, RecentFiles, LastKnownState
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
 from nxdrive.client import ProxyInfo
+from nxdrive.protocol_handler import win32
 from ui_preferences import Ui_preferencesDlg 
 from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
@@ -37,6 +39,13 @@ settings = create_settings()
 
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_EX_NX_DRIVE_FOLDER = default_expanded_nuxeo_drive_folder()
+
+OK_AND_RESTART = 1
+OK_AND_NO_RESTART = 2
+CANCELLED = 3
+PROGRESS_DLG_RESULT = {QDialog.Accepted: OK_AND_RESTART,
+                       QDialog.Rejected: CANCELLED,
+                       }
 
 settings = QSettings()
 
@@ -210,7 +219,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.btnProxy.setEnabled(False)
         
     def changeFolder(self):
-        self.move_to_folder = os.path.join(self.txtCloudfolder.text(), Constants.DEFAULT_NXDRIVE_FOLDER)
+        self.move_to_folder = os.path.normpath(os.path.join(self.txtCloudfolder.text(), Constants.DEFAULT_NXDRIVE_FOLDER))
           
 #        if self._isConnected():
 #            #prompt for moving the Nuxeo Drive folder for current binding
@@ -356,7 +365,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 QMessageBox(QMessageBox.Critical, self.tr("%s Error") % Constants.APP_NAME, self.tr("Failed to connect to server, please try again.")).exec_()
                 return QDialog.Rejected
                         
-        if self.local_folder is not None and not self.move_to_folder is not None and self.local_folder != self.move_to_folder:           
+        if self.local_folder is not None and self.move_to_folder is not None and self.local_folder != self.move_to_folder:           
             if self._isConnected():
                 #prompt for moving the Nuxeo Drive folder for current binding
                 msg = QMessageBox(QMessageBox.Question, self.tr('Move Root Folder'),
@@ -382,12 +391,55 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #                mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)         
 #                if mbox.exec_() == QMessageBox.No:
 #                    return QDialog.Rejected                  
+
+            result = self._stopServer()
+            if result == QDialog.Rejected:
+                return QDialog.Rejected  
             
             shutil.copytree(self.local_folder, self.move_to_folder)                    
-            if self.frontend is not None:
-                self.frontend.local_folder = self.local_folder = self.move_to_folder
                   
-            #TODO Update the database
+            # Update the database
+            if self.frontend is not None:
+                session = self.frontend.controller.get_session()               
+                    
+                root_bindings = session.query(RootBinding).filter(RootBinding.local_folder == self.local_folder).all()
+                for rb in root_bindings:
+                    rb.local_root = rb.local_root.replace(self.local_folder, self.move_to_folder)
+                    
+                recent_files = session.query(RecentFiles).all()
+                for rf in recent_files:
+                    rf.local_root = rf.local_root.replace(self.local_folder, self.move_to_folder)
+                    
+                last_known_states = session.query(LastKnownState).all()
+                for lks in last_known_states:
+                    if lks.local_root.find(self.local_folder) != -1:
+                        lks.local_root = lks.local_root.replace(self.local_folder, self.move_to_folder)
+                    
+                # Update this last as it cascades primary key change to the other tables
+                server_bindings = session.query(ServerBinding).filter(ServerBinding.local_folder == self.local_folder).all()
+                for sb in server_bindings:
+                    sb.local_folder = self.move_to_folder
+                session.commit()
+                        
+                # restart syncing if it was stopped
+                if result == OK_AND_RESTART and self.frontend.state == Constants.APP_STATE_STOPPED:
+                    self.frontend._doSync()
+                self.frontend.local_folder = self.local_folder = self.move_to_folder
+                
+        # Update the Favorites link (Windows only)
+        if sys.platform == 'win32':
+            shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
+            win32.create_or_replace_shortcut(shortcut, self.local_folder)
+            
+            notifications = settings.value('preferences/notifications', 'true')
+            if notifications.lower() == 'true':
+                self.notifications = True
+            elif notifications.lower() == 'false':
+                self.notifications = False
+            else:
+                self.notifications = True
+        else:
+            self.notifications = settings.value('preferences/notifications', True)
         
         # Apply other changes
         if self.rbProxy.isChecked():
@@ -421,30 +473,38 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         settings.setValue('preferences/icon-overlays', self.iconOverlays)
         settings.setValue('preferences/autostart', self.autostart)
         settings.setValue('preferences/log', self.logEnabled)
-            
-        settings.sync()
-        # TEST: useProxy is not saved!
-        result = settings.status()
-        if result != QSettings.NoError:
-            log.error('settings saving error: %s', str(result))
         
         if sys.platform == 'win32':
-            reg_settings = QSettings("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", QSettings.NativeFormat)
+#            reg_settings = QSettings("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", QSettings.NativeFormat)
+#            if self.autostart:
+#                exe_path = win32.find_exe_path()
+#                if exe_path is None:
+#                    exe_path = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
+#                reg_settings.setValue("name", exe_path)
+#            else:
+#                reg_settings.remove('name')
+
+            startup_folder = os.path.expanduser('~/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup')
+            startup_folder = os.path.normpath(startup_folder)
+            shortcut_path = os.path.join(startup_folder, Constants.SHORT_APP_NAME + '.lnk')
             if self.autostart:
-                # TODO change this for the deployed version of the exe
-                path = executable + os.path.join(os.getcwd(), 'commandline.py') + ' gui'
-                reg_settings.setValue("name", path)
+                target = win32.find_exe_path()
+                if target is None:
+                    # FOR TESTING
+                    target = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
+                win32.create_shortcut_if_not_exists(shortcut_path, target)
             else:
-                reg_settings.remove('name')
+                os.unlink(shortcut_path)
+                       
         elif sys.platform == 'darwin':
-            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/%s.sla.sync.plist') % Constants.COMPANY_NAME, 
+            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/%s.%s.plist') % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME),
                                        QSettings.NativeFormat)
             if not plist_settings.contains('Label'):
                 # create the plist
                 plist_settings.setValue('Label', '%s.%s' % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME))
                 path = '/Applications/%s.app/Contents/MacOS/%s' % (Constants.OSX_APP_NAME, Constants.OSX_APP_NAME)
                 plist_settings.setValue('Program', path)
-                plist_settings.setValue('ProgramArguments', [path, 'gui', '--log-level-console DEBUG'])
+                plist_settings.setValue('ProgramArguments', [path, 'gui'])
 
             # start when it loads the agent
             plist_settings.setValue('RunAtLoad', self.autostart)
@@ -454,7 +514,12 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             else:
                 plist_settings.remove('KeepAlive')
                 
-                        
+        settings.sync()
+        # TEST: useProxy was not saved!
+        result = settings.status()
+        if result != QSettings.NoError:
+            log.error('settings saving error: %s', str(result))
+                                    
         self.done(QDialog.Accepted)
         
     def _stopServer(self, cancel=True):
@@ -465,7 +530,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             
             # wait in a loop while displaying a message...
             self.dlg = ProgressDialog(self, cancel=cancel)
-            return self.dlg.exec_()
+            return PROGRESS_DLG_RESULT[self.dlg.exec_()]
+        else:
+            return OK_AND_NO_RESTART
             
     def timeout(self):
         if self.frontend.worker is None or not self.frontend.worker.isAlive():
