@@ -848,8 +848,6 @@ def startApp(controller, start):
     i.show()
     return app.exec_()
 
-#   del i
-#   del app
 
 if __name__ == "__main__":
     sys.exit(startApp)

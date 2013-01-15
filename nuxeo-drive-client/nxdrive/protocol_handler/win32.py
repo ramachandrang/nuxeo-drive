@@ -133,4 +133,4 @@ def create_shortcut_if_not_exists(shortcut, target):
         # TODO find the Favorites location for other Windows versions
         pass    
     
-            
+    

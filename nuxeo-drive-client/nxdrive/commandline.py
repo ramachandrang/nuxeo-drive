@@ -1,6 +1,7 @@
 """Utilities to operate Nuxeo Drive from the command line"""
 import os
 import sys
+import sys
 import argparse
 from getpass import getpass
 import traceback
@@ -11,6 +12,9 @@ except ImportError:
     import pdb
     debugger = pdb
 
+import win32api
+import win32con
+
 from nxdrive.controller import Controller
 from nxdrive.daemon import daemonize
 from nxdrive.controller import default_nuxeo_drive_folder
@@ -18,6 +22,7 @@ from nxdrive.logging_config import configure
 from nxdrive.logging_config import get_logger
 from nxdrive.protocol_handler import parse_protocol_url
 from nxdrive.protocol_handler import register_protocol_handlers
+from nxdrive import Constants
 
 
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
@@ -35,6 +40,8 @@ Possible commands:
 - unbind-server
 - bind-root
 - unbind-root
+- gui
+- com
 
 To get options for a specific command:
 
@@ -46,6 +53,9 @@ PROTOCOL_COMMANDS = {
     'nxdriveedit': 'edit',
     'nxdrivebind': 'bind_server',
 }
+
+# FOR DEBIGGING ONLY
+DEBUGGING = 1
 
 
 def make_cli_parser(add_subparsers=True):
@@ -194,7 +204,20 @@ def make_cli_parser(add_subparsers=True):
         parents=[common_parser],
     )
     gui_parser.set_defaults(command='gui')
-
+    
+    com_parser = subparsers.add_parser(
+        'com',
+        help="Register or Unregister the COM Local Server",
+    )
+    
+    if sys.platform == 'win32':
+        com_parser.set_defaults(command='com')
+        action = com_parser.add_mutually_exclusive_group(required=True)
+        action.add_argument(
+            '--register', required=False, action='store_true', help='Register COM Local Server')
+        action.add_argument(
+            '--unregister', required=False, action='store_true', help='Unregister COM Local Server')    
+    
     # embedded test runner base on nose:
     test_parser = subparsers.add_parser(
         'test',
@@ -358,9 +381,35 @@ class CliHandler(object):
         return 0
     
     def gui(self, options=None):
+#        sys.coinit_flags = 2
+#        import pythoncom
+#        import win32api
+#        from win32com.server import factory
+#        from nxdrive.icon_overlay.win32 import IconOverlay
+#        from win32com.server import localserver
+#        
+#        sys.argv = sys.argv[:1]
+#        sys.argv.append(IconOverlay._reg_clsid_)
+#        localserver.main()
+        # start the COM server
+#        infos = factory.RegisterClassFactories([IconOverlay._reg_clsid_])
+        #=======================================================================
+        # pythoncom.EnableQuitMessage(win32api.GetCurrentThreadId())    
+        #=======================================================================
+#        pythoncom.CoResumeClassObjects()
+#        sys.argv.append('--register')
+#        register_iconovelay_handler()
+
         from nxdrive.gui.menubar import startApp
-#        return startApp(self.controller, self.looper(options))
-        return startApp(self.controller, options)
+        result =  startApp(self.controller, options)
+        
+#        sys.argv = sys.argv[:-1]
+#        sys.argv.append('--unregister')
+#        unregister_icon_ovelay_handler()
+
+#        factory.RevokeClassFactories( infos )
+#        pythoncom.CoUninitialize()
+        return result
 
     def stop(self, options=None):
         self.controller.stop()
@@ -402,6 +451,13 @@ class CliHandler(object):
         self.controller.unbind_root(options.local_root)
         return 0
 
+    def com(self, options):
+        if options.register:
+            register_iconovelay_handler()
+        elif options.unregister:
+            unregister_icon_ovelay_handler()
+
+        
     def test(self, options):
         import nose
         # Monkeypatch nose usage message as it's complicated to include
@@ -435,6 +491,33 @@ class CliHandler(object):
         ]
         return 0 if nose.run(argv=argv) else 1
 
+def register_iconovelay_handler():
+    if sys.platform == 'win32':
+        import win32com.server.register
+        from nxdrive.icon_overlay.win32 import IconOverlay
+        win32com.server.register.UseCommandLine(IconOverlay, debug=DEBUGGING)
+        
+        keyname = r'Software\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\%sOverlay' % Constants.SHORT_APP_NAME
+        key = win32api.RegCreateKey (win32con.HKEY_LOCAL_MACHINE, keyname)
+        win32api.RegSetValue (key, None, win32con.REG_SZ, IconOverlay._reg_clsid_)
+    else:
+        pass
+
+def unregister_icon_ovelay_handler():
+    if sys.platform == 'win32':
+        import win32com.server.register
+        import pywintypes
+        from nxdrive.icon_overlay.win32 import IconOverlay
+        win32com.server.register.UseCommandLine(IconOverlay)
+        
+        keyname = r'Software\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers'
+        key = win32api.RegOpenKey(win32con.HKEY_LOCAL_MACHINE, keyname)
+        try:
+            win32api.RegDeleteKey(key, '%sOverlay' % Constants.SHORT_APP_NAME)
+        except pywintypes.error:
+            pass
+    else:
+        pass
 
 def main(argv=None):
     if argv is None:
@@ -442,4 +525,10 @@ def main(argv=None):
     return CliHandler().handle(argv)
 
 if __name__ == "__main__":
-    sys.exit(main())
+#    sys.argv.append('--register')
+#    register_iconovelay_handler()
+#    sys.argv = sys.argv[:-1]
+    ret = main()
+#    sys.argv.append('--unregister')
+#    unregister_icon_ovelay_handler()
+    sys.exit(ret)
