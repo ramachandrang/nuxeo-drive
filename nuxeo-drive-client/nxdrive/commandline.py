@@ -24,7 +24,6 @@ from nxdrive.protocol_handler import parse_protocol_url
 from nxdrive.protocol_handler import register_protocol_handlers
 from nxdrive import Constants
 
-
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_DELAY = 5.0
 USAGE = """ndrive [command]
@@ -224,6 +223,14 @@ def make_cli_parser(add_subparsers=True):
         help='Run the Nuxeo Drive test suite.',
         parents=[common_parser],
     )
+    
+    wizard_parser = subparsers.add_parser(
+        'wizard',
+        help='Run the wizard.',
+        parents=[common_parser],
+    )
+    wizard_parser.set_defaults(command='wizard')
+    
     test_parser.set_defaults(command='test')
     test_parser.add_argument(
         "--with-coverage", default=False, action="store_true",
@@ -411,6 +418,10 @@ class CliHandler(object):
 #        pythoncom.CoUninitialize()
         return result
 
+    def wizard(self, options=None):
+        from nxdrive.gui.wizard import startWizard
+        return startWizard(self.controller, options)
+        
     def stop(self, options=None):
         self.controller.stop()
         return 0

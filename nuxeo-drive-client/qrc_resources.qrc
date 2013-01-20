@@ -13,5 +13,12 @@
      <file alias="account.png">nxdrive/data/icons/user-account.png</file>
      <file alias="network.png">nxdrive/data/icons/network-proxy.png</file>
      <file alias="advanced.png">nxdrive/data/icons/advanced.png</file>
+     <file alias="rb_icon.png">nxdrive/data/icons/nuxeo_drive_icon_32.png</file>
+     <file alias="banner.png">nxdrive/data/images/banner-small.png</file>
+     <file alias="bkgrnd.png">nxdrive/data/images/webpage.png</file>
+     <file alias="finder_folders.png">nxdrive/data/images/finder_folders.png</file>
+     <file alias="access_files.png">nxdrive/data/images/access_files.png</file>
+     <file alias="appbar.png">nxdrive/data/images/appbar.png</file>
+     <file alias="final_page.png">nxdrive/data/images/final_page.png</file>
 </qresource>
 </RCC>

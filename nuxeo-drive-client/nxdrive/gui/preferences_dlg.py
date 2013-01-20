@@ -7,6 +7,7 @@ Created on Dec 13, 2012
 import os
 import sys
 import platform
+from sys import executable
 import shutil
 from win32com.shell import shell
 import pythoncom
@@ -249,7 +250,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         defaultFld = self.txtCloudfolder.text()
         if (defaultFld == None):
             defaultFld = self.local_folder
-        selectedFld = QFileDialog.getExistingDirectory(self, self.tr("Choose or create CloudDesk parent directory"),
+        selectedFld = QFileDialog.getExistingDirectory(self, self.tr("Choose or create %s folder location") % Constants.PRODUCT_NAME,
                         defaultFld, QFileDialog.DontResolveSymlinks)
         if (len(selectedFld) == 0):
             selectedFld = defaultFld

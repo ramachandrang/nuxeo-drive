@@ -5,13 +5,13 @@
 
 import sys
 import os
+import platform
+import subprocess
 from datetime import datetime
-from win32com.client import Dispatch
 
 from distutils.core import setup
 if sys.platform == 'win32':
     import py2exe
-    
 
 PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
 APP_NAME = PRODUCT_NAME + ' Desktop'
@@ -66,7 +66,10 @@ package_data = {
     'nxdrive.data.icons': ['*.png', '*.svg', '*.ico', '*.icns'],
     'nxdrive.data': ['*.txt', '*.xml'],
 }
+
 script = 'nuxeo-drive-client/scripts/ndrive'
+
+
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
 win_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.ico')
 png_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.png')
@@ -91,6 +94,16 @@ for filename in os.listdir(others_home):
     filepath = os.path.join(others_home, filename)
     if os.path.isfile(filepath) and os.path.splitext(filename)[1] != '.py':
         others_files.append(filepath)
+        
+if sys.platform == 'win32':
+    bin_files = []
+    arch = '64bit' if 'PROGRAMFILES(X86)' in os.environ else '32bit'
+    bin_home = os.path.join('nuxeo-drive-client/nxdrive/data/bin/', arch)
+    for filename in os.listdir(bin_home):
+        filepath = os.path.normpath(os.path.join(bin_home, filename))
+        if os.path.isfile(filepath) and os.path.splitext(filepath) == '.dll':
+            bin_files.append(filepath)
+    
 
 if '--dev' in sys.argv:
     # timestamp the dev artifacts for continuous integration
@@ -129,21 +142,9 @@ if '--freeze' in sys.argv:
             Executable(script, targetName="CpoDesktop.exe", base="Win32GUI",
                        icon=icon, shortcutDir="ProgramMenuFolder",
                        shortcutName=APP_NAME))
-        
-        # NOTE creating the Favorites link here presents an issue with the icon.
-        # User may change the default installation directory
-#        user_home = os.path.expanduser('~')
-#        target_path = default_nuxeo_drive_folder()
-#        
-#        # create the Favorites shortcut
-#        win_version = sys.getwindowsversion()
-#        if win_version.major == 6 and win_version.minor == 1:
-#            shortcut = os.path.join(user_home, 'Links', PRODUCT_NAME + '.lnk')
-#            create_shortcut(shortcut, target_path)
-#        else:
-#            # TODO find the Favorites location for other Windows versions
-#            pass
-    
+
+
+
     scripts = []
     # special handling for data files
     packages.remove('nxdrive.data')
@@ -166,7 +167,9 @@ if '--freeze' in sys.argv:
     freeze_options = dict(
         executables=executables,
         data_files=[('icons', icons_files), 
-            ('nxdrive/data', others_files)],
+                    ('nxdrive/data', others_files),
+                    ('nxdrive/bin', bin_files),
+                    ],
         options={
             "build_exe": {
                 "includes": includes,
@@ -238,3 +241,5 @@ setup(
     long_description=open('README.rst').read(),
     **freeze_options
 )
+
+
