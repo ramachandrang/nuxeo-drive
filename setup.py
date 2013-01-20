@@ -5,6 +5,8 @@
 
 import sys
 import os
+import platform
+import subprocess
 from datetime import datetime
 
 from distutils.core import setup
@@ -33,7 +35,10 @@ package_data = {
     'nxdrive.data.icons': ['*.png', '*.svg', '*.ico', '*.icns'],
     'nxdrive.data': ['*.txt', '*.xml'],
 }
+
 script = 'nuxeo-drive-client/scripts/ndrive'
+init_script = 'nuxeo-drive-client/scripts/initScript.py'
+
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
 win_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.ico')
 png_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.png')
@@ -58,6 +63,16 @@ for filename in os.listdir(others_home):
     filepath = os.path.join(others_home, filename)
     if os.path.isfile(filepath) and os.path.splitext(filename)[1] != '.py':
         others_files.append(filepath)
+        
+if sys.platform == 'win32':
+    bin_files = []
+    arch = '64bit' if 'PROGRAMFILES(X86)' in os.environ else '32bit'
+    bin_home = os.path.join('nuxeo-drive-client/nxdrive/data/bin/', arch)
+    for filename in os.listdir(bin_home):
+        filepath = os.path.normpath(os.path.join(bin_home, filename))
+        if os.path.isfile(filepath) and os.path.splitext(filepath) == '.dll':
+            bin_files.append(filepath)
+    
 
 if '--dev' in sys.argv:
     # timestamp the dev artifacts for continuous integration
@@ -94,7 +109,9 @@ if '--freeze' in sys.argv:
         executables.append(
             Executable(script, targetName="CpoDesktop.exe", base="Win32GUI",
                        icon=icon, shortcutDir="ProgramMenuFolder",
-                       shortcutName=APP_NAME))
+                       shortcutName=APP_NAME,
+                       initScript=init_script))
+        
     scripts = []
     # special handling for data files
     packages.remove('nxdrive.data')
@@ -117,7 +134,9 @@ if '--freeze' in sys.argv:
     freeze_options = dict(
         executables=executables,
         data_files=[('icons', icons_files), 
-            ('nxdrive/data', others_files)],
+                    ('nxdrive/data', others_files),
+                    ('nxdrive/bin', bin_files),
+                    ],
         options={
             "build_exe": {
                 "includes": includes,
@@ -189,3 +208,5 @@ setup(
     long_description=open('README.rst').read(),
     **freeze_options
 )
+
+
