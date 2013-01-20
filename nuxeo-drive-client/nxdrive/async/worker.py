@@ -29,7 +29,8 @@ class Worker(Thread):
     def pause(self):
         if self.operation is not None:
             with self.operation.lock:
-                self.operation.pause = True    
+                self.operation.pause = True   
+            self.operation.event.clear() 
         
     def resume(self):
         if self.operation is not None:
