@@ -44,6 +44,11 @@ APP_ICON_TAB_GENERAL = ':/general.png'
 APP_ICON_TAB_ACCOUNT = ':/account.png'
 APP_ICON_TAB_NETWORK =':/network.png'
 APP_ICON_TAB_ADVANCED = ':/advanced.png'
+APP_ICON_WIZARD_RB = ':/rb_icon.png'
+APP_IMG_WIZARD_FINDER_FOLDERS = ':/finder_folders.png'
+APP_IMG_WIZARD_ACCESS_FILES = ':/access_files.png'
+APP_IMG_WIZARD_APPBAR = ':/appbar.png'
+APP_IMG_WIZARD_FINAL = ':/final_page.png'
 
 COPYRIGHT_FILE = 'nxdrive/data/CloudDesk_EULA.txt'
 

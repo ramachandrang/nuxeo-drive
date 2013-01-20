@@ -38,7 +38,6 @@ settings = create_settings()
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_EX_NX_DRIVE_FOLDER = default_expanded_nuxeo_drive_folder()
 
-settings = QSettings()
 
 class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def __init__(self, frontend=None, parent=None):
@@ -240,7 +239,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         defaultFld = self.txtCloudfolder.text()
         if (defaultFld == None):
             defaultFld = self.local_folder
-        selectedFld = QFileDialog.getExistingDirectory(self, self.tr("Choose or create CloudDesk parent directory"),
+        selectedFld = QFileDialog.getExistingDirectory(self, self.tr("Choose or create %s folder location") % Constants.PRODUCT_NAME,
                         defaultFld, QFileDialog.DontResolveSymlinks)
         if (len(selectedFld) == 0):
             selectedFld = defaultFld
