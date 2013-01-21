@@ -3,6 +3,7 @@ Created on Oct 28, 2012
 
 @author: mconstantin
 '''
+import sys
 
 COMPANY_NAME = 'SHARP'
 PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
@@ -45,10 +46,24 @@ APP_ICON_TAB_ACCOUNT = ':/account.png'
 APP_ICON_TAB_NETWORK =':/network.png'
 APP_ICON_TAB_ADVANCED = ':/advanced.png'
 APP_ICON_WIZARD_RB = ':/rb_icon.png'
-APP_IMG_WIZARD_FINDER_FOLDERS = ':/finder_folders.png'
-APP_IMG_WIZARD_ACCESS_FILES = ':/access_files.png'
-APP_IMG_WIZARD_APPBAR = ':/appbar.png'
-APP_IMG_WIZARD_FINAL = ':/final_page.png'
+
+if sys.platform == 'darwin':
+    APP_IMG_WIZARD_FINDER_FOLDERS = ':/finder_folders.png'
+    APP_IMG_WIZARD_ACCESS_FILES = ':/access_files.png'
+    APP_IMG_WIZARD_APPBAR = ':/appbar.png'
+    APP_IMG_WIZARD_FINAL = ':/final_page.png'
+    APP_IMG_WIZARD_BKGRND = ':/bkgrnd.png'
+    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'
+    APP_IMG_WIZARD_BANNER = ':/banner.png'
+elif sys.platform == 'win32':
+    APP_IMG_WIZARD_FINDER_FOLDERS = ':/finder_folders.png'
+    APP_IMG_WIZARD_ACCESS_FILES = ':/access_files.png'
+    APP_IMG_WIZARD_APPBAR = ':/appbar.png'
+    APP_IMG_WIZARD_FINAL = ':/final_page.png'  
+    APP_IMG_WIZARD_BKGRND = ':/bkgrnd.png'
+    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'  
+    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'
+    APP_IMG_WIZARD_BANNER = ':/banner.png'
 
 COPYRIGHT_FILE = r'nxdrive/data/CloudDesk_EULA.txt'
 ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'

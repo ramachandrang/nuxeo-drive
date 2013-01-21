@@ -1,7 +1,6 @@
 """Utilities to operate Nuxeo Drive from the command line"""
 import os
 import sys
-import sys
 import argparse
 from getpass import getpass
 import traceback
@@ -40,6 +39,7 @@ Possible commands:
 - bind-root
 - unbind-root
 - gui
+- wizard
 - com
 
 To get options for a specific command:
@@ -96,6 +96,9 @@ def make_cli_parser(add_subparsers=True):
         "--stop-on-error", default=True, action="store_true",
         help="Stop the process on first unexpected error."
         "Useful for developers and Continuous Integration.")
+    
+    common_parser.add_argument(
+        '--start', '-s', action='store_true', help='start synchronization as soon as the gui starts.')
 
     parser = argparse.ArgumentParser(
         parents=[common_parser],
@@ -536,10 +539,4 @@ def main(argv=None):
     return CliHandler().handle(argv)
 
 if __name__ == "__main__":
-#    sys.argv.append('--register')
-#    register_iconovelay_handler()
-#    sys.argv = sys.argv[:-1]
-    ret = main()
-#    sys.argv.append('--unregister')
-#    unregister_icon_ovelay_handler()
     sys.exit(ret)

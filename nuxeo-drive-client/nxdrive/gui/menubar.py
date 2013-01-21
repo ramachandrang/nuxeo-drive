@@ -136,6 +136,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.setupMisc()
         self.update_running_icon()
         self.preferencesDlg = None
+        if options.start:
+            self.doWork()
         
     def setupMenu(self):
         self.menuCloudDesk = QtGui.QMenu()
@@ -841,10 +843,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
 from nxdrive.utils.helpers import QApplicationSingleton
 
-def startApp(controller, start):
+def startApp(controller, options):
     app = QApplicationSingleton()
     app.setQuitOnLastWindowClosed(False)
-    i = CloudDeskTray(controller, start)
+    i = CloudDeskTray(controller, options)
     i.show()
     return app.exec_()
 
