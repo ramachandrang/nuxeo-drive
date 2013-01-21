@@ -76,7 +76,7 @@ class CpoWizard(QWizard):
         
         self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
         self.setFixedSize(700, 500)      
-        self.setPixmap(QWizard.LogoPixmap, QPixmap(':/banner.png'))
+        self.setPixmap(QWizard.LogoPixmap, QPixmap(Constants.APP_IMG_WIZARD_BANNER))
         self.setWindowTitle(self.tr('%s Setup') % Constants.APP_NAME)
         if sys.platform == 'win32':
             self.setWizardStyle(QWizard.ModernStyle)
@@ -192,7 +192,7 @@ class CpoWizard(QWizard):
             base = os.path.split(os.path.split(__file__)[0])[0]
             script = os.path.join(base, 'commandline.py')
             python = sys.executable
-            subprocess.Popen([python, script])
+            subprocess.Popen([python, script, '--start'])
         
         return super(CpoWizard,self).accept()
         
@@ -204,8 +204,8 @@ class IntroPage(QWizardPage):
         
         self.setWindowTitle('<html><b><font color="red">%s</font></b></html> Setup' % Constants.APP_NAME)
         self.setSubTitle(self.tr('Welcome to %s') % Constants.APP_NAME)
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(':/bkgrnd.png'))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(':/bkgrnd.png'))
+        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
         
         self.lblInstr = QLabel(self.tr('Please log in to %s') % Constants.PRODUCT_NAME)
         self.lblUrl = QLabel("<html><a href='%s'>%s</a></html>" % (Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_CLOUDDESK_URL))
@@ -301,8 +301,8 @@ class InstallOptionsPage(QWizardPage):
 #        self.typical = True
         
         self.setSubTitle(self.tr('Choose Setup Type'))
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(':/bkgrnd.png'))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(':/bkgrnd.png'))
+        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
 
         # Typical option
         self.rdButtonTypical = QRadioButton(self)
@@ -388,8 +388,8 @@ class GuideOnePage(QWizardPage):
     def __init__(self, parent=None):
         super(GuideOnePage, self).__init__(parent)
         
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(':/bkgrnd.png'))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(':/bkgrnd.png'))
+        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
         username = self.field('username')
         # TEST ONLY
         if username is None:
@@ -422,8 +422,8 @@ class GuideTwoPage(QWizardPage):
     def __init__(self, parent=None):
         super(GuideTwoPage, self).__init__(parent)
         
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(':/bkgrnd.png'))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(':/bkgrnd.png'))
+        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
             
         self.setSubTitle(self.tr('Access your files from everywhere using %s!') % Constants.PRODUCT_NAME)
         self.lblDetail = QLabel(self.tr("<html>To access your files from a different computer, log in to %s. "
@@ -441,8 +441,8 @@ class GuideThreePage(QWizardPage):
     def __init__(self, parent=None):
         super(GuideThreePage, self).__init__(parent)
         
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(':/bkgrnd.png'))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(':/bkgrnd.png'))
+        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
             
         self.setSubTitle(self.tr('The %s Notification Icon') % Constants.APP_NAME)
 #        self.lblDetail = QLabel(self.tr("<html>Access your %s from the Mac Menu Bar. "
@@ -497,8 +497,8 @@ class AdvancedPage(QWizardPage):
     def __init__(self, parent=None):
         super(AdvancedPage, self).__init__(parent)
         
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(':/bkgrnd.png'))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(':/bkgrnd.png'))
+        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
         self.setSubTitle(self.tr('Advanced Setup'))
         
         folderGroup = QGroupBox(self.tr('Select Location'))
@@ -672,8 +672,8 @@ class FinalPage(QWizardPage):
     def __init__(self, parent=None):
         super(FinalPage, self).__init__(parent)
         
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(':/bkgrnd.png'))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(':/bkgrnd.png'))
+        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
             
         self.setSubTitle(self.tr('Successfully Completed.'))
         self.lblDetail = QLabel(self.tr("<html><span style='font-size: 12px'>%s has finished installation and is ready to go.</span>"

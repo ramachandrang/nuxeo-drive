@@ -34,6 +34,8 @@ Possible commands:
 - unbind-server
 - bind-root
 - unbind-root
+- gui
+- wizard
 
 To get options for a specific command:
 
@@ -86,6 +88,9 @@ def make_cli_parser(add_subparsers=True):
         "--stop-on-error", default=True, action="store_true",
         help="Stop the process on first unexpected error."
         "Useful for developers and Continuous Integration.")
+    
+    common_parser.add_argument(
+        '--start', '-s', action='store_true', help='start synchronization as soon as the gui starts.')
 
     parser = argparse.ArgumentParser(
         parents=[common_parser],
