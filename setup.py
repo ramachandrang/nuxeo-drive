@@ -48,8 +48,8 @@ def default_nuxeo_drive_folder():
         
     return os.path.expanduser(path)
     
-    
-scripts = ["nuxeo-drive-client/scripts/ndrive"]
+script = 'nuxeo-drive-client/scripts/ndrive.py'
+scripts = [script]
 freeze_options = {}
 
 packages = [
@@ -67,10 +67,10 @@ package_data = {
     'nxdrive.data': ['*.txt', '*.xml'],
 }
 
-script = 'nuxeo-drive-client/scripts/ndrive'
-
-
+# TODO: icons are already copied into 'icons' subfolder - investigate this
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
+images_home = 'nuxeo-drive-client/nxdrive/data/images'
+
 win_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.ico')
 png_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.png')
 osx_icon = os.path.join(icons_home, 'nuxeo_drive_app_icon_128.icns')
@@ -87,6 +87,12 @@ for filename in os.listdir(icons_home):
     filepath = os.path.join(icons_home, filename)
     if os.path.isfile(filepath):
         icons_files.append(filepath)
+        
+images_files = []
+for filename in os.listdir(images_home):
+    filepath = os.path.join(images_home, filename)
+    if os.path.isfile(filepath):
+        images_files.append(filepath)
         
 others_home = 'nuxeo-drive-client/nxdrive/data'
 others_files = []
@@ -167,8 +173,9 @@ if '--freeze' in sys.argv:
     freeze_options = dict(
         executables=executables,
         data_files=[('icons', icons_files), 
-                    ('nxdrive/data', others_files),
-                    ('nxdrive/bin', bin_files),
+                    ('data', others_files),
+                    ('bin', bin_files),
+                    ('images', images_files),
                     ],
         options={
             "build_exe": {
@@ -202,7 +209,7 @@ elif sys.platform == 'darwin':
     import py2app  # install the py2app command
 
     freeze_options = dict(
-        app=["nuxeo-drive-client/scripts/ndrive.py"],
+        app=[script],
         data_files=[('icons', icons_files), 
                     ('nxdrive/data', others_files)],
         options=dict(

@@ -539,4 +539,4 @@ def main(argv=None):
     return CliHandler().handle(argv)
 
 if __name__ == "__main__":
-    sys.exit(ret)
+    sys.exit(main())
