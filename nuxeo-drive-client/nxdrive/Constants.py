@@ -56,16 +56,25 @@ if sys.platform == 'darwin':
     APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'
     APP_IMG_WIZARD_BANNER = ':/banner.png'
 elif sys.platform == 'win32':
-    APP_IMG_WIZARD_FINDER_FOLDERS = ':/explorer_folders.png'
-    APP_IMG_WIZARD_ACCESS_FILES = ':/access_files_win32.png'
+#    APP_IMG_WIZARD_FINDER_FOLDERS = ':/explorer_folders.png'
+#    APP_IMG_WIZARD_ACCESS_FILES = ':/access_files_win32.png'
+#    APP_IMG_WIZARD_APPBAR = ':/systray.png'
+#    APP_IMG_WIZARD_FINAL = ':/final_page_win32.png'  
+#    APP_IMG_WIZARD_BKGRND = ':/bkgrnd.png'
+#    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'  
+#    APP_IMG_WIZARD_BANNER = ':/banner.png'
+    APP_IMG_WIZARD_FINDER_FOLDERS = ':/finder_folders.png'
+    APP_IMG_WIZARD_ACCESS_FILES = ':/access_files.png'
     APP_IMG_WIZARD_APPBAR = ':/systray.png'
-    APP_IMG_WIZARD_FINAL = ':/final_page_win32.png'  
+    APP_IMG_WIZARD_FINAL = ':/final_page.png'  
     APP_IMG_WIZARD_BKGRND = ':/bkgrnd.png'
     APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'  
     APP_IMG_WIZARD_BANNER = ':/banner.png'
-
+    
 COPYRIGHT_FILE = r'nxdrive/data/CloudDesk_EULA.txt'
 ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
+ICON_APP_ENABLED = R'nuxeo_drive_icon_16_enabled.png'
+ICON_APP_DISABLED = R'nuxeo_drive_icon_16_disabled.png'
 
 __version__ = '1.0.0'
 

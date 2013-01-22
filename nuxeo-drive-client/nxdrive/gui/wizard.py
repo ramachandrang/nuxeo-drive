@@ -465,9 +465,12 @@ class GuideThreePage(QWizardPage):
         self.webView = QWebView(self)
         self.webView.setFixedHeight(120)
         
-        data_uri1 = open("nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png", "rb").read().encode("base64").replace("\n", "")
+        from nxdrive.gui.resources import find_icon
+        icon1_path = find_icon(Constants.ICON_APP_ENABLED)
+        data_uri1 = open(icon1_path, "rb").read().encode("base64").replace("\n", "")
         img_tag1 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri1)
-        data_uri2 = open("nxdrive/data/icons/nuxeo_drive_icon_16_disabled.png", "rb").read().encode("base64").replace("\n", "")
+        icon2_path = find_icon(Constants.ICON_APP_DISABLED)
+        data_uri2 = open(icon2_path, "rb").read().encode("base64").replace("\n", "")
         img_tag2 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri2)        
         self.webView.setHtml(self.tr("<html><body style='background:WhiteSmoke; width:420px; height:100px; font-size:12px'>Access your %s from the Mac Menu Bar. "
                                         "A %s icon indicates that the client is connected ready to synchronize your files. "
