@@ -6,7 +6,7 @@ Created on Oct 28, 2012
 import sys
 
 COMPANY_NAME = 'SHARP'
-PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
+PRODUCT_NAME = 'Cloud Portal Office'
 APP_NAME = PRODUCT_NAME + ' Desktop'
 SHORT_APP_NAME = 'CpoDesktop'
 OSX_APP_NAME = APP_NAME
