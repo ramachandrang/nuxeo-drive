@@ -133,7 +133,7 @@ class Controller(object):
         self.device_id = self.get_device_config().device_id
 #        self.notifier = Notifier()
         self.fault_tolerant = True
-
+        self.loop_count = 0
 
     def get_session(self):
         """Reuse the thread local session for this controller
@@ -142,6 +142,9 @@ class Controller(object):
         this method is always called to fetch the session instance.
         """
         return self._session_maker()
+    
+    def get_loop_count(self):
+        return self.loop_count
 
     def get_device_config(self, session=None):
         """Fetch the singleton configuration object for this device"""
@@ -1511,7 +1514,11 @@ class Controller(object):
         session = self.get_session()
         doc_pair = self.next_pending(local_root=local_root, session=session)
         while doc_pair is not None and (limit is None or synchronized < limit):
-            if self.should_pause_synchronization(sync_operation):
+            if self.should_stop_synchronization(delete_stop_file=False):
+                pid = os.getpid()
+                log.info("Stopping synchronization for document %s (pid=%d)", doc_pair.local_name, pid)
+                break
+            if self.should_pause_synchronization(sync_operation, frontend=frontend):
                 break
             
             if fault_tolerant:
@@ -1600,7 +1607,7 @@ class Controller(object):
             while paused:
                 log.debug("pausing synchronization")
                 if frontend is not None:
-                    frontend.notify_stop_transfer()
+                    frontend.notify_pause_transfer()
                 sync_operation.event.wait()
                 #check whether should stop instead of resuming
                 if self.should_stop_synchronization(delete_stop_file=False):
@@ -1664,16 +1671,16 @@ class Controller(object):
         first_pass = True
         session = self.get_session()
         
-        loop_count = 0
+        self.loop_count = 0
         try:
             while True:
 
                 if self.should_stop_synchronization():
                     log.info("Stopping synchronization (pid=%d)", pid)
                     break
-                if (max_loops is not None and loop_count > max_loops):
+                if (max_loops is not None and self.loop_count > max_loops):
                     log.info("Stopping synchronization after %d loops",
-                             loop_count)
+                             self.loop_count)
                     break
                 
                 self.get_folders(session, frontend=frontend)
@@ -1683,6 +1690,10 @@ class Controller(object):
                 status = {}
                 for rb in bindings:
                     try:
+                        if self.should_stop_synchronization(delete_stop_file=False):
+                            pid = os.getpid()
+                            log.info("Stopping synchronization for root %s (pid=%d)", rb.local_root, pid)
+                            break
                         if self.should_pause_synchronization(sync_operation, frontend=frontend):
                             break;
                         # the alternative to local full scan is the watchdog
@@ -1743,8 +1754,8 @@ class Controller(object):
                     sleep(delay - spent)
                 previous_time = current_time
                 first_pass = False
-                log.debug("loop count=%d", loop_count)
-                loop_count += 1
+                log.debug("loop count=%d", self.loop_count)
+                self.loop_count += 1
 
         except KeyboardInterrupt:
             self.get_session().rollback()

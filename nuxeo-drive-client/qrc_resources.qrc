@@ -2,7 +2,7 @@
 <qresource>
      <file alias="indicator_icon_enabled.png">nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png</file>
      <file alias="indicator_icon_disabled.png">nxdrive/data/icons/nuxeo_drive_icon_16_disabled.png</file> 
-     <file alias="indicator_icon_stopping.png">nxdrive/data/icons/nuxeo_drive_icon_16_paused.png</file>
+     <file alias="indicator_icon_paused.png">nxdrive/data/icons/nuxeo_drive_icon_16_paused.png</file>
      <file alias="indicator_icon_transferring_1.png">nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png</file>
      <file alias="indicator_icon_transferring_2.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R90.png</file>
      <file alias="indicator_icon_transferring_3.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R180.png</file>

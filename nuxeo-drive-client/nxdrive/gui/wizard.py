@@ -10,7 +10,7 @@ import subprocess
 
 import PySide
 from PySide import QtGui
-from PySide.QtCore import Qt, QUrl, QObject, QEvent
+from PySide.QtCore import Qt, QUrl
 from PySide.QtGui import QWizard, QWizardPage, QPixmap, QIcon, QPalette, QApplication
 from PySide.QtGui import QLabel, QLineEdit, QGridLayout, QHBoxLayout, QVBoxLayout
 from PySide.QtGui import QPushButton, QRadioButton, QCheckBox, QGroupBox, QFileDialog, QDialog, QMessageBox
@@ -18,7 +18,7 @@ from PySide.QtWebKit import QWebView
 import os.path
 
 from folders_dlg import SyncFoldersDlg
-from nxdrive.utils.helpers import QApplicationSingleton
+from nxdrive.utils.helpers import QApplicationSingleton, EventFilter
 from nxdrive.utils.helpers import Communicator, RecoverableError
 from nxdrive.gui.menubar import DEFAULT_EX_NX_DRIVE_FOLDER
 from nxdrive import Constants
@@ -26,20 +26,6 @@ import nxdrive.gui.qrc_resources
 
 from nxdrive.model import ServerBinding
 
-
-class EventFilter(QObject):
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.KeyPress:
-            return True
-        elif event.type() == QEvent.MouseButtonPress:
-            return True
-        elif event.type() == QEvent.MouseButtonRelease:
-            return True
-        elif event.type() == QEvent.MouseButtonDblClick:
-            return True
-        else:
-            # standard event processing
-            return QObject.eventFilter(self, obj, event)
     
 class CpoWizard(QWizard):
     pages = {
@@ -66,6 +52,7 @@ class CpoWizard(QWizard):
         self.communicator = Communicator()
         self.options = options
         self.skip = False
+        self.keep_location = False
         self.addPage(IntroPage())           #0
         self.addPage(InstallOptionsPage())  #1
         self.addPage(GuideOnePage())        #2
@@ -93,15 +80,8 @@ class CpoWizard(QWizard):
         self.setButtonText(QWizard.CustomButton1, self.tr('&Skip Tour'))
         self.setOption(QWizard.HaveCustomButton1 ,True)
         self.customButtonClicked.connect(self.skip_tour)
-        btnList = [QWizard.Stretch, QWizard.CustomButton1, QWizard.BackButton]
-        if forward:
-            if self.currentId() == CpoWizard.FinalPageId:
-                btnList.append(QWizard.FinishButton)
-            else:
-                btnList.append(QWizard.NextButton)
-        else:
-            btnList.append(QWizard.NextButton)          
-            
+       
+        btnList = [QWizard.Stretch, QWizard.CustomButton1, QWizard.CommitButton, QWizard.BackButton, QWizard.NextButton, QWizard.FinishButton]                   
         self.setButtonLayout(btnList)
         
     def remove_skip_tour(self):
@@ -110,12 +90,9 @@ class CpoWizard(QWizard):
         btn = self.button(QWizard.CustomButton1)
         if btn.text():
             self.customButtonClicked.disconnect(self.skip_tour)
-        btnList = [QWizard.Stretch, QWizard.BackButton, QWizard.NextButton]
-        if self.currentId() == CpoWizard.FinalPageId:
-            btnList.append(QWizard.FinishButton)
-#        else:
-#            btnList.append(QWizard.NextButton)
             
+        self.setOption(QWizard.HaveCustomButton1 ,False)
+        btnList = [QWizard.Stretch, QWizard.BackButton, QWizard.CommitButton, QWizard.NextButton, QWizard.FinishButton]
         self.setButtonLayout(btnList)
         
     def skip_tour(self, custom_button):
@@ -218,7 +195,7 @@ class IntroPage(QWizardPage):
         self.lblUsername.setBuddy(self.txtUsername)
         self.txtPwd = QLineEdit()
         self.lblPwd.setBuddy(self.txtPwd)
-        self.txtPwd.setEchoMode(QLineEdit.PasswordEchoOnEdit)
+        self.txtPwd.setEchoMode(QLineEdit.Password)
         self.btnLogin = QPushButton(self.tr('Login'))
         self.lblMessage = QLabel()
         self.lblMessage.setObjectName('message')
@@ -275,14 +252,14 @@ class IntroPage(QWizardPage):
         except Unauthorized:
             self.lblMessage.setText(self.tr('Invalid credentials.'))
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
-            self.auth_ok = True
+            self.auth_ok = False
         except Exception as e:
             msg = self.tr('Unable to connect to %s') % Constants.DEFAULT_CLOUDDESK_URL
             if hasattr(e, 'msg'):
                 msg = e.msg
             self.lblMessage.setText(msg)
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
-            self.auth_ok = True
+            self.auth_ok = False
         finally:
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
@@ -361,7 +338,7 @@ class InstallOptionsPage(QWizardPage):
         if not self.rdButtonAdvanced.isChecked():
             folder = DEFAULT_EX_NX_DRIVE_FOLDER
             
-            if os.path.exists(folder):
+            if os.path.exists(folder) and not self.wizard().keep_location:
                 msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"), 
                                                           self.tr("Folder %s already exists. Do you want to use it?" % folder))
                 msgbox.setInformativeText(self.tr("Select Yes to keep this location or No to select a different one on the Advanced next page."))
@@ -371,8 +348,11 @@ class InstallOptionsPage(QWizardPage):
                     self.rdButtonAdvanced.setChecked(True)
                     return False
                 
+            self.wizard().keep_location = True
             if (not os.path.exists(folder)):
                 os.makedirs(folder)
+                self.wizard().keep_location = True
+                
             if self.wizard()._unbind_if_bound(folder):
                 # create the default server binding      
                 self.wizard()._bind(folder)
@@ -575,7 +555,7 @@ class AdvancedPage(QWizardPage):
             location = self.txtLocationSelect.text()
             
         folder = os.path.join(location, Constants.DEFAULT_NXDRIVE_FOLDER)
-        if os.path.exists(folder):
+        if os.path.exists(folder) and not self.wizard().keep_location:
             msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"), 
                                                       self.tr("Folder %s already exists. Do you want to use it?" % folder))
             msgbox.setInformativeText(self.tr("Select Yes to keep this location or No to select a different one."))
@@ -584,12 +564,14 @@ class AdvancedPage(QWizardPage):
             # BUG?! when the default (radio button) location is selected, the MessageBox is ok.
             # When the select (radio button) location is selected, the MessageBox is missing the title and main text
             # (only the informative text is shown)!!
-            msgbox = None
+
             if ret == QMessageBox.No:
                 self.rdLocationSelect.setChecked(True)
                 self.txtLocationSelect.setEnabled(True)
                 self.txtLocationSelect.selectAll()
                 return False
+            else:
+                self.wizard().keep_location = True
         else:            
             if (not os.path.exists(location)):
                 mbox = QMessageBox(QMessageBox.Warning, Constants.APP_NAME, self.tr("Folder %s does not exist.") % location)
@@ -601,6 +583,7 @@ class AdvancedPage(QWizardPage):
                 
             if not os.path.exists(folder):
                 os.makedirs(folder)
+                self.setCommitPage()
             
         if self.wizard()._unbind_if_bound(folder):
             self.wizard()._bind(folder)         
@@ -666,8 +649,7 @@ class AdvancedPage(QWizardPage):
         finally:
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
-
-
+            
 class FinalPage(QWizardPage):
     def __init__(self, parent=None):
         super(FinalPage, self).__init__(parent)

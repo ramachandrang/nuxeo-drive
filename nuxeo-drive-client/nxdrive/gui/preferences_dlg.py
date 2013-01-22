@@ -10,7 +10,7 @@ import platform
 from sys import executable
 import shutil
 
-from PySide.QtGui import QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QIcon
+from PySide.QtGui import QApplication, QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QIcon
 from PySide.QtCore import Qt, QSettings
 
 from nxdrive import Constants
@@ -18,6 +18,7 @@ from nxdrive.model import ServerBinding
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
+from nxdrive.utils.helpers import EventFilter
 from nxdrive.client import ProxyInfo
 from ui_preferences import Ui_preferencesDlg 
 from proxy_dlg import ProxyDlg
@@ -141,7 +142,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 (self.server_binding.remote_password is not None or self.server_binding.remote_token is not None))
         
     def _getDisconnectText(self):
-        return self.tr("Connect...") if not self._isConnected() else self.tr("Disconnect")
+        return self.tr("Sign In...") if not self._isConnected() else self.tr("Sign Out")
         
     def showEvent(self, evt):
         if evt.spontaneous:
@@ -173,12 +174,44 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #            self.tabWidget.setTabIcon(index, QIcon(Constants.APP_ICON_ABOUT))
     
     def selectFolders(self):
+        app = QApplication.instance()
+        process_filter = EventFilter(self)
+            
+        if self.controller.get_loop_count() < 1:
+            # retrieve folders and binding roots if controller hasn't done it yet
+            # NOTE/TODO: controller methods may not be thread-safe. Check..
+
+            app.setOverrideCursor(Qt.WaitCursor)
+            self.installEventFilter(process_filter)
+            try:
+                # retrieve folders
+                self.controller.get_folders(frontend=self.frontend)
+                self.controller.update_roots(frontend=self.frontend)
+
+            except Exception as e:
+                log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
+    
+            finally:
+                app.restoreOverrideCursor()
+                self.removeEventFilter(process_filter)
+            
         dlg = SyncFoldersDlg(frontend=self.frontend)
         if dlg.exec_() == QDialog.Rejected:
             return
-        # set the synchronized roots
-        self.controller.set_roots()
         
+        # set the synchronized roots
+        app.setOverrideCursor(Qt.WaitCursor)
+        self.installEventFilter(process_filter)
+        try:
+            self.controller.set_roots()
+            
+        except Exception as e:
+            log.error(self.tr('Unable to set roots for %s (%s)'), self.server_binding.server_url, str(e))
+
+        finally:
+            app.restoreOverrideCursor()
+            self.removeEventFilter(process_filter)
+            
         
     def configProxy(self):
         # Proxy... button is only enable in this case
@@ -275,6 +308,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtAccount.setReadOnly(True)
             self.txtAccount.deselect()
             self.txtUrl.setReadOnly(True)
+            self.btnSelect.setEnabled(True)
         else:
             self.txtAccount.setReadOnly(False)
             # widget looks still read-only
@@ -282,6 +316,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtAccount.setSelection(0, len(self.txtAccount.text()))
             self.txtUrl.setReadOnly(False)
             self.txtUrl.setEnabled(True)
+            self.btnSelect.setEnabled(False)
     
     def _connect(self):
         # Launch the GUI to create a binding
@@ -355,7 +390,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 QMessageBox(QMessageBox.Critical, self.tr("%s Error") % Constants.APP_NAME, self.tr("Failed to connect to server, please try again.")).exec_()
                 return QDialog.Rejected
                         
-        if self.local_folder is not None and not self.move_to_folder is not None and self.local_folder != self.move_to_folder:           
+        if self.local_folder is not None and self.move_to_folder is not None and self.local_folder != self.move_to_folder:           
             if self._isConnected():
                 #prompt for moving the Nuxeo Drive folder for current binding
                 msg = QMessageBox(QMessageBox.Question, self.tr('Move Root Folder'),
@@ -370,7 +405,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
             if os.path.exists(self.move_to_folder):
                 error = QMessageBox(QMessageBox.Critical, self.tr("Path Error"), 
-                                                          self.tr("Folder %s already exists" % self.move_to_folder))
+                                                          self.tr("Folder %s already exists" % self.move_to_folder),
+                                                          QMessageBox.Ok)
                 error.setInformativeText(self.tr("Select a folder where %s does not exist." % Constants.DEFAULT_NXDRIVE_FOLDER))
                 error.exec_()
                 return QDialog.Rejected
@@ -381,8 +417,16 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #                mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)         
 #                if mbox.exec_() == QMessageBox.No:
 #                    return QDialog.Rejected                  
+                             
+            try:
+                shutil.move(self.local_folder, self.move_to_folder)
+            except shutil.Error as e:
+                error = QMessageBox(QMessageBox.Critical, self.tr("Move Error"), 
+                                                          self.tr("Error moving folder %s to %s" % (self.local_folder, self.move_to_folder)))
+                error.setInformativeText(str(e))
+                error.exec_()
+                return QDialog.Rejected
             
-            shutil.copytree(self.local_folder, self.move_to_folder)                    
             if self.frontend is not None:
                 self.frontend.local_folder = self.local_folder = self.move_to_folder
                   
