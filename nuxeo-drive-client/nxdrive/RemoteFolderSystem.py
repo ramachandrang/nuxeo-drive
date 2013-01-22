@@ -127,5 +127,8 @@ def update_model(session, parent):
             update_model(session, parent.child(i))
 
 
-        
+def no_bindings(session):
+    count = session.query(SyncFolders).\
+                       filter(SyncFolders.checked != None).count()
+    return count == 0
     

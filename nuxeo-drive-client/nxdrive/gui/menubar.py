@@ -161,8 +161,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionAbout = QtGui.QAction(self.tr("About"),self)
         self.actionAbout.setObjectName("actionAbout")
         # TO BE REMOVED - BEGIN
-        self.actionDebug = QtGui.QAction(self.tr("Debug"),self)
-        self.actionDebug.setObjectName("actionDebug")        
+#        self.actionDebug = QtGui.QAction(self.tr("Debug"),self)
+#        self.actionDebug.setObjectName("actionDebug")        
         # TO BE REMOVED - END
         self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
@@ -181,8 +181,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addAction(self.actionAbout)
         
         # TO BE REMOVED - BEGIN
-        self.menuCloudDesk.addSeparator()
-        self.menuCloudDesk.addAction(self.actionDebug)
+#        self.menuCloudDesk.addSeparator()
+#        self.menuCloudDesk.addAction(self.actionDebug)
         # TO BE REMOVED - END
         
         self.menuCloudDesk.addSeparator()
@@ -202,7 +202,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.messageClicked.connect(self.handle_message_clicked)
         
         # TO BE REMOVED - BEGIN
-        self.actionDebug.triggered.connect(self.debug_stuff)        
+#        self.actionDebug.triggered.connect(self.debug_stuff)        
         
         # copy to local binding
         for sb in self.controller.list_server_bindings():
@@ -364,12 +364,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     
     def _set_icon_enabled(self):
         self.setIcon(QIcon(Constants.APP_ICON_ENABLED))
-        
+
+    def _set_icon_paused(self):
+        self.setIcon(QIcon(Constants.APP_ICON_PAUSED))
+                
     def _set_icon_disabled(self):
         self.setIcon(QIcon(Constants.APP_ICON_DISABLED))
         
     def _set_icon_stopping(self):
-#        self.setIcon(QIcon(Constants.APP_ICON_STOPPING))
         self.setIcon(QIcon(Constants.APP_ICON_STOPPING))
         
     def _set_icon_enabled_start(self):
@@ -383,7 +385,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.stop = True
         else:
             self.timer.stop()
-            self._set_icon_stopping()
+            self._set_icon_enabled()
+        
+    def _set_icon_enabled_pause(self):
+        if self.startDelay:
+            self.stop = True
+        else:
+            self.timer.stop()
+            self._set_icon_paused()
         
     def _startAnimationDelay(self):
         assert not self.startDelay
@@ -573,7 +582,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def notify_stop_transfer(self):
         if self.state != Constants.APP_STATE_QUITTING:
             self.communicator.icon.emit('enabled_stop')
-        
+
+    def notify_pause_transfer(self):
+        if self.state != Constants.APP_STATE_QUITTING:
+            self.communicator.icon.emit('enabled_pause')
+                    
     def notify_local_folders(self, local_folders):
         """Cleanup unbound server bindings if any"""
         
@@ -680,7 +693,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def _syncCommand(self):
         infos = self.binding_info.values()
         if len(infos) == 0:
-            self.actionCommand.setEnabled(False) 
+            self.actionCommand.setEnabled(True) 
             return self.tr("Start")
         elif self.state == Constants.APP_STATE_STOPPED:
             self.actionCommand.setEnabled(True)
@@ -730,9 +743,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if len(self.controller.list_server_bindings()) == 0:
             # Launch the GUI to create a binding
             from nxdrive.gui.authentication import prompt_authentication
-            ok = prompt_authentication(self.controller, DEFAULT_NX_DRIVE_FOLDER,
+            result = prompt_authentication(self.controller, DEFAULT_NX_DRIVE_FOLDER,
                                        url=Constants.DEFAULT_CLOUDDESK_URL,
                                        username=Constants.DEFAULT_ACCOUNT)
+            ok = result[0]
             if not ok: return
             
         self.setupProcessing()
