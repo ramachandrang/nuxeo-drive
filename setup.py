@@ -98,7 +98,7 @@ others_home = 'nuxeo-drive-client/nxdrive/data'
 others_files = []
 for filename in os.listdir(others_home):
     filepath = os.path.join(others_home, filename)
-    if os.path.isfile(filepath) and os.path.splitext(filename)[1] != '.py':
+    if os.path.isfile(filepath) and os.path.splitext(filename)[1] not in ['.py', '.pyc', '.pyd']:
         others_files.append(filepath)
         
 if sys.platform == 'win32':
@@ -107,7 +107,7 @@ if sys.platform == 'win32':
     bin_home = os.path.join('nuxeo-drive-client/nxdrive/data/bin/', arch)
     for filename in os.listdir(bin_home):
         filepath = os.path.normpath(os.path.join(bin_home, filename))
-        if os.path.isfile(filepath) and os.path.splitext(filepath) == '.dll':
+        if os.path.isfile(filepath) and os.path.splitext(filepath)[1] == '.dll':
             bin_files.append(filepath)
     
 
