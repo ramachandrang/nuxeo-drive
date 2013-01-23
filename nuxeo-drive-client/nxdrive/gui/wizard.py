@@ -5,21 +5,18 @@ Created on Jan 16, 2013
 '''
 
 import sys
-import os
+import os.path
 import subprocess
 
-import PySide
-from PySide import QtGui
-from PySide.QtCore import Qt, QUrl
+from PySide.QtCore import Qt
 from PySide.QtGui import QWizard, QWizardPage, QPixmap, QIcon, QPalette, QApplication
 from PySide.QtGui import QLabel, QLineEdit, QGridLayout, QHBoxLayout, QVBoxLayout
 from PySide.QtGui import QPushButton, QRadioButton, QCheckBox, QGroupBox, QFileDialog, QDialog, QMessageBox
 from PySide.QtWebKit import QWebView
-import os.path
 
 from folders_dlg import SyncFoldersDlg
 from nxdrive.utils.helpers import QApplicationSingleton, EventFilter
-from nxdrive.utils.helpers import Communicator, RecoverableError
+from nxdrive.utils.helpers import Communicator
 from nxdrive.gui.menubar import DEFAULT_EX_NX_DRIVE_FOLDER
 from nxdrive import Constants
 import nxdrive.gui.qrc_resources
@@ -69,12 +66,6 @@ class CpoWizard(QWizard):
             self.setWizardStyle(QWizard.ModernStyle)
         elif sys.platform == 'darwin':
             self.setWizardStyle(QWizard.MacStyle)
-            
-        # NOTE: override validatePage instead
-#        btnNext = self.button(QWizard.NextButton)
-#        btnNext.clicked.connect(self.next)
-#        btnBack = self.button(QWizard.BackButton)
-#        btnBack.clicked.connect(self.back)
             
     def add_skip_tour(self, forward):
         self.setButtonText(QWizard.CustomButton1, self.tr('&Skip Tour'))
@@ -371,9 +362,6 @@ class GuideOnePage(QWizardPage):
         self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
         self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
         username = self.field('username')
-        # TEST ONLY
-        if username is None:
-            username = "Michael"
             
         self.setSubTitle(self.tr('Welcome to %s, %s!') % (Constants.APP_NAME, username))
         self.lblDetail = QLabel(self.tr("<html>The %s is a special folder which synchronizes content under <b>My Docs</b> and "
@@ -615,7 +603,7 @@ class AdvancedPage(QWizardPage):
         self.txtLocationSelect.setText(selected_location)
     
     def sync_select(self):
-        # ths requires server binding
+        # this requires server binding
         if not self.validatePage():
             return
             
@@ -661,7 +649,6 @@ class FinalPage(QWizardPage):
         self.lblDetail = QLabel(self.tr("<html><span style='font-size: 12px'>%s has finished installation and is ready to go.</span>"
                                         "<p><span style='font-size: 10px; font-weight: bold; color: lightseagreen'>Thanks for using it!</span></html>") % Constants.APP_NAME)
         self.lblDetail.setWordWrap(True)
-#        self.lblDetail.setStyleSheet('QLabel { font-size: 12px; font-weight: bold; color: lightseagreen }')
         self.lblImg = QLabel()
         self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_FINAL))
         self.rdLaunch = QCheckBox(self.tr("Launch %s") % Constants.APP_NAME)
