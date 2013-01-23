@@ -20,5 +20,9 @@
      <file alias="access_files_darwin.png">nxdrive/data/images/access_files_darwin.png</file>
      <file alias="appbar.png">nxdrive/data/images/appbar.png</file>
      <file alias="final_page_darwin.png">nxdrive/data/images/final_page_darwin.png</file>
+     <file alias="explorer_folders.png">nxdrive/data/images/explorer_folders.png</file>
+     <file alias="access_files_win32.png">nxdrive/data/images/access_files_win32.png</file>
+     <file alias="systray.png">nxdrive/data/images/systray.png</file>
+     <file alias="final_page_win32.png">nxdrive/data/images/final_page_win32.png</file>
 </qresource>
 </RCC>

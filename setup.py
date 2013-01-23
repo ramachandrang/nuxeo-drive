@@ -15,7 +15,9 @@ if sys.platform == 'win32':
 
 PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
 APP_NAME = PRODUCT_NAME + ' Desktop'
+WIZARD_NAME = PRODUCT_NAME + ' Wizard'
 SHORT_APP_NAME = 'CpoDesktop'
+SHORT_WIZARD_NAME = 'CpoWizard'
 DEFAULT_ROOT_FOLDER = PRODUCT_NAME
 version = '0.1.1'
 
@@ -49,7 +51,9 @@ def default_nuxeo_drive_folder():
     return os.path.expanduser(path)
     
 script = 'nuxeo-drive-client/scripts/ndrive.py'
-scripts = [script]
+scriptwzd = 'nuxeo-drive-client/scripts/ndrivewzd.py'
+scripts = [script, scriptwzd]
+
 freeze_options = {}
 
 packages = [
@@ -140,18 +144,21 @@ if '--freeze' in sys.argv:
     # build_exe does not seem to take the package_dir info into account
     sys.path.append('nuxeo-drive-client')
 
-    executables = [Executable(script, base=None)]
-
+#    executables = [Executable(script, base=None)]
+    executables = []
+    
     if sys.platform == "win32":
         # Windows GUI program that can be launched without a cmd console
         executables.append(
-            Executable(script, targetName="CpoDesktop.exe", base="Win32GUI",
+            Executable(script, targetName=SHORT_APP_NAME + '.exe', base="Win32GUI",
                        icon=icon, shortcutDir="ProgramMenuFolder",
                        shortcutName=APP_NAME))
 
+        executables.append(
+            Executable(scriptwzd, targetName=SHORT_WIZARD_NAME + '.exe', base="Win32GUI",
+                       icon=icon, shortcutDir="ProgramMenuFolder",
+                       shortcutName=WIZARD_NAME))
 
-
-    scripts = []
     # special handling for data files
     packages.remove('nxdrive.data')
     packages.remove('nxdrive.data.icons')

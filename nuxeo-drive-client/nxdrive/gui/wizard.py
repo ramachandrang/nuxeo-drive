@@ -463,7 +463,7 @@ class GuideThreePage(QWizardPage):
         self.lblImg = QLabel()
         self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_APPBAR))
         self.webView = QWebView(self)
-        self.webView.setFixedHeight(120)
+        self.webView.setFixedHeight(130)
         
         from nxdrive.gui.resources import find_icon
         icon1_path = find_icon(Constants.ICON_APP_ENABLED)
@@ -472,12 +472,12 @@ class GuideThreePage(QWizardPage):
         icon2_path = find_icon(Constants.ICON_APP_DISABLED)
         data_uri2 = open(icon2_path, "rb").read().encode("base64").replace("\n", "")
         img_tag2 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri2)        
-        self.webView.setHtml(self.tr("<html><body style='background:WhiteSmoke; width:420px; height:100px; font-size:12px'>Access your %s from the Mac Menu Bar. "
-                                        "A %s icon indicates that the client is connected ready to synchronize your files. "
-                                        "If the icon is animated, synchronization is in progress. "
-                                        "A %s icon indicates that the client is not connected or not started yet. "
-                                        "Use the Start menu or check your Preferences to connect to %s site. "
-                                        "Also from the same menu, you can open your %s folder, access the site, or change other settings.</body></html>") % 
+        self.webView.setHtml(self.tr("<html><body style='background:WhiteSmoke; font-size:10px'>Access your %s from the Mac Menu Bar."
+                                        "<br>A %s icon indicates that the client is connected ready to synchronize your files. "
+                                        "<br>If the icon is animated, synchronization is in progress. "
+                                        "<br>A %s icon indicates that the client is not connected or not started yet. "
+                                        "<br>Use the Start menu or check your Preferences to connect to %s site. "
+                                        "<br>Also from the same menu, you can open your %s folder, access the site, or change other settings.</body></html>") % 
                                 (Constants.PRODUCT_NAME, img_tag1, img_tag2, Constants.PRODUCT_NAME, Constants.APP_NAME))
 #        palette = self.webView.palette();
 #        palette.setBrush(QPalette.Base, Qt.transparent);
