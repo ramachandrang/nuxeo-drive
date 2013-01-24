@@ -35,14 +35,6 @@ from nxdrive.gui.preferences_dlg import PreferencesDlg
 settings = create_settings()
 
 def default_expanded_nuxeo_drive_folder():
-    # get home directory
-    # this does not work in Windows
-#        home = os.environ["HOME"]
-#        home = os.path.expanduser("~")
-#        if (home[-1] != os.sep):
-#            home += os.sep
-#        home += Constants.DEFAULT_NXDRIVE_FOLDER
-#        return home
     return os.path.expanduser(DEFAULT_NX_DRIVE_FOLDER)
 
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
@@ -163,8 +155,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionAbout = QtGui.QAction(self.tr("About"),self)
         self.actionAbout.setObjectName("actionAbout")
         # TO BE REMOVED - BEGIN
-        self.actionDebug = QtGui.QAction(self.tr("Debug"),self)
-        self.actionDebug.setObjectName("actionDebug")        
+#        self.actionDebug = QtGui.QAction(self.tr("Debug"),self)
+#        self.actionDebug.setObjectName("actionDebug")        
         # TO BE REMOVED - END
         self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
@@ -183,8 +175,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addAction(self.actionAbout)
         
         # TO BE REMOVED - BEGIN
-        self.menuCloudDesk.addSeparator()
-        self.menuCloudDesk.addAction(self.actionDebug)
+#        self.menuCloudDesk.addSeparator()
+#        self.menuCloudDesk.addAction(self.actionDebug)
         # TO BE REMOVED - END
         
         self.menuCloudDesk.addSeparator()
@@ -204,8 +196,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.messageClicked.connect(self.handle_message_clicked)
         
         # TO BE REMOVED - BEGIN
-        self.actionDebug.triggered.connect(self.debug_stuff)        
-        # TO BE REMOVED - END
+#        self.actionDebug.triggered.connect(self.debug_stuff)        
         
         # copy to local binding
         for sb in self.controller.list_server_bindings():
@@ -327,8 +318,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                             'form_submitted_marker': '',
                             'Submit': 'Log in'
                             }
-            
-#                url += 'nxstartup.faces?token=' + fdtoken     
+                 
             url += 'nxstartup.faces?' + urllib.urlencode(query_params)
             webbrowser.open(url, new=new)
         except Exception as e:
@@ -338,15 +328,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     @QtCore.Slot(str)
     def set_icon_state(self, state):
         """Execute systray icon change operations triggered by state change
-
         The synchronization thread can update the state info but cannot
         directly call QtGui widget methods. The should be executed by the main
         thread event loop, hence the delegation to this method that is
         triggered by a signal to allow for message passing between the 2
         threads.
-
         Return True of the icon has changed state.
-
         """
         if self.get_icon_state() == state:
             # Nothing to update
@@ -360,7 +347,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 
             handler()
             self._icon_state = state
-#            log.debug('Updated icon state to: %s', state)
             return True
         except Exception as ex:
             log.debug("set_icon_state() error: %s" % str(ex))
@@ -371,12 +357,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     
     def _set_icon_enabled(self):
         self.setIcon(QIcon(Constants.APP_ICON_ENABLED))
-        
+
+    def _set_icon_paused(self):
+        self.setIcon(QIcon(Constants.APP_ICON_PAUSED))
+                
     def _set_icon_disabled(self):
         self.setIcon(QIcon(Constants.APP_ICON_DISABLED))
         
     def _set_icon_stopping(self):
-#        self.setIcon(QIcon(Constants.APP_ICON_STOPPING))
         self.setIcon(QIcon(Constants.APP_ICON_STOPPING))
         
     def _set_icon_enabled_start(self):
@@ -390,7 +378,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.stop = True
         else:
             self.timer.stop()
-            self._set_icon_stopping()
+            self._set_icon_enabled()
+        
+    def _set_icon_enabled_pause(self):
+        if self.startDelay:
+            self.stop = True
+        else:
+            self.timer.stop()
+            self._set_icon_paused()
         
     def _startAnimationDelay(self):
         assert not self.startDelay
@@ -490,13 +485,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.update_running_icon()
             self.communicator.menu.emit()
             
-        # show message notification - DO NOT SHOW THIS
-#        if n_pending > 0 or info.online_status_change():
-#            self.communicator.message.emit(self.tr("CloudDesk Operation"), 
-#                                           info.get_status_message(), 
-#                                           QtGui.QSystemTrayIcon.Information)     
-                   
-            
     def notify_pending_details(self, status):
         """NOT USED"""
         if self.state == Constants.APP_STATE_QUITTING:
@@ -580,7 +568,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def notify_stop_transfer(self):
         if self.state != Constants.APP_STATE_QUITTING:
             self.communicator.icon.emit('enabled_stop')
-        
+
+    def notify_pause_transfer(self):
+        if self.state != Constants.APP_STATE_QUITTING:
+            self.communicator.icon.emit('enabled_pause')
+                    
     def notify_local_folders(self, local_folders):
         """Cleanup unbound server bindings if any"""
         
@@ -692,7 +684,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def _syncCommand(self):
         infos = self.binding_info.values()
         if len(infos) == 0:
-            self.actionCommand.setEnabled(False) 
+            self.actionCommand.setEnabled(True) 
             return self.tr("Start")
         elif self.state == Constants.APP_STATE_STOPPED:
             self.actionCommand.setEnabled(True)
@@ -742,13 +734,13 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if len(self.controller.list_server_bindings()) == 0:
             # Launch the GUI to create a binding
             from nxdrive.gui.authentication import prompt_authentication
-            ok = prompt_authentication(self.controller, DEFAULT_NX_DRIVE_FOLDER,
+            result = prompt_authentication(self.controller, DEFAULT_NX_DRIVE_FOLDER,
                                        url=Constants.DEFAULT_CLOUDDESK_URL,
                                        username=Constants.DEFAULT_ACCOUNT)
+            ok = result[0]
             if not ok: return
             
         self.setupProcessing()
-#        self._updateOperationStatus(Constants.SYNC_STATUS_START)
     
     def started(self):
         self.actionCommand.setText("Pause")
@@ -849,7 +841,6 @@ def startApp(controller, options):
     i = CloudDeskTray(controller, options)
     i.show()
     return app.exec_()
-
 
 if __name__ == "__main__":
     sys.exit(startApp)

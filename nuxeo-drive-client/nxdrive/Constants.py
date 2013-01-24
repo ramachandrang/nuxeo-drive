@@ -6,7 +6,7 @@ Created on Oct 28, 2012
 import sys
 
 COMPANY_NAME = 'SHARP'
-PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
+PRODUCT_NAME = 'Cloud Portal Office'
 APP_NAME = PRODUCT_NAME + ' Desktop'
 SHORT_APP_NAME = 'CpoDesktop'
 OSX_APP_NAME = APP_NAME
@@ -37,7 +37,8 @@ SYNC_STATUS_STOP = 1
 SYNC_STATUS_START = 2
 APP_ICON_ENABLED = ':/indicator_icon_enabled.png'
 APP_ICON_DISABLED = ':/indicator_icon_disabled.png'
-APP_ICON_STOPPING = ':/indicator_icon_stopping.png'
+APP_ICON_PAUSED = ':/indicator_icon_paused.png'
+APP_ICON_STOPPING = ':/indicator_icon_paused.png'
 APP_ICON_PATTERN = ':/indicator_icon_%s.png'
 APP_ICON_PATTERN_ANIMATION = ':/indicator_icon_%s_%s.png'
 APP_ICON_ABOUT = ':/about_icon.png'

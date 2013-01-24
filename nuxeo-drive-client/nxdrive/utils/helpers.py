@@ -5,7 +5,7 @@ Created on Nov 7, 2012
 '''
 
 import urllib2
-from PySide.QtCore import Signal, QObject, QCoreApplication, QSettings
+from PySide.QtCore import Signal, QObject, QCoreApplication, QSettings, QObject, QEvent
 from PySide.QtGui import QSystemTrayIcon, QMessageBox
 from nxdrive import Constants
 
@@ -103,3 +103,19 @@ def create_settings():
     QCoreApplication.setOrganizationDomain(Constants.COMPANY_NAME)
     QCoreApplication.setApplicationName(Constants.SHORT_APP_NAME)
     return QSettings()
+
+
+class EventFilter(QObject):
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress:
+            return True
+        elif event.type() == QEvent.MouseButtonPress:
+            return True
+        elif event.type() == QEvent.MouseButtonRelease:
+            return True
+        elif event.type() == QEvent.MouseButtonDblClick:
+            return True
+        else:
+            # standard event processing
+            return QObject.eventFilter(self, obj, event)
+        

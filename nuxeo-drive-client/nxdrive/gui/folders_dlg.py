@@ -9,7 +9,7 @@ from PySide.QtCore import Qt, QObject, Signal, Slot, QModelIndex
 
 from nxdrive.model import SyncFolders
 from ui_sync_folders import Ui_Dialog
-from nxdrive.RemoteFolderSystem import get_model, update_model
+from nxdrive.RemoteFolderSystem import get_model, update_model, no_bindings
 from nxdrive.RemoteFolderSystem import ID_ROLE, CHECKED_ROLE
 from nxdrive import Constants
 from nxdrive.logging_config import get_logger
@@ -59,8 +59,15 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         update_model(session, root)
         
     def set_checked_state(self, parent):
-        """Initialize the state of all checkboxes based on the model"""
+        """Initialize the state of all checkboxes based on the model.
+        If there are no bindings at all, set all checkboxes.
+        This is used as default when first installing the app (e.g. thru using the wizard)."""
 
+        session = self.frontend.controller.get_session()
+        if no_bindings(session):
+            self.set_all(parent)
+            return
+        
         for i in range(parent.rowCount()):
             item = parent.child(i)
             check_state = item.data(CHECKED_ROLE)
@@ -78,7 +85,12 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         for i in range(parent.rowCount()):
             parent.child(i).setCheckState(Qt.Unchecked)
             self.clear_all(parent.child(i))
-        
+
+    def set_all(self, parent):
+        for i in range(parent.rowCount()):
+            parent.child(i).setCheckState(Qt.Checked)
+            self.set_all(parent.child(i))
+                    
     def expand(self, parent=QModelIndex(), level=2):
         if level <= 0:
             return

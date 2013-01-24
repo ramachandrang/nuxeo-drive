@@ -7,12 +7,9 @@ Created on Dec 13, 2012
 import os
 import sys
 import platform
-from sys import executable
 import shutil
-from win32com.shell import shell
-import pythoncom
 
-from PySide.QtGui import QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QIcon
+from PySide.QtGui import QApplication, QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QIcon
 from PySide.QtCore import Qt, QSettings
 
 from nxdrive import Constants
@@ -20,6 +17,7 @@ from nxdrive.model import ServerBinding, RootBinding, RecentFiles, LastKnownStat
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
+from nxdrive.utils.helpers import EventFilter
 from nxdrive.client import ProxyInfo
 from nxdrive.protocol_handler import win32
 from ui_preferences import Ui_preferencesDlg 
@@ -27,7 +25,7 @@ from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
 from folders_dlg import SyncFoldersDlg
 import nxdrive.gui.qrc_resources
-import nxdrive.Constants 
+
 # Under ZOL license - add license in documentation
 from icemac.truncatetext import truncate
 
@@ -87,7 +85,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.cbNotifications.stateChanged.connect(self.setNotifications)
         self.cbAutostart.stateChanged.connect(self.setAutostart)
         self.rbProxy.toggled.connect(self.setProxy)
-        self.rbAutodetect.toggled.connect(self.setProxy)
+        # REMOVE proxy auto-detect
+#        self.rbAutodetect.toggled.connect(self.setProxy)
         
         self.cbIconOverlays.stateChanged.connect(self.setShowIconOverlays)
         if sys.platform == 'win32':
@@ -119,23 +118,18 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 self.logEnabled = False
             else:
                 self.logEnabled = True
-            useProxy = settings.value('preferences/useProxy', 'true')   
-            if useProxy.lower() == 'true':
-                self.useProxy = True
-            elif useProxy.lower() == 'false':
-                self.useProxy = False
-            else:
-                self.useProxy = True
         else:
             self.autostart = settings.value('preferences/autostart', True)
             self.iconOverlays = settings.value('preferences/icon-overlays', True)
             self.notifications = settings.value('preferences/notifications', True)
             self.logEnabled = settings.value('preferences/log', True)
-            self.useProxy = settings.value('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
+
+        self.useProxy = settings.value('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
             
         self.rbProxy.setChecked(self.useProxy == ProxyInfo.PROXY_SERVER)
         self.rbDirect.setChecked(self.useProxy == ProxyInfo.PROXY_DIRECT)
-        self.rbAutodetect.setChecked(self.useProxy == ProxyInfo.PROXY_AUTODETECT)
+        # REMOVE proxy auto-detect
+#        self.rbAutodetect.setChecked(self.useProxy == ProxyInfo.PROXY_AUTODETECT)
         self.btnProxy.setEnabled(self.useProxy == ProxyInfo.PROXY_SERVER)
             
         self.setAttribute(Qt.WA_DeleteOnClose, False)
@@ -152,7 +146,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 (self.server_binding.remote_password is not None or self.server_binding.remote_token is not None))
         
     def _getDisconnectText(self):
-        return self.tr("Connect...") if not self._isConnected() else self.tr("Disconnect")
+        return self.tr("Sign In...") if not self._isConnected() else self.tr("Sign Out")
         
     def showEvent(self, evt):
         if evt.spontaneous:
@@ -184,12 +178,44 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #            self.tabWidget.setTabIcon(index, QIcon(Constants.APP_ICON_ABOUT))
     
     def selectFolders(self):
+        app = QApplication.instance()
+        process_filter = EventFilter(self)
+            
+        if self.controller.get_loop_count() < 1:
+            # retrieve folders and binding roots if controller hasn't done it yet
+            # NOTE/TODO: controller methods may not be thread-safe. Check..
+
+            app.setOverrideCursor(Qt.WaitCursor)
+            self.installEventFilter(process_filter)
+            try:
+                # retrieve folders
+                self.controller.get_folders(frontend=self.frontend)
+                self.controller.update_roots(frontend=self.frontend)
+
+            except Exception as e:
+                log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
+    
+            finally:
+                app.restoreOverrideCursor()
+                self.removeEventFilter(process_filter)
+            
         dlg = SyncFoldersDlg(frontend=self.frontend)
         if dlg.exec_() == QDialog.Rejected:
             return
-        # set the synchronized roots
-        self.controller.set_roots()
         
+        # set the synchronized roots
+        app.setOverrideCursor(Qt.WaitCursor)
+        self.installEventFilter(process_filter)
+        try:
+            self.controller.set_roots()
+            
+        except Exception as e:
+            log.error(self.tr('Unable to set roots for %s (%s)'), self.server_binding.server_url, str(e))
+
+        finally:
+            app.restoreOverrideCursor()
+            self.removeEventFilter(process_filter)
+            
         
     def configProxy(self):
         # Proxy... button is only enable in this case
@@ -214,36 +240,14 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         # ignore state as is called from multiple toggle events
         if self.rbProxy.isChecked():
             self.btnProxy.setEnabled(True)
-        elif self.rbAutodetect.isChecked():
-            self.btnProxy.setEnabled(False)
+        # REMOVE proxy auto-detect
+#        elif self.rbAutodetect.isChecked():
+#            self.btnProxy.setEnabled(False)
         else:
             self.btnProxy.setEnabled(False)
         
     def changeFolder(self):
         self.move_to_folder = os.path.normpath(os.path.join(self.txtCloudfolder.text(), Constants.DEFAULT_NXDRIVE_FOLDER))
-          
-#        if self._isConnected():
-#            #prompt for moving the Nuxeo Drive folder for current binding
-#            msg = QMessageBox(QMessageBox.Question, self.tr('Move Root Folder'),
-#                              self.tr("This action will move the %s folder and all its subfolders and files\n"
-#                              "to a new location. If will also stop the synchronization if running.\n"
-#                              ) % self.local_folder,
-#                              QMessageBox.Yes | QMessageBox.No)
-#            msg.setInformativeText(self.tr("Do you want to proceed?\n"
-#                                           "If yes, select the new CloudDesk folder."
-#                                           ))
-#            if msg.exec_() == QMessageBox.No:
-#                return
-#                            
-#            dst = os.path.join(selectedFld, Constants.DEFAULT_NXDRIVE_FOLDER)
-#            if os.path.exists(dst):
-#                error = QMessageBox(QMessageBox.Critical, self.tr("Path Error"), 
-#                                                          self.tr("Folder %s already exists" % dst))
-#                error.setInformativeText(self.tr("Select a folder where %s does not exist." % Constants.DEFAULT_NXDRIVE_FOLDER))
-#                error.exec_()
-#                return
-#               
-#            self.move_to_folder = dst
         
     def browseFolder(self):
         """enter or select a new path"""
@@ -286,6 +290,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtAccount.setReadOnly(True)
             self.txtAccount.deselect()
             self.txtUrl.setReadOnly(True)
+            self.btnSelect.setEnabled(True)
         else:
             self.txtAccount.setReadOnly(False)
             # widget looks still read-only
@@ -293,11 +298,12 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtAccount.setSelection(0, len(self.txtAccount.text()))
             self.txtUrl.setReadOnly(False)
             self.txtUrl.setEnabled(True)
+            self.btnSelect.setEnabled(False)
     
     def _connect(self):
         # Launch the GUI to create a binding
         from nxdrive.gui.authentication import prompt_authentication
-        from nxdrive.commandline import default_nuxeo_drive_folder
+
         local_folder = os.path.join(self.txtCloudfolder.text(), Constants.DEFAULT_NXDRIVE_FOLDER)
         remote_user = self.txtAccount.text()
         server_url = self.txtUrl.text()
@@ -381,7 +387,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
             if os.path.exists(self.move_to_folder):
                 error = QMessageBox(QMessageBox.Critical, self.tr("Path Error"), 
-                                                          self.tr("Folder %s already exists" % self.move_to_folder))
+                                                          self.tr("Folder %s already exists" % self.move_to_folder),
+                                                          QMessageBox.Ok)
                 error.setInformativeText(self.tr("Select a folder where %s does not exist." % Constants.DEFAULT_NXDRIVE_FOLDER))
                 error.exec_()
                 return QDialog.Rejected
@@ -392,12 +399,19 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #                mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)         
 #                if mbox.exec_() == QMessageBox.No:
 #                    return QDialog.Rejected                  
-
+                             
             result = self._stopServer()
             if result == QDialog.Rejected:
                 return QDialog.Rejected  
+            try:
+                shutil.move(self.local_folder, self.move_to_folder)
+            except shutil.Error as e:
+                error = QMessageBox(QMessageBox.Critical, self.tr("Move Error"), 
+                                                          self.tr("Error moving folder %s to %s" % (self.local_folder, self.move_to_folder)))
+                error.setInformativeText(str(e))
+                error.exec_()
+                return QDialog.Rejected
             
-            shutil.copytree(self.local_folder, self.move_to_folder)                    
                   
             # Update the database
             if self.frontend is not None:
@@ -445,8 +459,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         # Apply other changes
         if self.rbProxy.isChecked():
             useProxy = ProxyInfo.PROXY_SERVER
-        elif self.rbAutodetect.isChecked():
-            useProxy = ProxyInfo.PROXY_AUTODETECT
+        # REMOVE proxy auto-detect
+#        elif self.rbAutodetect.isChecked():
+#            useProxy = ProxyInfo.PROXY_AUTODETECT
         else:
             useProxy = ProxyInfo.PROXY_DIRECT
         
@@ -476,15 +491,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         settings.setValue('preferences/log', self.logEnabled)
         
         if sys.platform == 'win32':
-#            reg_settings = QSettings("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", QSettings.NativeFormat)
-#            if self.autostart:
-#                exe_path = win32.find_exe_path()
-#                if exe_path is None:
-#                    exe_path = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
-#                reg_settings.setValue("name", exe_path)
-#            else:
-#                reg_settings.remove('name')
-
             startup_folder = os.path.expanduser('~/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup')
             startup_folder = os.path.normpath(startup_folder)
             shortcut_path = os.path.join(startup_folder, Constants.SHORT_APP_NAME + '.lnk')
