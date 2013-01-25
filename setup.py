@@ -13,13 +13,13 @@ from distutils.core import setup
 if sys.platform == 'win32':
     import py2exe
 
-PRODUCT_NAME = 'CLOUD PORTAL OFFICE'
+PRODUCT_NAME = 'Cloud Portal Office'
 APP_NAME = PRODUCT_NAME + ' Desktop'
 WIZARD_NAME = PRODUCT_NAME + ' Wizard'
 SHORT_APP_NAME = 'CpoDesktop'
 SHORT_WIZARD_NAME = 'CpoWizard'
 DEFAULT_ROOT_FOLDER = PRODUCT_NAME
-version = '0.1.1'
+version = '0.1.2'
 
 def create_shortcut(path, target, wDir='', icon=''):
     shell = Dispatch('WScript.Shell')

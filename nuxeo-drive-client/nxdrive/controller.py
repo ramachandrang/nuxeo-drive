@@ -58,10 +58,11 @@ POSSIBLE_NETWORK_ERROR_TYPES = (
     ProxyConfigurationError,
 )
 
-schema_url = 'nxdrive/data/federatedloginservices.xml'
-service_url = 'https://swee.sharpb2bcloud.com/login/auth.ejs'
-ns = "http://www.inventua.com/federatedloginservices/"
-CLOUDDESK_SCOPE = 'clouddesk'
+schema_url = r'federatedloginservices.xml'
+#service_url = 'https://swee.sharpb2bcloud.com/login/auth.ejs'
+service_url = r'http://login.sharpb2bcloud.com'
+ns = r'http://www.inventua.com/federatedloginservices/'
+CLOUDDESK_SCOPE = r'clouddesk'
 
 log = get_logger(__name__)
 
@@ -467,14 +468,27 @@ class Controller(object):
 #                e.msg = base_error_message + ": " + e.msg
 #            raise            
         
-                  
+    def find_data_path(self):
+        """Introspect the Python runtime to find the frozen 'data' path."""
+        import nxdrive
+        nxdrive_path = os.path.dirname(nxdrive.__file__)
+        data_path = os.path.join(nxdrive_path, 'data')
+        frozen_suffix = os.path.join('library.zip', 'nxdrive')
+        if nxdrive_path.endswith(frozen_suffix):
+            # installed version
+            data_path = os.path.join(os.path.dirname(os.path.dirname(nxdrive_path)), 'data')
+        # TODO: handle the python.exe + python script as sys.argv[0] case as well
+        return data_path  
+                
     def _rerequest_clouddesk_token(self, username, pwdhash):
         """Request and return a token for CloudDesk (federated authentication)"""
-        location = os.path.join(os.getcwd(), schema_url)
+        
+        data_path = self.find_data_path()
+        location = os.path.join(data_path, schema_url)
         logging.getLogger('suds.client').setLevel(logging.DEBUG)
         
         try:              
-            cli = suds.client.Client('file://' + location)
+            cli = suds.client.Client('file:///' + location)
             cli.wsdl.services[0].setlocation(service_url)
             validateUserActionFlags = cli.factory.create('ValidateUserActionFlags')
             log.trace("calling %s to validate user", service_url)

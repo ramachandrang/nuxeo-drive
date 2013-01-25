@@ -17,8 +17,8 @@ APP_STATE_QUITTING = 'quitting'
 
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 # TODO replace with CloudDesk url and admin(?) account
-DEFAULT_CLOUDDESK_URL = "http://ec2-50-112-198-72.us-west-2.compute.amazonaws.com:8080/app1"
-DEFAULT_ACCOUNT = "user@shiro.com"
+DEFAULT_CLOUDDESK_URL = r'https://vpc.sharpb2bcloud.com/app1'
+DEFAULT_ACCOUNT = "user1@st.com"
 
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
 MY_DOCS = 'My Docs'

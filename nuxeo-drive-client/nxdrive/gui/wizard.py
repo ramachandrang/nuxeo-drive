@@ -46,6 +46,7 @@ class CpoWizard(QWizard):
         super(CpoWizard, self).__init__(parent)
         
         self.controller = controller
+        self.session = self.controller.get_session()
         self.communicator = Communicator()
         self.options = options
         self.skip = False
@@ -115,7 +116,7 @@ class CpoWizard(QWizard):
         return self.currentId() + 1 
  
     def _unbind_if_bound(self, folder):
-        server_binding = self.controller.get_server_binding(raise_if_missing=False)
+        server_binding = self.controller.get_server_binding(session=self.session, raise_if_missing=False)
         unbind = False
         if server_binding is not None:
             unbind = server_binding.local_folder != folder
@@ -149,6 +150,8 @@ class CpoWizard(QWizard):
         
         if self.local_folder is not None and not os.path.exists(self.local_folder):
             os.makedirs(self.local_folder)
+            
+        self.session.commit()
                 
         if sys.platform == 'win32':
             # create the Favorites shortcut
@@ -167,14 +170,22 @@ class CpoWizard(QWizard):
         
         launch = self.field('launch')
         if launch:
-            base = os.path.split(os.path.split(__file__)[0])[0]
-            script = os.path.join(base, 'commandline.py')
-            python = sys.executable
-            subprocess.Popen([python, script, '--start'])
+            exe_path = win32.find_exe_path()
+            if exe_path is not None:
+                subprocess.Popen([exe_path, '--start'])
+            else:
+                base = os.path.split(os.path.split(__file__)[0])[0]
+                script = os.path.join(base, 'commandline.py')
+                python = sys.executable
+                subprocess.Popen([python, script, '--start'])
         
         return super(CpoWizard,self).accept()
         
-        
+    def reject(self):
+        self.session.rollback()
+        return super(CpoWizard,self).reject()
+    
+    
 class IntroPage(QWizardPage):
     def __init__(self, parent=None):
         super(IntroPage, self).__init__(parent)
@@ -359,6 +370,7 @@ class InstallOptionsPage(QWizardPage):
             if self.wizard()._unbind_if_bound(folder):
                 # create the default server binding      
                 self.wizard()._bind(folder)
+
         return True
             
     def change_option(self, state):
@@ -594,7 +606,8 @@ class AdvancedPage(QWizardPage):
             self.wizard().local_folder = folder
                           
         if self.wizard()._unbind_if_bound(folder):
-            self.wizard()._bind(folder)         
+            self.wizard()._bind(folder) 
+       
         return True
     
     def cleanupPage(self):
@@ -646,7 +659,8 @@ class AdvancedPage(QWizardPage):
             # set the synchronized roots
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
-            self.wizard().controller.set_roots()
+            self.wizard().controller.set_roots(session=self.wizard().session)
+            self.wizard().session.commit()
             self.setCommitPage(True)
             
         except Exception as e:
