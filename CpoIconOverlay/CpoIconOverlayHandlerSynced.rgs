@@ -1,0 +1,38 @@
+HKCR
+{
+	NoRemove CLSID
+	{
+		ForceRemove {6780E873-C33D-4498-AC3B-694221A87964} = s 'Icon Overlay Handler for Cloud Portal Office Desktop'
+		{
+			InprocServer32 = s '%MODULE%'
+			{
+				val ThreadingModel = s 'Apartment'
+			}
+			Version = s '1.0'
+		}
+	}
+}
+
+HKLM
+{
+	NoRemove Software
+	{
+		NoRemove Microsoft
+		{
+			NoRemove Windows
+			{
+				NoRemove CurrentVersion
+				{
+					NoRemove Explorer
+					{
+						NoRemove ShellIconOverlayIdentifiers
+						{
+							ForceRemove CpoDesktop2 = 
+								s '{6780E873-C33D-4498-AC3B-694221A87964}'
+						}
+					}
+				}
+			}
+		}
+	}
+}
