@@ -31,6 +31,7 @@ import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
+import org.nuxeo.ecm.core.api.security.SecurityConstants;
 import org.nuxeo.ecm.platform.filemanager.api.FileManager;
 import org.nuxeo.ecm.platform.query.api.PageProvider;
 import org.nuxeo.ecm.platform.query.api.PageProviderService;
@@ -44,31 +45,41 @@ import org.nuxeo.runtime.api.Framework;
 public class DocumentBackedFolderItem extends
         AbstractDocumentBackedFileSystemItem implements FolderItem {
 
+    private static final long serialVersionUID = 1L;
+
     private static final String FOLDER_ITEM_CHILDREN_PAGE_PROVIDER = "FOLDER_ITEM_CHILDREN";
+
+    protected boolean canCreateChild;
 
     public DocumentBackedFolderItem(String factoryName, DocumentModel doc)
             throws ClientException {
         super(factoryName, doc);
+        initialize(doc);
     }
 
-    /*--------------------- AbstractFileSystemItem ---------------------*/
-    @Override
-    public String getName() throws ClientException {
-        DocumentModel doc = getDocument(getSession());
-        return (String) doc.getPropertyValue("dc:title");
+    public DocumentBackedFolderItem(String factoryName, String parentId,
+            DocumentModel doc) throws ClientException {
+        super(factoryName, parentId, doc);
+        initialize(doc);
     }
 
-    @Override
-    public boolean isFolder() {
-        return true;
+    protected DocumentBackedFolderItem() {
+        // Needed for JSON deserialization
     }
 
+    /*--------------------- FileSystemItem ---------------------*/
     @Override
     public void rename(String name) throws ClientException {
+        // Update doc properties
         CoreSession session = getSession();
         DocumentModel doc = getDocument(session);
         doc.setPropertyValue("dc:title", name);
-        session.saveDocument(doc);
+        doc = session.saveDocument(doc);
+        session.save();
+        // Update FileSystemItem attributes
+        this.docTitle = name;
+        this.name = name;
+        updateLastModificationDate(doc);
     }
 
     /*--------------------- FolderItem -----------------*/
@@ -86,12 +97,18 @@ public class DocumentBackedFolderItem extends
         List<FileSystemItem> children = new ArrayList<FileSystemItem>(
                 dmChildren.size());
         for (DocumentModel dmChild : dmChildren) {
-            FileSystemItem child = dmChild.getAdapter(FileSystemItem.class);
+            FileSystemItem child = getFileSystemItemAdapterService().getFileSystemItem(
+                    dmChild, id);
             if (child != null) {
                 children.add(child);
             }
         }
         return children;
+    }
+
+    @Override
+    public boolean getCanCreateChild() {
+        return canCreateChild;
     }
 
     @Override
@@ -105,7 +122,8 @@ public class DocumentBackedFolderItem extends
                                 "Cannot create folder named '%s' as a child of doc %s. Probably because of the allowed sub-types for this doc type, please check them.",
                                 name, docPath));
             }
-            return new DocumentBackedFolderItem(getFactoryName(), folder);
+            return (FolderItem) getFileSystemItemAdapterService().getFileSystemItem(
+                    folder, id);
         } catch (Exception e) {
             throw ClientException.wrap(e);
         }
@@ -124,15 +142,28 @@ public class DocumentBackedFolderItem extends
                                 "Cannot create file '%s' as a child of doc %s. Probably because there are no file importers registered, please check the contributions to the <extension target=\"org.nuxeo.ecm.platform.filemanager.service.FileManagerService\" point=\"plugins\"> extension point.",
                                 fileName, docPath));
             }
-            return new DocumentBackedFileItem(getFactoryName(), file);
+            return (FileItem) getFileSystemItemAdapterService().getFileSystemItem(
+                    file, id);
         } catch (Exception e) {
             throw ClientException.wrap(e);
         }
     }
 
     /*--------------------- Protected -----------------*/
+    protected void initialize(DocumentModel doc) throws ClientException {
+        this.name = docTitle;
+        this.folder = true;
+        this.canCreateChild = doc.getCoreSession().hasPermission(doc.getRef(),
+                SecurityConstants.ADD_CHILDREN);
+    }
+
     protected FileManager getFileManager() {
         return Framework.getLocalService(FileManager.class);
+    }
+
+    /*---------- Needed for JSON deserialization ----------*/
+    protected void setCanCreateChild(boolean canCreateChild) {
+        this.canCreateChild = canCreateChild;
     }
 
 }

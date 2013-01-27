@@ -19,6 +19,7 @@ package org.nuxeo.drive.seam;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -87,8 +88,7 @@ public class NuxeoDriveActions implements Serializable {
         Boolean isUnderSync = (Boolean) cache.get(IS_UNDER_SYNCHRONIZATION_ROOT);
         if (isUnderSync == null) {
             NuxeoDriveManager driveManager = Framework.getLocalService(NuxeoDriveManager.class);
-            Set<IdRef> references = driveManager.getSynchronizationRootReferences(
-                    documentManager.getPrincipal().getName(), documentManager);
+            Set<IdRef> references = driveManager.getSynchronizationRootReferences(documentManager);
             DocumentModelList path = navigationContext.getCurrentPath();
             DocumentModel root = null;
             // list is ordered such as closest synchronized ancestor is
@@ -228,9 +228,7 @@ public class NuxeoDriveActions implements Serializable {
     public DocumentModelList getSynchronizationRoots() throws ClientException {
         DocumentModelList syncRoots = new DocumentModelListImpl();
         NuxeoDriveManager driveManager = Framework.getLocalService(NuxeoDriveManager.class);
-        String userName = documentManager.getPrincipal().getName();
-        Set<IdRef> syncRootRefs = driveManager.getSynchronizationRootReferences(
-                userName, documentManager);
+        Set<IdRef> syncRootRefs = driveManager.getSynchronizationRootReferences(documentManager);
         for (IdRef syncRootRef : syncRootRefs) {
             syncRoots.add(documentManager.getDocument(syncRootRef));
         }
@@ -249,6 +247,9 @@ public class NuxeoDriveActions implements Serializable {
         FacesContext ctx = FacesContext.getCurrentInstance();
         Set<String> paths = ctx.getExternalContext().getResourcePaths(
                 "/nuxeo-drive");
+        if (paths == null) {
+            return Collections.emptyList();
+        }
         String baseURL = VirtualHostHelper.getBaseURL((ServletRequest) ctx.getExternalContext().getRequest());
         List<DesktopPackageDefinition> packages = new ArrayList<DesktopPackageDefinition>();
         for (String path : paths) {

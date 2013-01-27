@@ -38,6 +38,8 @@ public interface FolderItem extends FileSystemItem {
     @JsonIgnore
     List<FileSystemItem> getChildren() throws ClientException;
 
+    boolean getCanCreateChild();
+
     FileItem createFile(Blob blob) throws ClientException;
 
     FolderItem createFolder(String name) throws ClientException;

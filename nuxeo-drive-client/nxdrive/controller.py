@@ -10,7 +10,7 @@ from sqlalchemy import asc
 from sqlalchemy import or_
 
 import nxdrive
-from nxdrive.client import NuxeoClient
+from nxdrive.client import NuxeoClient, Unauthorized
 from nxdrive.client import LocalClient
 from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
@@ -313,10 +313,39 @@ class Controller(object):
         local_folder = os.path.abspath(os.path.expanduser(local_folder))
         binding = self.get_server_binding(local_folder, raise_if_missing=True,
                                           session=session)
+
+        # Revoke token if necessary
+        if binding.remote_token is not None:
+            try:
+                nxclient = self.nuxeo_client_factory(
+                        binding.server_url,
+                        binding.remote_user,
+                        self.device_id,
+                        token=binding.remote_token)
+                log.info("Revoking token for '%s' with account '%s'",
+                         binding.server_url, binding.remote_user)
+                nxclient.revoke_token()
+            except Unauthorized:
+                log.warning("Could not connect to server '%s' to revoke token",
+                            binding.server_url)
+
+        # Invalidate client cache
+        self.invalidate_client_cache(binding.server_url)
+
+        # Delete binding info in local DB
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
         session.delete(binding)
         session.commit()
+
+    def unbind_all(self):
+        """Unbind all server and revoke all tokens
+
+        This is useful for cleanup in integration test code.
+        """
+        session = self.get_session()
+        for sb in session.query(ServerBinding).all():
+            self.unbind_server(sb.local_folder)
 
     def get_root_binding(self, local_root, raise_if_missing=False,
                          session=None):
@@ -421,46 +450,23 @@ class Controller(object):
                      server_binding.server_url)
             session.add(RootBinding(local_root, repository, remote_info.uid))
 
-            # Initialize the metadata info by recursive walk on the remote
-            # folder structure
-            self._recursive_init(lcclient, local_info, nxclient, remote_info)
-        session.commit()
-
-    def _recursive_init(self, local_client, local_info, remote_client,
-                        remote_info):
-        """Initialize the metadata table by walking the binding tree"""
-
-        folderish = remote_info.folderish
-        state = LastKnownState(local_client.base_folder,
-                               local_info=local_info,
-                               remote_info=remote_info)
-        if folderish:
-            # Mark as synchronized as there is nothing to download later
-            state.update_state(local_state='synchronized',
-                               remote_state='synchronized')
-        else:
-            # Mark remote as updated to trigger a download of the binary
-            # attachment during the next synchro
-            state.update_state(local_state='synchronized',
-                               remote_state='modified')
-        session = self.get_session()
-        session.add(state)
-
-        if folderish:
-            # TODO: how to handle the too many children case properly?
-            # Shall we introduce some pagination or shall we raise an
-            # exception if a folder contains too many children?
-            children = remote_client.get_children_info(remote_info.uid)
-            for child_remote_info in children:
-                if child_remote_info.folderish:
-                    child_local_path = local_client.make_folder(
-                        local_info.path, child_remote_info.name)
-                else:
-                    child_local_path = local_client.make_file(
-                        local_info.path, child_remote_info.name)
-                child_local_info = local_client.get_info(child_local_path)
-                self._recursive_init(local_client, child_local_info,
-                                     remote_client, child_remote_info)
+            # Initialize the metadata of the root and let the synchronizer
+            # scan the folder recursively
+            state = LastKnownState(lcclient.base_folder,
+                    local_info=local_info, remote_info=remote_info)
+            if remote_info.folderish:
+                # Mark as synchronized as there is nothing to download later
+                state.update_state(local_state='synchronized',
+                        remote_state='synchronized')
+            else:
+                # Mark remote as updated to trigger a download of the binary
+                # attachment during the next synchro
+                state.update_state(local_state='synchronized',
+                                remote_state='modified')
+            session.add(state)
+            self.synchronizer.scan_local(local_root, session=session)
+            self.synchronizer.scan_remote(local_root, session=session)
+            session.commit()
 
     def unbind_root(self, local_root, session=None):
         """Remove binding on a root folder"""

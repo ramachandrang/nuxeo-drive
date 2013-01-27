@@ -34,15 +34,23 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 public interface FileSystemItemAdapterService {
 
     /**
-     * Gets the {@link FileSystemItem} adapter for the given
-     * {@link DocumentModel}.
+     * Gets the {@link FileSystemItem} for the given {@link DocumentModel}.
      *
-     * @return the {@link FileSystemItem} adapter or null if the
-     *         {@link DocumentModel} is not adaptable as a
-     *         {@link FileSystemItem}
+     * @return the {@link FileSystemItem} or null if the {@link DocumentModel}
+     *         is not adaptable as a {@link FileSystemItem}
      * @see FileSystemItemFactory#getFileSystemItem(DocumentModel)
      */
-    FileSystemItem getFileSystemItemAdapter(DocumentModel doc)
+    FileSystemItem getFileSystemItem(DocumentModel doc) throws ClientException;
+
+    /**
+     * Gets the {@link FileSystemItem} for the given {@link DocumentModel}
+     * forcing its parent id with the given id.
+     *
+     * @return the {@link FileSystemItem} or null if the {@link DocumentModel}
+     *         is not adaptable as a {@link FileSystemItem}
+     * @see FileSystemItemFactory#getFileSystemItem(DocumentModel, String)
+     */
+    FileSystemItem getFileSystemItem(DocumentModel doc, String parentId)
             throws ClientException;
 
     /**
@@ -55,5 +63,10 @@ public interface FileSystemItemAdapterService {
      */
     FileSystemItemFactory getFileSystemItemFactoryForId(String id)
             throws ClientException;
+
+    /**
+     * Gets the {@link TopLevelFolderItemFactory}.
+     */
+    TopLevelFolderItemFactory getTopLevelFolderItemFactory();
 
 }

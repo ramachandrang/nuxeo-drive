@@ -35,7 +35,10 @@ import org.nuxeo.drive.adapter.FileSystemItem;
 import org.nuxeo.drive.adapter.FolderItem;
 import org.nuxeo.drive.service.FileSystemItemAdapterService;
 import org.nuxeo.drive.service.FileSystemItemFactory;
+import org.nuxeo.drive.service.TopLevelFolderItemFactory;
 import org.nuxeo.drive.service.impl.DefaultFileSystemItemFactory;
+import org.nuxeo.drive.service.impl.DefaultSyncRootFolderItemFactory;
+import org.nuxeo.drive.service.impl.DefaultTopLevelFolderItemFactory;
 import org.nuxeo.drive.service.impl.FileSystemItemAdapterServiceImpl;
 import org.nuxeo.drive.service.impl.FileSystemItemFactoryDescriptor;
 import org.nuxeo.drive.service.impl.FileSystemItemFactoryWrapper;
@@ -46,8 +49,6 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.impl.blob.StringBlob;
 import org.nuxeo.ecm.core.test.CoreFeature;
 import org.nuxeo.ecm.core.test.TransactionalFeature;
-import org.nuxeo.ecm.core.test.annotations.Granularity;
-import org.nuxeo.ecm.core.test.annotations.RepositoryConfig;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.reload.ReloadService;
 import org.nuxeo.runtime.test.runner.Deploy;
@@ -65,7 +66,6 @@ import com.google.inject.Inject;
  */
 @RunWith(FeaturesRunner.class)
 @Features({ TransactionalFeature.class, CoreFeature.class })
-@RepositoryConfig(cleanup = Granularity.METHOD)
 @Deploy({ "org.nuxeo.drive.core", "org.nuxeo.runtime.reload" })
 @LocalDeploy({
         "org.nuxeo.drive.core:OSGI-INF/test-nuxeodrive-types-contrib.xml",
@@ -81,6 +81,8 @@ public class TestFileSystemItemAdapterService {
     @Inject
     protected RuntimeHarness harness;
 
+    protected String rootDocFileSystemItemId;
+
     protected DocumentModel file;
 
     protected DocumentModel folder;
@@ -88,10 +90,16 @@ public class TestFileSystemItemAdapterService {
     protected DocumentModel custom;
 
     @Before
-    public void createTestDocs() throws ClientException {
+    public void createTestDocs() throws Exception {
+
+        rootDocFileSystemItemId = "dummyFacetFactory/test/"
+                + session.getRootDocument().getId();
 
         file = session.createDocumentModel("/", "aFile", "File");
         file.setPropertyValue("dc:creator", "Joe");
+        Blob blob = new StringBlob("Content of Joe's file.");
+        blob.setFilename("Joe's file.txt");
+        file.setPropertyValue("file:content", (Serializable) blob);
         file = session.createDocument(file);
 
         folder = session.createDocumentModel("/", "aFolder", "Folder");
@@ -101,7 +109,7 @@ public class TestFileSystemItemAdapterService {
 
         custom = session.createDocumentModel("/", "aCustom", "Custom");
         custom.setPropertyValue("dc:creator", "Bonnie");
-        Blob blob = new StringBlob("Content of the custom document's blob.");
+        blob = new StringBlob("Content of the custom document's blob.");
         blob.setFilename("Bonnie's file.txt");
         custom.setPropertyValue("file:content", (Serializable) blob);
         custom = session.createDocument(custom);
@@ -113,13 +121,22 @@ public class TestFileSystemItemAdapterService {
     public void testService() throws Exception {
 
         // ------------------------------------------------------
-        // Check factory descriptors
+        // Check file system item factory descriptors
         // ------------------------------------------------------
-        Map<String, FileSystemItemFactoryDescriptor> factoryDescs = ((FileSystemItemAdapterServiceImpl) fileSystemItemAdapterService).getFactoryDescriptors();
-        assertNotNull(factoryDescs);
-        assertEquals(3, factoryDescs.size());
+        Map<String, FileSystemItemFactoryDescriptor> fileSystemItemFactoryDescs = ((FileSystemItemAdapterServiceImpl) fileSystemItemAdapterService).getFileSystemItemFactoryDescriptors();
+        assertNotNull(fileSystemItemFactoryDescs);
+        assertEquals(4, fileSystemItemFactoryDescs.size());
 
-        FileSystemItemFactoryDescriptor desc = factoryDescs.get("dummyDocTypeFactory");
+        FileSystemItemFactoryDescriptor desc = fileSystemItemFactoryDescs.get("defaultSyncRootFolderItemFactory");
+        assertNotNull(desc);
+        assertTrue(desc.isEnabled());
+        assertEquals(10, desc.getOrder());
+        assertEquals("defaultSyncRootFolderItemFactory", desc.getName());
+        assertNull(desc.getDocType());
+        assertEquals("DriveSynchronized", desc.getFacet());
+        assertTrue(desc.getFactory() instanceof DefaultSyncRootFolderItemFactory);
+
+        desc = fileSystemItemFactoryDescs.get("dummyDocTypeFactory");
         assertNotNull(desc);
         assertTrue(desc.isEnabled());
         assertEquals(20, desc.getOrder());
@@ -128,7 +145,7 @@ public class TestFileSystemItemAdapterService {
         assertNull(desc.getFacet());
         assertTrue(desc.getFactory() instanceof DummyFileItemFactory);
 
-        desc = factoryDescs.get("dummyFacetFactory");
+        desc = fileSystemItemFactoryDescs.get("dummyFacetFactory");
         assertNotNull(desc);
         assertTrue(desc.isEnabled());
         assertEquals(30, desc.getOrder());
@@ -137,7 +154,7 @@ public class TestFileSystemItemAdapterService {
         assertEquals("Folderish", desc.getFacet());
         assertTrue(desc.getFactory() instanceof DummyFolderItemFactory);
 
-        desc = factoryDescs.get("defaultFileSystemItemFactory");
+        desc = fileSystemItemFactoryDescs.get("defaultFileSystemItemFactory");
         assertNotNull(desc);
         assertTrue(desc.isEnabled());
         assertEquals(50, desc.getOrder());
@@ -147,27 +164,34 @@ public class TestFileSystemItemAdapterService {
         assertTrue(desc.getFactory() instanceof DefaultFileSystemItemFactory);
 
         // ------------------------------------------------------
-        // Check ordered factories
+        // Check ordered file system item factories
         // ------------------------------------------------------
-        List<FileSystemItemFactoryWrapper> factories = ((FileSystemItemAdapterServiceImpl) fileSystemItemAdapterService).getFactories();
-        assertNotNull(factories);
-        assertEquals(3, factories.size());
+        List<FileSystemItemFactoryWrapper> fileSystemItemFactories = ((FileSystemItemAdapterServiceImpl) fileSystemItemAdapterService).getFileSystemItemFactories();
+        assertNotNull(fileSystemItemFactories);
+        assertEquals(4, fileSystemItemFactories.size());
 
-        FileSystemItemFactoryWrapper factory = factories.get(0);
+        FileSystemItemFactoryWrapper factory = fileSystemItemFactories.get(0);
+        assertNotNull(factory);
+        assertNull(factory.getDocType());
+        assertEquals("DriveSynchronized", factory.getFacet());
+        assertTrue(factory.getFactory().getClass().getName().endsWith(
+                "DefaultSyncRootFolderItemFactory"));
+
+        factory = fileSystemItemFactories.get(1);
         assertNotNull(factory);
         assertEquals("File", factory.getDocType());
         assertNull(factory.getFacet());
         assertTrue(factory.getFactory().getClass().getName().endsWith(
                 "DummyFileItemFactory"));
 
-        factory = factories.get(1);
+        factory = fileSystemItemFactories.get(2);
         assertNotNull(factory);
         assertNull(factory.getDocType());
         assertEquals("Folderish", factory.getFacet());
         assertTrue(factory.getFactory().getClass().getName().endsWith(
                 "DummyFolderItemFactory"));
 
-        factory = factories.get(2);
+        factory = fileSystemItemFactories.get(3);
         assertNotNull(factory);
         assertNull(factory.getDocType());
         assertNull(factory.getFacet());
@@ -175,35 +199,39 @@ public class TestFileSystemItemAdapterService {
                 "DefaultFileSystemItemFactory"));
 
         // ------------------------------------------------------
-        // Check #getFileSystemItemAdapter(DocumentModel doc)
+        // Check #getFileSystemItem(DocumentModel doc)
         // ------------------------------------------------------
         // File => should use the dummyDocTypeFactory bound to the
         // DummyFileItemFactory class
-        FileSystemItem fsItem = fileSystemItemAdapterService.getFileSystemItemAdapter(file);
+        FileSystemItem fsItem = fileSystemItemAdapterService.getFileSystemItem(file);
         assertNotNull(fsItem);
         assertTrue(fsItem instanceof DummyFileItem);
         assertEquals("dummyDocTypeFactory/test/" + file.getId(), fsItem.getId());
+        assertEquals(rootDocFileSystemItemId, fsItem.getParentId());
         assertEquals("Dummy file with id " + file.getId(), fsItem.getName());
         assertFalse(fsItem.isFolder());
         assertEquals("Joe", fsItem.getCreator());
 
         // Folder => should use the dummyFacetFactory bound to the
         // DummyFolderItemFactory class
-        fsItem = fileSystemItemAdapterService.getFileSystemItemAdapter(folder);
+        fsItem = fileSystemItemAdapterService.getFileSystemItem(folder);
         assertNotNull(fsItem);
         assertTrue(fsItem instanceof DummyFolderItem);
+        assertTrue(((FolderItem) fsItem).getCanCreateChild());
         assertEquals("dummyFacetFactory/test/" + folder.getId(), fsItem.getId());
+        assertEquals(rootDocFileSystemItemId, fsItem.getParentId());
         assertEquals("Dummy folder with id " + folder.getId(), fsItem.getName());
         assertTrue(fsItem.isFolder());
         assertEquals("Jack", fsItem.getCreator());
 
         // Custom => should use the defaultFileSystemItemFactory bound to the
         // DefaultFileSystemItemFactory class
-        fsItem = fileSystemItemAdapterService.getFileSystemItemAdapter(custom);
+        fsItem = fileSystemItemAdapterService.getFileSystemItem(custom);
         assertNotNull(fsItem);
         assertTrue(fsItem instanceof FileItem);
         assertEquals("defaultFileSystemItemFactory/test/" + custom.getId(),
                 fsItem.getId());
+        assertEquals(rootDocFileSystemItemId, fsItem.getParentId());
         assertEquals("Bonnie's file.txt", fsItem.getName());
         assertFalse(fsItem.isFolder());
         assertEquals("Bonnie", fsItem.getCreator());
@@ -211,6 +239,16 @@ public class TestFileSystemItemAdapterService {
         assertEquals("Bonnie's file.txt", fileFsItemBlob.getFilename());
         assertEquals("Content of the custom document's blob.",
                 fileFsItemBlob.getString());
+
+        // ------------------------------------------------------
+        // Check #getFileSystemItem(DocumentModel doc, String parentId)
+        // ------------------------------------------------------
+        // File => should use the dummyDocTypeFactory bound to the
+        // DummyFileItemFactory class
+        fsItem = fileSystemItemAdapterService.getFileSystemItem(file,
+                "fileParentId");
+        assertNotNull(fsItem);
+        assertEquals("fileParentId", fsItem.getParentId());
 
         // -------------------------------------------------------------
         // Check #getFileSystemItemFactoryForId(String id)
@@ -222,6 +260,16 @@ public class TestFileSystemItemAdapterService {
         assertEquals("defaultFileSystemItemFactory", fsItemFactory.getName());
         assertTrue(fsItemFactory.getClass().getName().endsWith(
                 "DefaultFileSystemItemFactory"));
+        assertTrue(fsItemFactory.canHandleFileSystemItemId(fsItemId));
+
+        // Top level folder item factory
+        fsItemId = "org.nuxeo.drive.service.impl.DefaultTopLevelFolderItemFactory/";
+        fsItemFactory = fileSystemItemAdapterService.getFileSystemItemFactoryForId(fsItemId);
+        assertNotNull(fsItemFactory);
+        assertTrue(fsItemFactory.getName().endsWith(
+                "DefaultTopLevelFolderItemFactory"));
+        assertTrue(fsItemFactory.getClass().getName().endsWith(
+                "DefaultTopLevelFolderItemFactory"));
         assertTrue(fsItemFactory.canHandleFileSystemItemId(fsItemId));
 
         // Factory with #canHandleFileSystemItemId returning false
@@ -256,6 +304,15 @@ public class TestFileSystemItemAdapterService {
                     "No fileSystemItemFactory found for FileSystemItem with id nonExistentFactoryName/test/someId. Please check the contributions to the following extension point: <extension target=\"org.nuxeo.drive.service.FileSystemItemAdapterService\" point=\"fileSystemItemFactory\"> and make sure there is at least one defining a FileSystemItemFactory class for which the #canHandleFileSystemItemId(String id) method returns true.",
                     e.getMessage());
         }
+
+        // -------------------------------------------------------------
+        // Check #getTopLevelFolderItemFactory()
+        // -------------------------------------------------------------
+        TopLevelFolderItemFactory topLevelFactory = fileSystemItemAdapterService.getTopLevelFolderItemFactory();
+        assertNotNull(topLevelFactory);
+        assertTrue(topLevelFactory.getClass().getName().endsWith(
+                "DefaultTopLevelFolderItemFactory"));
+        assertTrue(topLevelFactory instanceof DefaultTopLevelFolderItemFactory);
     }
 
     @Test
@@ -266,13 +323,22 @@ public class TestFileSystemItemAdapterService {
         Framework.getLocalService(ReloadService.class).reload();
 
         // ------------------------------------------------------
-        // Check factory descriptors
+        // Check file system item factory descriptors
         // ------------------------------------------------------
-        Map<String, FileSystemItemFactoryDescriptor> factoryDescs = ((FileSystemItemAdapterServiceImpl) fileSystemItemAdapterService).getFactoryDescriptors();
-        assertNotNull(factoryDescs);
-        assertEquals(2, factoryDescs.size());
+        Map<String, FileSystemItemFactoryDescriptor> fileSystemItemFactoryDescs = ((FileSystemItemAdapterServiceImpl) fileSystemItemAdapterService).getFileSystemItemFactoryDescriptors();
+        assertNotNull(fileSystemItemFactoryDescs);
+        assertEquals(3, fileSystemItemFactoryDescs.size());
 
-        FileSystemItemFactoryDescriptor desc = factoryDescs.get("dummyFacetFactory");
+        FileSystemItemFactoryDescriptor desc = fileSystemItemFactoryDescs.get("defaultSyncRootFolderItemFactory");
+        assertNotNull(desc);
+        assertTrue(desc.isEnabled());
+        assertEquals(10, desc.getOrder());
+        assertEquals("defaultSyncRootFolderItemFactory", desc.getName());
+        assertNull(desc.getDocType());
+        assertEquals("DriveSynchronized", desc.getFacet());
+        assertTrue(desc.getFactory() instanceof DefaultSyncRootFolderItemFactory);
+
+        desc = fileSystemItemFactoryDescs.get("dummyFacetFactory");
         assertNotNull(desc);
         assertTrue(desc.isEnabled());
         assertEquals(20, desc.getOrder());
@@ -281,7 +347,7 @@ public class TestFileSystemItemAdapterService {
         assertEquals("Folderish", desc.getFacet());
         assertTrue(desc.getFactory() instanceof DefaultFileSystemItemFactory);
 
-        desc = factoryDescs.get("dummyDocTypeFactory");
+        desc = fileSystemItemFactoryDescs.get("dummyDocTypeFactory");
         assertNotNull(desc);
         assertTrue(desc.isEnabled());
         assertEquals(30, desc.getOrder());
@@ -291,48 +357,69 @@ public class TestFileSystemItemAdapterService {
         assertTrue(desc.getFactory() instanceof DefaultFileSystemItemFactory);
 
         // ------------------------------------------------------
-        // Check ordered factories
+        // Check ordered file system item factories
         // ------------------------------------------------------
-        List<FileSystemItemFactoryWrapper> factories = ((FileSystemItemAdapterServiceImpl) fileSystemItemAdapterService).getFactories();
-        assertNotNull(factories);
-        assertEquals(2, factories.size());
+        List<FileSystemItemFactoryWrapper> fileSystemItemFactories = ((FileSystemItemAdapterServiceImpl) fileSystemItemAdapterService).getFileSystemItemFactories();
+        assertNotNull(fileSystemItemFactories);
+        assertEquals(3, fileSystemItemFactories.size());
 
-        FileSystemItemFactoryWrapper factory = factories.get(0);
+        FileSystemItemFactoryWrapper factory = fileSystemItemFactories.get(0);
+        assertNotNull(factory);
+        assertNull(factory.getDocType());
+        assertEquals("DriveSynchronized", factory.getFacet());
+        assertTrue(factory.getFactory().getClass().getName().endsWith(
+                "DefaultSyncRootFolderItemFactory"));
+
+        factory = fileSystemItemFactories.get(1);
         assertNotNull(factory);
         assertNull(factory.getDocType());
         assertEquals("Folderish", factory.getFacet());
         assertTrue(factory.getFactory().getClass().getName().endsWith(
                 "DefaultFileSystemItemFactory"));
 
-        factory = factories.get(1);
+        factory = fileSystemItemFactories.get(2);
         assertNotNull(factory);
         assertEquals("File", factory.getDocType());
         assertNull(factory.getFacet());
         assertTrue(factory.getFactory().getClass().getName().endsWith(
                 "DefaultFileSystemItemFactory"));
 
-        // ------------------------------------------------------
-        // Check #getFileSystemItemAdapter(DocumentModel doc)
-        // ------------------------------------------------------
+        // -------------------------------------------------------------
+        // Check #getFileSystemItem(DocumentModel doc)
+        // -------------------------------------------------------------
         // File => should use the dummyDocTypeFactory bound to the
         // DefaultFileSystemItemFactory class, but return null because the
         // document has no file
-        FileSystemItem fsItem = fileSystemItemAdapterService.getFileSystemItemAdapter(file);
+        file.setPropertyValue("file:content", null);
+        session.saveDocument(file);
+        FileSystemItem fsItem = fileSystemItemAdapterService.getFileSystemItem(file);
         assertNull(fsItem);
 
         // Folder => should use the dummyFacetFactory bound to the
         // DefaultFileSystemItemFactory class
-        fsItem = fileSystemItemAdapterService.getFileSystemItemAdapter(folder);
+        fsItem = fileSystemItemAdapterService.getFileSystemItem(folder);
         assertNotNull(fsItem);
         assertTrue(fsItem instanceof FolderItem);
+        assertTrue(((FolderItem) fsItem).getCanCreateChild());
         assertEquals("dummyFacetFactory/test/" + folder.getId(), fsItem.getId());
+        assertEquals(rootDocFileSystemItemId, fsItem.getParentId());
         assertEquals("Jack's folder", fsItem.getName());
         assertTrue(fsItem.isFolder());
         assertEquals("Jack", fsItem.getCreator());
 
         // Custom => should find no matching fileSystemItemFactory
-        fsItem = fileSystemItemAdapterService.getFileSystemItemAdapter(custom);
+        fsItem = fileSystemItemAdapterService.getFileSystemItem(custom);
         assertNull(fsItem);
+
+        // -------------------------------------------------------------
+        // Check #getFileSystemItem(DocumentModel doc, String parentId)
+        // -------------------------------------------------------------
+        // Folder => should use the dummyFacetFactory bound to the
+        // DefaultFileSystemItemFactory class
+        fsItem = fileSystemItemAdapterService.getFileSystemItem(folder,
+                "folderParentId");
+        assertNotNull(fsItem);
+        assertEquals("folderParentId", fsItem.getParentId());
 
         // -------------------------------------------------------------
         // Check #getFileSystemItemFactoryForId(String id)
@@ -365,5 +452,24 @@ public class TestFileSystemItemAdapterService {
         assertTrue(fsItemFactory.getClass().getName().endsWith(
                 "DefaultFileSystemItemFactory"));
         assertTrue(fsItemFactory.canHandleFileSystemItemId(fsItemId));
+
+        // Top level folder item factory
+        fsItemId = "org.nuxeo.drive.service.adapter.DummyTopLevelFolderItemFactory/";
+        fsItemFactory = fileSystemItemAdapterService.getFileSystemItemFactoryForId(fsItemId);
+        assertNotNull(fsItemFactory);
+        assertTrue(fsItemFactory.getName().endsWith(
+                "DummyTopLevelFolderItemFactory"));
+        assertTrue(fsItemFactory.getClass().getName().endsWith(
+                "DummyTopLevelFolderItemFactory"));
+        assertTrue(fsItemFactory.canHandleFileSystemItemId(fsItemId));
+
+        // -------------------------------------------------------------
+        // Check #getTopLevelFolderItemFactory()
+        // -------------------------------------------------------------
+        TopLevelFolderItemFactory topLevelFactory = fileSystemItemAdapterService.getTopLevelFolderItemFactory();
+        assertNotNull(topLevelFactory);
+        assertTrue(topLevelFactory.getClass().getName().endsWith(
+                "DummyTopLevelFolderItemFactory"));
+        assertTrue(topLevelFactory instanceof DummyTopLevelFolderItemFactory);
     }
 }

@@ -17,13 +17,19 @@
 package org.nuxeo.drive.adapter.impl;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.nuxeo.common.utils.URIUtils;
 import org.nuxeo.drive.adapter.FileItem;
+import org.nuxeo.drive.service.NuxeoDriveManager;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.blobholder.BlobHolder;
+import org.nuxeo.ecm.core.api.model.PropertyException;
+import org.nuxeo.ecm.core.versioning.VersioningService;
+import org.nuxeo.runtime.api.Framework;
 
 /**
  * {@link DocumentModel} backed implementation of a {@link FileItem}.
@@ -33,37 +39,50 @@ import org.nuxeo.ecm.core.api.blobholder.BlobHolder;
 public class DocumentBackedFileItem extends
         AbstractDocumentBackedFileSystemItem implements FileItem {
 
+    private static final long serialVersionUID = 1L;
+
+    private static final Log log = LogFactory.getLog(DocumentBackedFileItem.class);
+
+    private static final String MD5_DIGEST_ALGORITHM = "MD5";
+
+    protected String digestAlgorithm;
+
+    protected String digest;
+
+    protected boolean canUpdate;
+
     public DocumentBackedFileItem(String factoryName, DocumentModel doc)
             throws ClientException {
         super(factoryName, doc);
+        initialize(doc);
     }
 
-    /*--------------------- AbstractFileSystemItem ---------------------*/
-    @Override
-    public String getName() throws ClientException {
-        DocumentModel doc = getDocument(getSession());
-        return getFileName(doc);
+    public DocumentBackedFileItem(String factoryName, String parentId,
+            DocumentModel doc) throws ClientException {
+        super(factoryName, parentId, doc);
+        initialize(doc);
     }
 
-    @Override
-    public boolean isFolder() {
-        return false;
+    protected DocumentBackedFileItem() {
+        // Needed for JSON deserialization
     }
 
+    /*--------------------- FileSystemItem ---------------------*/
     @Override
     public void rename(String name) throws ClientException {
+        // Update doc properties
         CoreSession session = getSession();
         DocumentModel doc = getDocument(session);
         BlobHolder bh = getBlobHolder(doc);
         Blob blob = getBlob(bh);
-        // TODO: not sure about the behavior for the doc title
-        String fileName = blob.getFilename();
-        if (fileName.equals(doc.getPropertyValue("dc:title"))) {
-            doc.setPropertyValue("dc:title", name);
-        }
         blob.setFilename(name);
         bh.setBlob(blob);
-        session.saveDocument(doc);
+        updateDocTitleIfNeeded(doc, name);
+        doc = session.saveDocument(doc);
+        session.save();
+        // Update FileSystemItem attributes
+        this.name = name;
+        updateLastModificationDate(doc);
     }
 
     /*--------------------- FileItem -----------------*/
@@ -75,7 +94,6 @@ public class DocumentBackedFileItem extends
 
     @Override
     public String getDownloadURL(String baseURL) throws ClientException {
-        DocumentModel doc = getDocument(getSession());
         StringBuilder downloadURLSb = new StringBuilder();
         downloadURLSb.append(baseURL);
         downloadURLSb.append("nxbigfile/");
@@ -85,26 +103,61 @@ public class DocumentBackedFileItem extends
         downloadURLSb.append("/");
         downloadURLSb.append("blobholder:0");
         downloadURLSb.append("/");
-        downloadURLSb.append(URIUtils.quoteURIPathComponent(getFileName(doc),
-                true));
+        downloadURLSb.append(URIUtils.quoteURIPathComponent(name, true));
         return downloadURLSb.toString();
     }
 
     @Override
+    public String getDigestAlgorithm() {
+        return digestAlgorithm;
+    }
+
+    @Override
+    public String getDigest() {
+        return digest;
+    }
+
+    @Override
+    public boolean getCanUpdate() {
+        return canUpdate;
+    }
+
+    @Override
     public void setBlob(Blob blob) throws ClientException {
+        /* Update doc properties */
         CoreSession session = getSession();
         DocumentModel doc = getDocument(session);
-        BlobHolder bh = getBlobHolder(doc);
-        // If blob's filename is empty, set it to the current blob's
-        // filename
-        if (StringUtils.isEmpty(blob.getFilename())) {
-            blob.setFilename(getBlob(bh).getFilename());
+        // Handle versioning
+        versionIfNeeded(doc, session);
+        // If blob's filename is empty, set it to the current name
+        String blobFileName = blob.getFilename();
+        if (StringUtils.isEmpty(blobFileName)) {
+            blob.setFilename(name);
+        } else {
+            updateDocTitleIfNeeded(doc, blobFileName);
+            name = blobFileName;
         }
+        BlobHolder bh = getBlobHolder(doc);
         bh.setBlob(blob);
-        session.saveDocument(doc);
+        doc = session.saveDocument(doc);
+        session.save();
+        /* Update FileSystemItem attributes */
+        updateLastModificationDate(doc);
+        updateDigest();
+
     }
 
     /*--------------------- Protected -----------------*/
+    protected void initialize(DocumentModel doc) throws ClientException {
+        this.name = getFileName(doc);
+        this.folder = false;
+        // TODO: should get the digest algorithm from the binary store
+        // configuration, but it is not exposed as a public API for now
+        this.digestAlgorithm = MD5_DIGEST_ALGORITHM;
+        updateDigest();
+        this.canUpdate = this.canRename;
+    }
+
     protected BlobHolder getBlobHolder(DocumentModel doc)
             throws ClientException {
         BlobHolder bh = doc.getAdapter(BlobHolder.class);
@@ -132,7 +185,80 @@ public class DocumentBackedFileItem extends
     }
 
     protected String getFileName(DocumentModel doc) throws ClientException {
-        return getBlob(doc).getFilename();
+        String filename = getBlob(doc).getFilename();
+        return filename != null ? filename : doc.getTitle();
+    }
+
+    protected void updateDocTitleIfNeeded(DocumentModel doc, String name)
+            throws ClientException {
+        // TODO: not sure about the behavior for the doc title
+        if (this.name.equals(docTitle)) {
+            doc.setPropertyValue("dc:title", name);
+            docTitle = name;
+        }
+    }
+
+    protected void updateDigest() throws ClientException {
+        digest = getBlob().getDigest();
+    }
+
+    protected void versionIfNeeded(DocumentModel doc, CoreSession session)
+            throws ClientException {
+        if (needsVersioning(doc)) {
+            doc.putContextData(VersioningService.VERSIONING_OPTION,
+                    getNuxeoDriveManager().getVersioningOption());
+            session.saveDocument(doc);
+        }
+    }
+
+    protected boolean needsVersioning(DocumentModel doc)
+            throws PropertyException, ClientException {
+        // Need to version the doc if the current contributor is different from
+        // the last contributor or if the last modification was done more than
+        // VERSIONING_DELAY seconds ago.
+        String lastContributor = (String) doc.getPropertyValue("dc:lastContributor");
+        boolean contributorChanged = !principal.getName().equals(
+                lastContributor);
+        if (contributorChanged) {
+            log.debug(String.format(
+                    "Contributor %s is different from the last contributor %s => will create a version of the document.",
+                    principal.getName(), lastContributor));
+            return true;
+        }
+        if (getLastModificationDate() == null) {
+            log.debug("Last modification date is null => will not create a version of the document.");
+            return true;
+        }
+        long lastModified = System.currentTimeMillis()
+                - getLastModificationDate().getTimeInMillis();
+        long versioningDelay = getNuxeoDriveManager().getVersioningDelay() * 1000;
+        if (lastModified > versioningDelay) {
+            log.debug(String.format(
+                    "Last modification was done %d milliseconds ago, this is more than the versioning delay %d milliseconds => will create a version of the document.",
+                    lastModified, versioningDelay));
+            return true;
+        }
+        log.debug(String.format(
+                "Contributor %s is the last contributor and last modification was done %d milliseconds ago, this is less than the versioning delay %d milliseconds => will not create a version of the document.",
+                principal.getName(), lastModified, versioningDelay));
+        return false;
+    }
+
+    protected NuxeoDriveManager getNuxeoDriveManager() {
+        return Framework.getLocalService(NuxeoDriveManager.class);
+    }
+
+    /*---------- Needed for JSON deserialization ----------*/
+    protected void setDigestAlgorithm(String digestAlgorithm) {
+        this.digestAlgorithm = digestAlgorithm;
+    }
+
+    protected void setDigest(String digest) {
+        this.digest = digest;
+    }
+
+    protected void setCanUpdate(boolean canUpdate) {
+        this.canUpdate = canUpdate;
     }
 
 }

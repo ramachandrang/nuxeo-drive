@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.lang.StringUtils;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.junit.After;
 import org.junit.Before;
@@ -35,7 +34,6 @@ import org.nuxeo.drive.service.MockChangeFinder;
 import org.nuxeo.drive.service.NuxeoDriveManager;
 import org.nuxeo.drive.service.impl.FileSystemChangeSummary;
 import org.nuxeo.drive.service.impl.FileSystemItemChange;
-import org.nuxeo.ecm.automation.client.OperationRequest;
 import org.nuxeo.ecm.automation.client.Session;
 import org.nuxeo.ecm.automation.client.jaxrs.impl.HttpAutomationClient;
 import org.nuxeo.ecm.automation.client.model.Blob;
@@ -92,6 +90,8 @@ public class TestGetChangeSummaryMultiRepo {
 
     protected long lastSuccessfulSync;
 
+    protected String lastSyncActiveRoots;
+
     protected DocumentModel folder1;
 
     protected DocumentModel folder2;
@@ -116,6 +116,7 @@ public class TestGetChangeSummaryMultiRepo {
 
         nuxeoDriveManager.setChangeFinder(new MockChangeFinder());
         lastSuccessfulSync = Calendar.getInstance().getTimeInMillis();
+        lastSyncActiveRoots = "";
 
         folder1 = session.createDocument(session.createDocumentModel("/",
                 "folder1", "Folder"));
@@ -178,26 +179,22 @@ public class TestGetChangeSummaryMultiRepo {
         otherSession.save();
 
         // Look in all repositories => should find 3 changes
-        FileSystemChangeSummary changeSummary = getDocumentChangeSummary();
+        FileSystemChangeSummary changeSummary = getChangeSummary();
         List<FileSystemItemChange> docChanges = changeSummary.getFileSystemChanges();
         assertEquals(3, docChanges.size());
         FileSystemItemChange docChange = docChanges.get(0);
         assertEquals("other", docChange.getRepositoryId());
         assertEquals("documentChanged", docChange.getEventId());
-        assertEquals("project", docChange.getDocLifeCycleState());
-        assertEquals("/folder3/doc3", docChange.getDocPath());
         assertEquals(doc3.getId(), docChange.getDocUuid());
+
         docChange = docChanges.get(1);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("documentChanged", docChange.getEventId());
-        assertEquals("project", docChange.getDocLifeCycleState());
-        assertEquals("/folder2/doc2", docChange.getDocPath());
         assertEquals(doc2.getId(), docChange.getDocUuid());
+
         docChange = docChanges.get(2);
         assertEquals("test", docChange.getRepositoryId());
         assertEquals("documentChanged", docChange.getEventId());
-        assertEquals("project", docChange.getDocLifeCycleState());
-        assertEquals("/folder1/doc1", docChange.getDocPath());
         assertEquals(doc1.getId(), docChange.getDocUuid());
         assertEquals(Boolean.FALSE, changeSummary.getHasTooManyChanges());
 
@@ -211,53 +208,26 @@ public class TestGetChangeSummaryMultiRepo {
         session.save();
         otherSession.save();
 
-        // Look in 'other' repository => should find only 1 change
-        changeSummary = getDocumentChangeSummary("other");
+        changeSummary = getChangeSummary();
         docChanges = changeSummary.getFileSystemChanges();
-        assertEquals(1, docChanges.size());
-        docChange = docChanges.get(0);
-        assertEquals("other", docChange.getRepositoryId());
-        assertEquals("documentChanged", docChange.getEventId());
-        assertEquals("project", docChange.getDocLifeCycleState());
-        assertEquals("/folder3/doc3", docChange.getDocPath());
-        assertEquals(doc3.getId(), docChange.getDocUuid());
+        assertEquals(3, docChanges.size());
     }
 
-    /**
-     * Gets the document changes summary looking in all repositories for the
-     * user bound to the {@link #session} using the
-     * {@link NuxeoDriveGetChangeSummary} automation operation and
-     * updates the {@link #lastSuccessfulSync} date.
-     */
-    protected FileSystemChangeSummary getDocumentChangeSummary() throws Exception {
-        return getDocumentChangeSummary(null);
-    }
-
-    /**
-     * Gets the document changes summary looking in the given repository for the
-     * user bound to the {@link #session} using the
-     * {@link NuxeoDriveGetChangeSummary} automation operation and
-     * updates the {@link #lastSuccessfulSync} date.
-     */
-    protected FileSystemChangeSummary getDocumentChangeSummary(
-            String repositoryName) throws Exception {
-
+    protected FileSystemChangeSummary getChangeSummary() throws Exception {
         // Wait 1 second as the mock change finder relies on steps of 1 second
         Thread.sleep(1000);
-        OperationRequest opRequest = clientSession.newRequest(
-                NuxeoDriveGetChangeSummary.ID).set(
-                "lastSuccessfulSync", lastSuccessfulSync);
-        if (!StringUtils.isEmpty(repositoryName)) {
-            opRequest.setHeader("X-NXRepository", repositoryName);
-        }
-        Blob docChangeSummaryJSON = (Blob) opRequest.execute();
+        Blob docChangeSummaryJSON = (Blob) clientSession.newRequest(
+                NuxeoDriveGetChangeSummary.ID).set("lastSyncDate",
+                lastSuccessfulSync).set("lastSyncActiveRootDefinitions",
+                lastSyncActiveRoots).execute();
         assertNotNull(docChangeSummaryJSON);
 
-        FileSystemChangeSummary docChangeSummary = mapper.readValue(
+        FileSystemChangeSummary changeSummary = mapper.readValue(
                 docChangeSummaryJSON.getStream(), FileSystemChangeSummary.class);
-        assertNotNull(docChangeSummary);
+        assertNotNull(changeSummary);
 
-        lastSuccessfulSync = docChangeSummary.getSyncDate();
-        return docChangeSummary;
+        lastSuccessfulSync = changeSummary.getSyncDate();
+        lastSyncActiveRoots = changeSummary.getActiveSynchronizationRootDefinitions();
+        return changeSummary;
     }
 }

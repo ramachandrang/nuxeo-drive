@@ -16,43 +16,147 @@
  */
 package org.nuxeo.drive.adapter.impl;
 
+import java.security.Principal;
 import java.util.Calendar;
 
+import org.apache.commons.lang.StringUtils;
 import org.nuxeo.drive.adapter.FileSystemItem;
+import org.nuxeo.drive.adapter.FolderItem;
+import org.nuxeo.drive.service.FileSystemItemAdapterService;
+import org.nuxeo.drive.service.FileSystemItemManager;
 import org.nuxeo.ecm.core.api.ClientException;
+import org.nuxeo.ecm.core.api.CoreSession;
+import org.nuxeo.ecm.platform.usermanager.UserManager;
+import org.nuxeo.runtime.api.Framework;
 
 /**
  * Base class for {@link FileSystemItem} implementations.
  *
  * @author Antoine Taillefer
  * @see AbstractDocumentBackedFileSystemItem
+ * @see DefaultTopLevelFolderItem
  */
 public abstract class AbstractFileSystemItem implements FileSystemItem {
 
-    protected final String factoryName;
+    private static final long serialVersionUID = 1L;
 
-    protected AbstractFileSystemItem(String factoryName) {
+    /** {@link FileSystemItem} attributes */
+    protected String id;
+
+    protected String parentId;
+
+    protected String name;
+
+    protected boolean folder;
+
+    protected String creator;
+
+    protected Calendar creationDate;
+
+    protected Calendar lastModificationDate;
+
+    protected boolean canRename;
+
+    protected boolean canDelete;
+
+    /** Internal attributes */
+    protected String factoryName;
+
+    // Must not be serialized => transient
+    protected transient Principal principal;
+
+    /**
+     * Needed for JSON serialization/deserialization since we don't serialize
+     * the principal
+     */
+    protected String userName;
+
+    protected AbstractFileSystemItem(String factoryName, Principal principal) {
         this.factoryName = factoryName;
+        this.principal = principal;
+        this.userName = principal.getName();
+        this.id = this.factoryName + "/";
+    }
+
+    protected AbstractFileSystemItem() {
+        // Needed for JSON deserialization
     }
 
     /*--------------------- FileSystemItem ---------------------*/
-    public abstract String getName() throws ClientException;
+    @Override
+    public String getId() {
+        return id;
+    }
 
-    public abstract boolean isFolder();
+    @Override
+    public String getParentId() {
+        return parentId;
+    }
 
-    public abstract String getCreator() throws ClientException;
+    @Override
+    public String getName() {
+        return name;
+    }
 
-    public abstract Calendar getCreationDate() throws ClientException;
+    @Override
+    public boolean isFolder() {
+        return folder;
+    }
 
-    public abstract Calendar getLastModificationDate() throws ClientException;
+    @Override
+    public String getCreator() {
+        return creator;
+    }
+
+    @Override
+    public Calendar getCreationDate() {
+        return creationDate;
+    }
+
+    @Override
+    public Calendar getLastModificationDate() {
+        return lastModificationDate;
+    }
+
+    @Override
+    public boolean getCanRename() {
+        return canRename;
+    }
+
+    @Override
+    public boolean getCanDelete() {
+        return canDelete;
+    }
 
     public abstract void rename(String name) throws ClientException;
 
     public abstract void delete() throws ClientException;
 
+    public abstract boolean canMove(FolderItem dest) throws ClientException;
+
+    public abstract FileSystemItem move(FolderItem dest) throws ClientException;
+
+    /*---------- Needed for JSON serialization ----------*/
+    public String getUserName() {
+        return userName;
+    }
+
+    /*--------------------- Comparable -------------*/
     @Override
-    public String getId() {
-        return getFactoryName();
+    public int compareTo(FileSystemItem other) {
+        if (StringUtils.isEmpty(getName())
+                && StringUtils.isEmpty(other.getName())) {
+            return 0;
+        }
+        if (StringUtils.isEmpty(getName())
+                && !StringUtils.isEmpty(other.getName())) {
+            return -1;
+        }
+        if (!StringUtils.isEmpty(getName())
+                && StringUtils.isEmpty(other.getName())) {
+            return 1;
+        }
+        return getName().compareTo(other.getName());
     }
 
     /*--------------------- Object -----------------*/
@@ -67,9 +171,66 @@ public abstract class AbstractFileSystemItem implements FileSystemItem {
         return getId().equals(((FileSystemItem) obj).getId());
     }
 
-    /*--------------------- Protected -----------------*/
-    protected String getFactoryName() {
-        return factoryName;
+    @Override
+    public String toString() {
+        return String.format("%s(id=\"%s\", name=\"%s\")",
+                getClass().getSimpleName(), getId(), getName());
     }
 
+    /*--------------------- Protected ---------------------*/
+    protected CoreSession getSession(String repositoryName)
+            throws ClientException {
+        return getFileSystemItemManager().getSession(repositoryName, principal);
+    }
+
+    protected FileSystemItemManager getFileSystemItemManager() {
+        return Framework.getLocalService(FileSystemItemManager.class);
+    }
+
+    protected FileSystemItemAdapterService getFileSystemItemAdapterService() {
+        return Framework.getLocalService(FileSystemItemAdapterService.class);
+    }
+
+    /*---------- Needed for JSON deserialization ----------*/
+    protected void setId(String id) {
+        this.id = id;
+    }
+
+    protected void setParentId(String parentId) {
+        this.parentId = parentId;
+    }
+
+    protected void setName(String name) {
+        this.name = name;
+    }
+
+    protected void setFolder(boolean isFolder) {
+        this.folder = isFolder;
+    }
+
+    protected void setCreator(String creator) {
+        this.creator = creator;
+    }
+
+    protected void setCreationDate(Calendar creationDate) {
+        this.creationDate = creationDate;
+    }
+
+    protected void setLastModificationDate(Calendar lastModificationDate) {
+        this.lastModificationDate = lastModificationDate;
+    }
+
+    protected void setCanRename(boolean canRename) {
+        this.canRename = canRename;
+    }
+
+    protected void setCanDelete(boolean canDelete) {
+        this.canDelete = canDelete;
+    }
+
+    protected void setUserName(String userName) throws ClientException {
+        this.userName = userName;
+        this.principal = Framework.getLocalService(UserManager.class).getPrincipal(
+                userName);
+    }
 }

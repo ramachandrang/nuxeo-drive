@@ -38,6 +38,12 @@ public interface FileItem extends FileSystemItem {
 
     String getDownloadURL(String baseURL) throws ClientException;
 
+    String getDigestAlgorithm();
+
+    String getDigest();
+
+    boolean getCanUpdate();
+
     void setBlob(Blob blob) throws ClientException;
 
 }

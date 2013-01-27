@@ -16,20 +16,24 @@
  */
 package org.nuxeo.drive.adapter;
 
+import java.io.Serializable;
 import java.util.Calendar;
 
 import org.nuxeo.drive.adapter.impl.AbstractDocumentBackedFileSystemItem;
+import org.nuxeo.drive.adapter.impl.AbstractFileSystemItem;
 import org.nuxeo.ecm.core.api.ClientException;
 
 /**
  * Representation of a file system item, typically a file or a folder.
  *
  * @author Antoine Taillefer
+ * @see AbstractFileSystemItem
+ * @see AbstractDocumentBackedFileSystemItem
  * @see FileItem
  * @see FolderItem
- * @see AbstractDocumentBackedFileSystemItem
  */
-public interface FileSystemItem {
+public interface FileSystemItem extends Comparable<FileSystemItem>,
+        Serializable {
 
     /**
      * Gets a unique id generated server-side.
@@ -37,20 +41,33 @@ public interface FileSystemItem {
     String getId();
 
     /**
+     * Gets the parent {@link FileSystemItem} id.
+     */
+    String getParentId();
+
+    /**
      * Gets the name displayed in the file system.
      */
-    String getName() throws ClientException;
+    String getName();
 
     boolean isFolder();
 
-    String getCreator() throws ClientException;
+    String getCreator();
 
-    Calendar getCreationDate() throws ClientException;
+    Calendar getCreationDate();
 
-    Calendar getLastModificationDate() throws ClientException;
+    Calendar getLastModificationDate();
+
+    boolean getCanRename();
 
     void rename(String name) throws ClientException;
 
+    boolean getCanDelete();
+
     void delete() throws ClientException;
+
+    boolean canMove(FolderItem dest) throws ClientException;
+
+    FileSystemItem move(FolderItem dest) throws ClientException;
 
 }

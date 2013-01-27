@@ -21,7 +21,9 @@ import java.util.List;
 import java.util.Set;
 
 import org.nuxeo.drive.service.impl.FileSystemItemChange;
+import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
+import org.nuxeo.ecm.core.api.IdRef;
 
 /**
  * Allows to find document changes.
@@ -31,9 +33,8 @@ import org.nuxeo.ecm.core.api.CoreSession;
 public interface FileSystemChangeFinder extends Serializable {
 
     /**
-     * Gets the changes in all repositories or in the repository against which
-     * the given session is bound depending on the {@code allRepositories}
-     * parameter, for the given synchronization root paths, since the given last
+     * Gets the changes in the repository against which the given session is
+     * bound for the given synchronization root paths, since the given last
      * successful synchronization date and without exceeding the given limit.
      *
      * The change summaries are mapped back to the file system view: the file
@@ -41,11 +42,10 @@ public interface FileSystemChangeFinder extends Serializable {
      * documents in the repositories but this is a back-end detail that the
      * client does not have to deal with.
      *
-     * @param allRepositories if true then the document changes are retrieved
-     *            from all repositories, else only from the one against which
-     *            the given session is bound
      * @param session the session bound to a specific repository
-     * @param rootPaths the synchronization root paths
+     * @param lastActiveRootRefs docrefs of the roots as reported by the last
+     *            successful synchronization (can be empty or null)
+     * @param activeRoots the currently active synchronization roots
      * @param lastSuccessfulSyncDate the last successful synchronization date of
      *            the user's device
      * @param syncDate the current synchronization date
@@ -53,10 +53,12 @@ public interface FileSystemChangeFinder extends Serializable {
      * @return the list of document changes
      * @throws TooManyChangesException if the number of changes found has
      *             exceeded the limit
+     * @throws ClientException if the access to the repository fails for another
+     *             reason.
      */
-    public List<FileSystemItemChange> getFileSystemChanges(boolean allRepositories,
-            CoreSession session, Set<String> rootPaths,
+    List<FileSystemItemChange> getFileSystemChanges(CoreSession session,
+            Set<IdRef> lastActiveRootRefs, SynchronizationRoots activeRoots,
             long lastSuccessfulSyncDate, long syncDate, int limit)
-            throws TooManyChangesException;
+            throws ClientException, TooManyChangesException;
 
 }

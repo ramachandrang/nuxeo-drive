@@ -18,8 +18,8 @@ package org.nuxeo.drive.service;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
+import java.security.Principal;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -41,9 +41,9 @@ import org.nuxeo.ecm.core.api.security.ACE;
 import org.nuxeo.ecm.core.api.security.ACL;
 import org.nuxeo.ecm.core.api.security.ACP;
 import org.nuxeo.ecm.core.api.security.SecurityConstants;
-import org.nuxeo.ecm.core.security.SecurityException;
 import org.nuxeo.ecm.core.test.DefaultRepositoryInit;
 import org.nuxeo.ecm.core.test.RepositorySettings;
+import org.nuxeo.ecm.core.test.TransactionalFeature;
 import org.nuxeo.ecm.core.test.annotations.Granularity;
 import org.nuxeo.ecm.core.test.annotations.RepositoryConfig;
 import org.nuxeo.ecm.directory.Session;
@@ -63,7 +63,7 @@ import com.google.inject.Inject;
  * @author <a href="mailto:ogrise@nuxeo.com">Olivier Grisel</a>
  */
 @RunWith(FeaturesRunner.class)
-@Features(PlatformFeature.class)
+@Features({ TransactionalFeature.class, PlatformFeature.class })
 @RepositoryConfig(repositoryName = "default", init = DefaultRepositoryInit.class, cleanup = Granularity.METHOD)
 @Deploy({ "org.nuxeo.ecm.platform.userworkspace.types",
         "org.nuxeo.ecm.platform.userworkspace.api",
@@ -164,12 +164,12 @@ public class TestNuxeoDriveManager {
         nuxeoDriveManager.handleFolderDeletion((IdRef) doc("/").getRef());
     }
 
-    protected void checkRootsCount(String userName, CoreSession session,
-            int expectedCount) throws ClientException {
+    protected void checkRootsCount(Principal principal, int expectedCount)
+            throws ClientException {
         assertEquals(
                 expectedCount,
-                nuxeoDriveManager.getSynchronizationRootReferences(userName,
-                        session).size());
+                nuxeoDriveManager.getSynchronizationRoots(principal).get(
+                        session.getRepositoryName()).refs.size());
     }
 
     public DocumentModel doc(String path) throws ClientException {
@@ -193,15 +193,14 @@ public class TestNuxeoDriveManager {
 
         // Check synchronization root references
         Set<IdRef> rootRefs = nuxeoDriveManager.getSynchronizationRootReferences(
-                "user1", user1Session);
+                user1Session);
         assertEquals(2, rootRefs.size());
         assertTrue(rootRefs.contains(user1Workspace));
         assertTrue(rootRefs.contains(new IdRef(user1Session.getDocument(
                 new PathRef("/default-domain/workspaces/workspace-2")).getId())));
 
         // Check synchronization root paths
-        Map<String, SynchronizationRoots> synRootMap = nuxeoDriveManager.getSynchronizationRoots(
-                true, "user1", user1Session);
+        Map<String, SynchronizationRoots> synRootMap = nuxeoDriveManager.getSynchronizationRoots(user1Session.getPrincipal());
         Set<String> rootPaths = synRootMap.get("default").paths;
         assertEquals(2, rootPaths.size());
         assertTrue(rootPaths.contains("/default-domain/UserWorkspaces/user1"));
@@ -210,62 +209,39 @@ public class TestNuxeoDriveManager {
 
     @Test
     public void testSynchronizeRootMultiUsers() throws Exception {
+        Principal user1 = user1Session.getPrincipal();
+        Principal user2 = user2Session.getPrincipal();
+
         // by default no user has any synchronization registered
-        checkRootsCount("user1", session, 0);
-        checkRootsCount("user1", user1Session, 0);
-        checkRootsCount("user1", user2Session, 0);
-        checkRootsCount("user2", session, 0);
-        checkRootsCount("user2", user1Session, 0);
-        checkRootsCount("user2", user2Session, 0);
+        checkRootsCount(user1, 0);
+        checkRootsCount(user2, 0);
 
         // check that users have the right to synchronize their own user
         // workspace
         nuxeoDriveManager.registerSynchronizationRoot("user1",
                 user1Session.getDocument(user1Workspace), user1Session);
-        checkRootsCount("user1", session, 1);
-        checkRootsCount("user2", session, 0);
+        checkRootsCount(user1, 1);
+        checkRootsCount(user2, 0);
 
         nuxeoDriveManager.registerSynchronizationRoot("user2",
                 user2Session.getDocument(user2Workspace), user2Session);
-        checkRootsCount("user1", session, 1);
-        checkRootsCount("user2", session, 1);
+        checkRootsCount(user1, 1);
+        checkRootsCount(user2, 1);
 
-        // check that users cannot synchronize workspaces and folders where they
-        // don't have content creation access to.
-        try {
-            nuxeoDriveManager.registerSynchronizationRoot(
-                    "user1",
-                    doc(user1Session, "/default-domain/workspaces/workspace-1"),
-                    user1Session);
-            fail("user1 should not have the permission to use Workspace 1 as sync root.");
-        } catch (SecurityException se) {
-            // expected
-        }
-
-        // this check should also fail even if the CoreSession is opened by the
-        // Administrator
-        try {
-            nuxeoDriveManager.registerSynchronizationRoot("user1",
-                    doc("/default-domain/workspaces/workspace-1"), session);
-        } catch (SecurityException se) {
-            // expected
-        }
-
-        // users can synchronize to workspaces and folder where they have
-        // write access
+        // users can synchronize to workspaces and folders
         nuxeoDriveManager.registerSynchronizationRoot("user1",
                 doc(user1Session, "/default-domain/workspaces/workspace-2"),
                 user1Session);
-        checkRootsCount("user1", session, 2);
-        checkRootsCount("user2", session, 1);
+        checkRootsCount(user1, 2);
+        checkRootsCount(user2, 1);
 
         nuxeoDriveManager.registerSynchronizationRoot(
                 "user2",
                 doc(user2Session,
                         "/default-domain/workspaces/workspace-2/folder-2-1"),
                 user2Session);
-        checkRootsCount("user1", session, 2);
-        checkRootsCount("user2", session, 2);
+        checkRootsCount(user1, 2);
+        checkRootsCount(user2, 2);
 
         // check unsync:
         // XXX: this does not work when fetching document with session instead
@@ -273,8 +249,8 @@ public class TestNuxeoDriveManager {
         nuxeoDriveManager.unregisterSynchronizationRoot("user1",
                 doc(user1Session, "/default-domain/workspaces/workspace-2"),
                 user1Session);
-        checkRootsCount("user1", session, 1);
-        checkRootsCount("user2", session, 2);
+        checkRootsCount(user1, 1);
+        checkRootsCount(user2, 2);
 
         // make user1 synchronize the same subfolder as user 2
         nuxeoDriveManager.registerSynchronizationRoot(
@@ -282,38 +258,40 @@ public class TestNuxeoDriveManager {
                 doc(user1Session,
                         "/default-domain/workspaces/workspace-2/folder-2-1"),
                 user1Session);
-        checkRootsCount("user1", session, 2);
-        checkRootsCount("user2", session, 2);
+        checkRootsCount(user1, 2);
+        checkRootsCount(user2, 2);
 
         // unsyncing unsynced folder does nothing
         nuxeoDriveManager.unregisterSynchronizationRoot("user2",
                 doc("/default-domain/workspaces/workspace-2"), session);
-        checkRootsCount("user1", session, 2);
-        checkRootsCount("user2", session, 2);
+        checkRootsCount(user1, 2);
+        checkRootsCount(user2, 2);
 
         nuxeoDriveManager.unregisterSynchronizationRoot("user1",
                 session.getDocument(user1Workspace), session);
-        checkRootsCount("user1", session, 1);
-        checkRootsCount("user2", session, 2);
+        checkRootsCount(user1, 1);
+        checkRootsCount(user2, 2);
 
         nuxeoDriveManager.unregisterSynchronizationRoot("user1",
                 doc("/default-domain/workspaces/workspace-2/folder-2-1"),
                 session);
-        checkRootsCount("user1", session, 0);
-        checkRootsCount("user2", session, 2);
+        checkRootsCount(user1, 0);
+        checkRootsCount(user2, 2);
 
         // check re-registration
         nuxeoDriveManager.registerSynchronizationRoot("user1",
                 doc("/default-domain/workspaces/workspace-2/folder-2-1"),
                 session);
-        checkRootsCount("user1", session, 1);
-        checkRootsCount("user2", session, 2);
+        checkRootsCount(user1, 1);
+        checkRootsCount(user2, 2);
     }
 
     @Test
     public void testSynchronizationRootDeletion() throws Exception {
-        checkRootsCount("user1", session, 0);
-        checkRootsCount("user2", session, 0);
+        Principal user1 = user1Session.getPrincipal();
+        Principal user2 = user2Session.getPrincipal();
+        checkRootsCount(user1, 0);
+        checkRootsCount(user2, 0);
 
         nuxeoDriveManager.registerSynchronizationRoot("user1",
                 doc(user1Session, "/default-domain/workspaces/workspace-2"),
@@ -323,22 +301,22 @@ public class TestNuxeoDriveManager {
                 doc(user1Session,
                         "/default-domain/workspaces/workspace-2/folder-2-1"),
                 user1Session);
-        checkRootsCount("user1", session, 1);
-        checkRootsCount("user2", session, 1);
+        checkRootsCount(user1, 1);
+        checkRootsCount(user2, 1);
 
         // check deletion by lifecycle
         session.followTransition(
                 doc("/default-domain/workspaces/workspace-2/folder-2-1").getRef(),
                 "delete");
         session.save();
-        checkRootsCount("user1", session, 1);
-        checkRootsCount("user2", session, 0);
+        checkRootsCount(user1, 1);
+        checkRootsCount(user2, 0);
 
         // check physical deletion of a parent folder
         session.removeDocument(doc("/default-domain").getRef());
         session.save();
-        checkRootsCount("user1", session, 0);
-        checkRootsCount("user2", session, 0);
+        checkRootsCount(user1, 0);
+        checkRootsCount(user2, 0);
     }
 
 }

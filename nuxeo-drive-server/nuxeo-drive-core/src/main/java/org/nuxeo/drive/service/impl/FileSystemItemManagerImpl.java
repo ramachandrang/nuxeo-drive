@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.transaction.Status;
 import javax.transaction.Synchronization;
 import javax.transaction.Transaction;
 
@@ -65,18 +66,12 @@ public class FileSystemItemManagerImpl implements FileSystemItemManager {
             openedSessions.get().put(sessionKey, newSession);
             try {
                 Transaction t = TransactionHelper.lookupTransactionManager().getTransaction();
-                t.registerSynchronization(new Synchronization() {
-                    @Override
-                    public void beforeCompletion() {
-                        CoreInstance.getInstance().close(newSession);
-                        openedSessions.get().remove(sessionKey);
-                    }
-
-                    @Override
-                    public void afterCompletion(int status) {
-                        // Nothing to do
-                    }
-                });
+                if (t == null) {
+                    throw new RuntimeException(
+                            "FileSystemItemManagerImpl requires an active transaction.");
+                }
+                t.registerSynchronization(new SessionCloser(newSession,
+                        sessionKey));
             } catch (Exception e) {
                 throw new ClientRuntimeException(e);
             }
@@ -85,7 +80,39 @@ public class FileSystemItemManagerImpl implements FileSystemItemManager {
         return session;
     }
 
+    protected class SessionCloser implements Synchronization {
+
+        protected final CoreSession session;
+
+        protected final String sessionKey;
+
+        protected SessionCloser(CoreSession session, String sessionKey) {
+            this.session = session;
+            this.sessionKey = sessionKey;
+        }
+
+        @Override
+        public void beforeCompletion() {
+            CoreInstance.getInstance().close(session);
+        }
+
+        @Override
+        public void afterCompletion(int status) {
+            openedSessions.get().remove(sessionKey);
+            if (status != Status.STATUS_COMMITTED) {
+                CoreInstance.getInstance().close(session);
+            }
+        }
+    }
+
     /*------------- Read operations ----------------*/
+    @Override
+    public List<FileSystemItem> getTopLevelChildren(Principal principal)
+            throws ClientException {
+        return getFileSystemItemAdapterService().getTopLevelFolderItemFactory().getTopLevelFolderItem(
+                principal.getName()).getChildren();
+    }
+
     @Override
     public boolean exists(String id, Principal principal)
             throws ClientException {
@@ -106,10 +133,23 @@ public class FileSystemItemManagerImpl implements FileSystemItemManager {
         FileSystemItem fileSystemItem = getFileSystemItemById(id, principal);
         if (!(fileSystemItem instanceof FolderItem)) {
             throw new ClientException(
-                    "Cannot get the children of a non folderish file system item.");
+                    String.format(
+                            "Cannot get the children of file system item with id %s because it is not a folder.",
+                            id));
         }
         FolderItem folderItem = (FolderItem) fileSystemItem;
         return folderItem.getChildren();
+    }
+
+    @Override
+    public boolean canMove(String srcId, String destId, Principal principal)
+            throws ClientException {
+        FileSystemItem srcFsItem = getFileSystemItemById(srcId, principal);
+        FileSystemItem destFsItem = getFileSystemItemById(destId, principal);
+        if (!(destFsItem instanceof FolderItem)) {
+            return false;
+        }
+        return srcFsItem.canMove((FolderItem) destFsItem);
     }
 
     /*------------- Write operations ---------------*/
@@ -119,7 +159,9 @@ public class FileSystemItemManagerImpl implements FileSystemItemManager {
         FileSystemItem parentFsItem = getFileSystemItemById(parentId, principal);
         if (!(parentFsItem instanceof FolderItem)) {
             throw new ClientException(
-                    "Cannot create a folder in a non folderish file system item.");
+                    String.format(
+                            "Cannot create a folder in file system item with id %s because it is not a folder.",
+                            parentId));
         }
         FolderItem parentFolder = (FolderItem) parentFsItem;
         return parentFolder.createFolder(name);
@@ -131,7 +173,9 @@ public class FileSystemItemManagerImpl implements FileSystemItemManager {
         FileSystemItem parentFsItem = getFileSystemItemById(parentId, principal);
         if (!(parentFsItem instanceof FolderItem)) {
             throw new ClientException(
-                    "Cannot create a file in a non folderish file system item.");
+                    String.format(
+                            "Cannot create a file in file system item with id %s because it is not a folder.",
+                            parentId));
         }
         FolderItem parentFolder = (FolderItem) parentFsItem;
         return parentFolder.createFile(blob);
@@ -143,7 +187,9 @@ public class FileSystemItemManagerImpl implements FileSystemItemManager {
         FileSystemItem fsItem = getFileSystemItemById(id, principal);
         if (!(fsItem instanceof FileItem)) {
             throw new ClientException(
-                    "Cannot update the content of a file system item that is not a file.");
+                    String.format(
+                            "Cannot update the content of file system item with id %s because it is not a file.",
+                            id));
         }
         FileItem file = (FileItem) fsItem;
         file.setBlob(blob);
@@ -167,15 +213,15 @@ public class FileSystemItemManagerImpl implements FileSystemItemManager {
     @Override
     public FileSystemItem move(String srcId, String destId, Principal principal)
             throws ClientException {
-        // TODO
-        return null;
-    }
-
-    @Override
-    public FileSystemItem copy(String srcId, String destId, Principal principal)
-            throws ClientException {
-        // TODO
-        return null;
+        FileSystemItem srcFsItem = getFileSystemItemById(srcId, principal);
+        FileSystemItem destFsItem = getFileSystemItemById(destId, principal);
+        if (!(destFsItem instanceof FolderItem)) {
+            throw new ClientException(
+                    String.format(
+                            "Cannot move a file system item to file system item with id %s because it is not a folder.",
+                            destId));
+        }
+        return srcFsItem.move((FolderItem) destFsItem);
     }
 
     /*------------- Protected ---------------*/

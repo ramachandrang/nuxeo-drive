@@ -1,116 +1,10 @@
-from time import sleep
 import os
-import hashlib
-from nose import with_setup
-from nose import SkipTest
-from nose.tools import assert_true
-from nose.tools import assert_false
-from nose.tools import assert_equal
-from nose.tools import assert_not_equal
-from nose.tools import assert_raises
-
+from unittest import SkipTest
+from time import sleep
 from nxdrive.client import NuxeoClient
 from nxdrive.client import Unauthorized
 from nxdrive.client import NotFound
-
-
-TEST_WORKSPACE_PATH = '/default-domain/workspaces/test-nxdrive'
-TEST_WORKSPACE = None
-
-EMPTY_DIGEST = hashlib.md5().hexdigest()
-SOME_TEXT_CONTENT = "Some text content."
-SOME_TEXT_DIGEST = hashlib.md5(SOME_TEXT_CONTENT).hexdigest()
-
-
-nxclient = None
-
-
-def setup_integration_server():
-    global nxclient, TEST_WORKSPACE
-    NUXEO_URL = os.environ.get('NXDRIVE_TEST_NUXEO_URL')
-    USER = os.environ.get('NXDRIVE_TEST_USER')
-    PASSWORD = os.environ.get('NXDRIVE_TEST_PASSWORD')
-    if None in (NUXEO_URL, USER, PASSWORD):
-        raise SkipTest("No integration server configuration found in "
-                       "environment.")
-    nxclient = NuxeoClient(NUXEO_URL, USER, 'test-device', PASSWORD,
-                           base_folder='/')
-
-    parent_path = os.path.dirname(TEST_WORKSPACE_PATH)
-    workspace_name = os.path.basename(TEST_WORKSPACE_PATH)
-    TEST_WORKSPACE = nxclient.create(
-        parent_path, 'Workspace', name=workspace_name,
-        properties={'dc:title': 'Nuxeo Drive Tests'})[u'uid']
-
-
-def teardown_integration_server():
-    if nxclient is not None and nxclient.exists(TEST_WORKSPACE):
-        nxclient.delete(TEST_WORKSPACE, use_trash=False)
-
-
-with_integration_server = with_setup(
-    setup_integration_server, teardown_integration_server)
-
-
-def check_addon():
-    if not nxclient.is_addon_installed():
-        raise SkipTest('Nuxeo Drive server addon is not installed')
-
-
-with_addon = with_setup(check_addon)
-
-
-@with_integration_server
-def test_authentication_failure():
-    assert_raises(Unauthorized, NuxeoClient,
-                  nxclient.server_url, 'someone else', 'test-device',
-                  password='bad password')
-    assert_raises(Unauthorized, NuxeoClient,
-                  nxclient.server_url, 'someone else', 'test-device',
-                  token='some-bad-token')
-
-
-@with_integration_server
-def test_make_token():
-    token = nxclient.request_token()
-    if token is None:
-        raise SkipTest('nuxeo-platform-login-token is not deployed')
-    assert_true(len(token) > 5)
-    assert_equal(nxclient.auth[0], 'X-Authentication-Token')
-    assert_equal(nxclient.auth[1], token)
-
-    # Requesting token is an idempotent operation
-    token2 = nxclient.request_token()
-    assert_equal(token, token2)
-
-    # It's possible to create a new client using the same token
-    nxclient2 = NuxeoClient(nxclient.server_url, nxclient.user_id,
-                            nxclient.device_id, token=token, base_folder='/')
-    token3 = nxclient.request_token()
-    assert_equal(token, token3)
-
-    # Register a root with client 2 and see it with client one
-    folder_1 = nxclient2.make_folder(TEST_WORKSPACE, 'Folder 1')
-    nxclient2.register_as_root(folder_1)
-
-    roots = nxclient.get_roots()
-    assert_equal(len(roots), 1)
-    assert_equal(roots[0].name, 'Folder 1')
-
-    # The root can also been seen with a new client connected using password
-    # based auth
-    password = os.environ.get('NXDRIVE_TEST_PASSWORD')
-    nxclient3 = NuxeoClient(nxclient.server_url, nxclient.user_id,
-                            nxclient.device_id, password=password, base_folder='/')
-    roots = nxclient3.get_roots()
-    assert_equal(len(roots), 1)
-    assert_equal(roots[0].name, 'Folder 1')
-
-    # Another device using the same user credentials will get a different token
-    nxclient4 = NuxeoClient(nxclient.server_url, nxclient.user_id,
-                            'other-test-device', password=password, base_folder='/')
-    token4 = nxclient4.request_token()
-    assert_not_equal(token, token4)
+from nxdrive.tests.common import IntegrationTestCase
 
 
 def wait_for_deletion(client, doc, retries_left=10, delay=0.300,
@@ -127,176 +21,245 @@ def wait_for_deletion(client, doc, retries_left=10, delay=0.300,
                       use_trash=use_trash)
 
 
-@with_integration_server
-def test_make_documents():
-    doc_1 = nxclient.make_file(TEST_WORKSPACE, 'Document 1.txt')
-    assert_true(nxclient.exists(doc_1))
-    assert_equal(nxclient.get_content(doc_1), "")
-    doc_1_info = nxclient.get_info(doc_1)
-    assert_equal(doc_1_info.name, 'Document 1.txt')
-    assert_equal(doc_1_info.uid, doc_1)
-    assert_equal(doc_1_info.get_digest(), EMPTY_DIGEST)
-    assert_equal(doc_1_info.folderish, False)
+class TestIntegrationNuxeoClient(IntegrationTestCase):
 
-    doc_2 = nxclient.make_file(TEST_WORKSPACE, 'Document 2.txt',
-                              content=SOME_TEXT_CONTENT)
-    assert_true(nxclient.exists(doc_2))
-    assert_equal(nxclient.get_content(doc_2), SOME_TEXT_CONTENT)
-    doc_2_info = nxclient.get_info(doc_2)
-    assert_equal(doc_2_info.name, 'Document 2.txt')
-    assert_equal(doc_2_info.uid, doc_2)
-    assert_equal(doc_2_info.get_digest(), SOME_TEXT_DIGEST)
-    assert_equal(doc_2_info.folderish, False)
+    def test_authentication_failure(self):
+        self.assertRaises(Unauthorized, NuxeoClient,
+                      self.remote_client_1.server_url,
+                      'someone else', 'test-device',
+                      password='bad password')
+        self.assertRaises(Unauthorized, NuxeoClient,
+                      self.remote_client_1.server_url,
+                      'someone else', 'test-device',
+                      token='some-bad-token')
 
-    nxclient.delete(doc_2)
-    assert_true(nxclient.exists(doc_1))
-    assert_false(nxclient.exists(doc_2))
-    assert_raises(NotFound, nxclient.get_info, doc_2)
+    def test_make_token(self):
+        remote_client = self.remote_client_1
+        token = remote_client.request_token()
+        if token is None:
+            raise SkipTest('nuxeo-platform-login-token is not deployed')
+        self.assertTrue(len(token) > 5)
+        self.assertEquals(remote_client.auth[0], 'X-Authentication-Token')
+        self.assertEquals(remote_client.auth[1], token)
 
-    # the document has been put in the trash by default
-    assert_true(nxclient.exists(doc_2, use_trash=False) is not None)
+        # Requesting token is an idempotent operation
+        token2 = remote_client.request_token()
+        self.assertEquals(token, token2)
 
-    # the document is now physically deleted (by calling delete a second time:
-    # the 'delete' transition will no longer be available hence physical
-    # deletion is used as a fallback)
-    nxclient.delete(doc_2)
-    assert_false(nxclient.exists(doc_2, use_trash=False))
-    assert_raises(NotFound, nxclient.get_info, doc_2, use_trash=False)
+        # It's possible to create a new client using the same token
+        remote_client2 = NuxeoClient(
+            remote_client.server_url, remote_client.user_id,
+            remote_client.device_id, token=token, base_folder='/')
 
-    # Test folder deletion (with trash)
-    folder_1 = nxclient.make_folder(TEST_WORKSPACE, 'A new folder')
-    assert_true(nxclient.exists(folder_1))
-    folder_1_info = nxclient.get_info(folder_1)
-    assert_equal(folder_1_info.name, 'A new folder')
-    assert_equal(folder_1_info.uid, folder_1)
-    assert_equal(folder_1_info.get_digest(), None)
-    assert_equal(folder_1_info.folderish, True)
+        token3 = remote_client.request_token()
+        self.assertEquals(token, token3)
 
-    doc_3 = nxclient.make_file(folder_1, 'Document 3.txt',
-                               content=SOME_TEXT_CONTENT)
-    nxclient.delete(folder_1)
-    assert_false(nxclient.exists(folder_1))
-    wait_for_deletion(nxclient, doc_3)
+        # Register a root with client 2 and see it with client one
+        folder_1 = remote_client2.make_folder(self.workspace, 'Folder 1')
+        remote_client2.register_as_root(folder_1)
 
-    assert_false(nxclient.exists(doc_3))
+        roots = remote_client.get_roots()
+        self.assertEquals(len(roots), 1)
+        self.assertEquals(roots[0].name, 'Folder 1')
 
-    # Test folder deletion (without trash)
-    folder_1 = nxclient.make_folder(TEST_WORKSPACE, 'A new folder')
-    assert_true(nxclient.exists(folder_1))
-    folder_1_info = nxclient.get_info(folder_1)
-    assert_equal(folder_1_info.name, 'A new folder')
-    assert_equal(folder_1_info.uid, folder_1)
-    assert_equal(folder_1_info.get_digest(), None)
-    assert_equal(folder_1_info.folderish, True)
+        # The root can also been seen with a new client connected using
+        # password based auth
+        remote_client3 = NuxeoClient(
+            remote_client.server_url, remote_client.user_id,
+            remote_client.device_id, password=self.password_1,
+            base_folder='/')
+        roots = remote_client3.get_roots()
+        self.assertEquals(len(roots), 1)
+        self.assertEquals(roots[0].name, 'Folder 1')
 
-    doc_3 = nxclient.make_file(folder_1, 'Document 3.txt',
-                               content=SOME_TEXT_CONTENT)
-    nxclient.delete(folder_1, use_trash=False)
-    assert_false(nxclient.exists(folder_1, use_trash=False))
-    wait_for_deletion(nxclient, doc_3, use_trash=False)
+        # Another device using the same user credentials will get a different
+        # token
+        remote_client4 = NuxeoClient(
+            remote_client.server_url, remote_client.user_id,
+            'other-test-device', password=self.password_1,
+            base_folder='/')
+        token4 = remote_client4.request_token()
+        self.assertNotEquals(token, token4)
+
+        # A client can revoke a token explicitly and thus loose credentials
+        remote_client4.revoke_token()
+        self.assertRaises(IOError, remote_client4.get_roots)
 
 
-@with_integration_server
-def test_complex_filenames():
-    # create another folder with the same title
-    title_with_accents = u"\xc7a c'est l'\xe9t\xe9 !"
-    folder_1 = nxclient.make_folder(TEST_WORKSPACE, title_with_accents)
-    folder_1_info = nxclient.get_info(folder_1)
-    assert_equal(folder_1_info.name, title_with_accents)
+    def test_make_documents(self):
+        remote_client = self.remote_client_1
+        doc_1 = remote_client.make_file(self.workspace, 'Document 1.txt')
+        self.assertTrue(remote_client.exists(doc_1))
+        self.assertEquals(remote_client.get_content(doc_1), "")
+        doc_1_info = remote_client.get_info(doc_1)
+        self.assertEquals(doc_1_info.name, 'Document 1.txt')
+        self.assertEquals(doc_1_info.uid, doc_1)
+        self.assertEquals(doc_1_info.get_digest(), self.EMPTY_DIGEST)
+        self.assertEquals(doc_1_info.folderish, False)
 
-    # create another folder with the same title
-    title_with_accents = u"\xc7a c'est l'\xe9t\xe9 !"
-    folder_2 = nxclient.make_folder(TEST_WORKSPACE, title_with_accents)
-    folder_2_info = nxclient.get_info(folder_2)
-    assert_equal(folder_2_info.name, title_with_accents)
-    assert_not_equal(folder_1, folder_2)
+        doc_2 = remote_client.make_file(self.workspace, 'Document 2.txt',
+                                  content=self.SOME_TEXT_CONTENT)
+        self.assertTrue(remote_client.exists(doc_2))
+        self.assertEquals(remote_client.get_content(doc_2), self.SOME_TEXT_CONTENT)
+        doc_2_info = remote_client.get_info(doc_2)
+        self.assertEquals(doc_2_info.name, 'Document 2.txt')
+        self.assertEquals(doc_2_info.uid, doc_2)
+        self.assertEquals(doc_2_info.get_digest(), self.SOME_TEXT_DIGEST)
+        self.assertEquals(doc_2_info.folderish, False)
 
-    # Create a file
-    # TODO: handle sanitization of the '/' character in local name
-    long_filename = u"\xe9" * 50 + u"%$#!*()[]{}+_-=';:&^" + ".doc"
-    file_1 = nxclient.make_file(folder_1, long_filename)
-    file_1 = nxclient.get_info(file_1)
-    assert_equal(file_1.name, long_filename)
+        remote_client.delete(doc_2)
+        self.assertTrue(remote_client.exists(doc_1))
+        self.assertFalse(remote_client.exists(doc_2))
+        self.assertRaises(NotFound, remote_client.get_info, doc_2)
 
+        # the document has been put in the trash by default
+        self.assertTrue(remote_client.exists(doc_2, use_trash=False) is not None)
 
-@with_integration_server
-def test_missing_document():
-    assert_raises(NotFound, nxclient.get_info, '/Something Missing')
+        # the document is now physically deleted (by calling delete a second time:
+        # the 'delete' transition will no longer be available hence physical
+        # deletion is used as a fallback)
+        remote_client.delete(doc_2)
+        self.assertFalse(remote_client.exists(doc_2, use_trash=False))
+        self.assertRaises(NotFound, remote_client.get_info, doc_2, use_trash=False)
 
+        # Test folder deletion (with trash)
+        folder_1 = remote_client.make_folder(self.workspace, 'A new folder')
+        self.assertTrue(remote_client.exists(folder_1))
+        folder_1_info = remote_client.get_info(folder_1)
+        self.assertEquals(folder_1_info.name, 'A new folder')
+        self.assertEquals(folder_1_info.uid, folder_1)
+        self.assertEquals(folder_1_info.get_digest(), None)
+        self.assertEquals(folder_1_info.folderish, True)
 
-@with_integration_server
-def test_get_children_info():
-    folder_1 = nxclient.make_folder(TEST_WORKSPACE, 'Folder 1')
-    folder_2 = nxclient.make_folder(TEST_WORKSPACE, 'Folder 2')
-    file_1 = nxclient.make_file(TEST_WORKSPACE, 'File 1.txt', content="foo\n")
+        doc_3 = remote_client.make_file(folder_1, 'Document 3.txt',
+                                   content=self.SOME_TEXT_CONTENT)
+        remote_client.delete(folder_1)
+        self.assertFalse(remote_client.exists(folder_1))
+        wait_for_deletion(remote_client, doc_3)
 
-    # not a direct child of TEST_WORKSPACE
-    nxclient.make_file(folder_1, 'File 2.txt', content="bar\n")
+        self.assertFalse(remote_client.exists(doc_3))
 
-    # ignored files
-    nxclient.make_file(TEST_WORKSPACE, '.File 2.txt', content="baz\n")
-    nxclient.make_file(TEST_WORKSPACE, '~$File 2.txt', content="baz\n")
-    nxclient.make_file(TEST_WORKSPACE, 'File 2.txt~', content="baz\n")
-    nxclient.make_file(TEST_WORKSPACE, 'File 2.txt.swp', content="baz\n")
-    nxclient.make_file(TEST_WORKSPACE, 'File 2.txt.lock', content="baz\n")
-    nxclient.make_file(TEST_WORKSPACE, 'File 2.txt.LOCK', content="baz\n")
-    nxclient.make_file(TEST_WORKSPACE, 'File 2.txt.part', content="baz\n")
+        # Test folder deletion (without trash)
+        folder_1 = remote_client.make_folder(self.workspace, 'A new folder')
+        self.assertTrue(remote_client.exists(folder_1))
+        folder_1_info = remote_client.get_info(folder_1)
+        self.assertEquals(folder_1_info.name, 'A new folder')
+        self.assertEquals(folder_1_info.uid, folder_1)
+        self.assertEquals(folder_1_info.get_digest(), None)
+        self.assertEquals(folder_1_info.folderish, True)
 
-    workspace_children = nxclient.get_children_info(TEST_WORKSPACE)
-    assert_equal(len(workspace_children), 3)
-    assert_equal(workspace_children[0].uid, file_1)
-    assert_equal(workspace_children[0].name, 'File 1.txt')
-    assert_equal(workspace_children[1].uid, folder_1)
-    assert_equal(workspace_children[1].name, 'Folder 1')
-    assert_equal(workspace_children[2].uid, folder_2)
-    assert_equal(workspace_children[2].name, 'Folder 2')
+        doc_3 = remote_client.make_file(folder_1, 'Document 3.txt',
+                                   content=self.SOME_TEXT_CONTENT)
+        remote_client.delete(folder_1, use_trash=False)
+        self.assertFalse(remote_client.exists(folder_1, use_trash=False))
+        wait_for_deletion(remote_client, doc_3, use_trash=False)
 
+    def test_complex_filenames(self):
+        remote_client = self.remote_client_1
+        # create another folder with the same title
+        title_with_accents = u"\xc7a c'est l'\xe9t\xe9 !"
+        folder_1 = remote_client.make_folder(self.workspace, title_with_accents)
+        folder_1_info = remote_client.get_info(folder_1)
+        self.assertEquals(folder_1_info.name, title_with_accents)
 
-@with_integration_server
-@with_addon
-def test_get_synchronization_roots_from_server():
-    # Check that the list of repositories can be introspected
-    assert_equal(nxclient.get_repository_names(), ['default'])
+        # create another folder with the same title
+        title_with_accents = u"\xc7a c'est l'\xe9t\xe9 !"
+        folder_2 = remote_client.make_folder(self.workspace, title_with_accents)
+        folder_2_info = remote_client.get_info(folder_2)
+        self.assertEquals(folder_2_info.name, title_with_accents)
+        self.assertNotEquals(folder_1, folder_2)
 
-    # By default no root is synchronized
-    assert_equal(nxclient.get_roots(), [])
+        # Create a file
+        # TODO: handle sanitization of the '/' character in local name
+        long_filename = u"\xe9" * 50 + u"%$#!*()[]{}+_-=';:&^" + ".doc"
+        file_1 = remote_client.make_file(folder_1, long_filename)
+        file_1 = remote_client.get_info(file_1)
+        self.assertEquals(file_1.name, long_filename)
 
-    # Register one root explicitly
-    folder_1 = nxclient.make_folder(TEST_WORKSPACE, 'Folder 1')
-    folder_2 = nxclient.make_folder(TEST_WORKSPACE, 'Folder 2')
-    folder_3 = nxclient.make_folder(TEST_WORKSPACE, 'Folder 3')
-    nxclient.register_as_root(folder_1)
+    def test_missing_document(self):
+        remote_client = self.remote_client_1
+        self.assertRaises(NotFound, remote_client.get_info,
+                      '/Something Missing')
 
-    roots = nxclient.get_roots()
-    assert_equal(len(roots), 1)
-    assert_equal(roots[0].name, 'Folder 1')
+    def test_get_children_info(self):
+        remote_client = self.remote_client_1
+        folder_1 = remote_client.make_folder(self.workspace, 'Folder 1')
+        folder_2 = remote_client.make_folder(self.workspace, 'Folder 2')
+        file_1 = remote_client.make_file(self.workspace, 'File 1.txt',
+                                              content="foo\n")
 
-    # registetration is idem-potent
-    roots = nxclient.get_roots()
-    assert_equal(len(roots), 1)
-    assert_equal(roots[0].name, 'Folder 1')
+        # not a direct child of self.workspace
+        remote_client.make_file(folder_1, 'File 2.txt', content="bar\n")
 
-    nxclient.register_as_root(folder_2)
-    roots = nxclient.get_roots()
-    assert_equal(len(roots), 2)
-    assert_equal(roots[0].name, 'Folder 1')
-    assert_equal(roots[1].name, 'Folder 2')
+        # ignored files
+        remote_client.make_file(self.workspace,
+                                     '.File 2.txt', content="baz\n")
+        remote_client.make_file(self.workspace,
+                                     '~$File 2.txt', content="baz\n")
+        remote_client.make_file(self.workspace,
+                                     'File 2.txt~', content="baz\n")
+        remote_client.make_file(self.workspace,
+                                     'File 2.txt.swp', content="baz\n")
+        remote_client.make_file(self.workspace,
+                                     'File 2.txt.lock', content="baz\n")
+        remote_client.make_file(self.workspace,
+                                     'File 2.txt.LOCK', content="baz\n")
+        remote_client.make_file(self.workspace,
+                                     'File 2.txt.part', content="baz\n")
 
-    nxclient.unregister_as_root(folder_1)
-    roots = nxclient.get_roots()
-    assert_equal(len(roots), 1)
-    assert_equal(roots[0].name, 'Folder 2')
+        workspace_children = remote_client.get_children_info(self.workspace)
+        self.assertEquals(len(workspace_children), 3)
+        self.assertEquals(workspace_children[0].uid, file_1)
+        self.assertEquals(workspace_children[0].name, 'File 1.txt')
+        self.assertEquals(workspace_children[1].uid, folder_1)
+        self.assertEquals(workspace_children[1].name, 'Folder 1')
+        self.assertEquals(workspace_children[2].uid, folder_2)
+        self.assertEquals(workspace_children[2].name, 'Folder 2')
 
-    # register new roots in another order
-    nxclient.register_as_root(folder_3)
-    nxclient.register_as_root(folder_1)
-    roots = nxclient.get_roots()
-    assert_equal(len(roots), 3)
-    assert_equal(roots[0].name, 'Folder 1')
-    assert_equal(roots[1].name, 'Folder 2')
-    assert_equal(roots[2].name, 'Folder 3')
+    def test_get_synchronization_roots_from_server(self):
+        remote_client = self.remote_client_1
+        # Check that the list of repositories can be introspected
+        self.assertEquals(remote_client.get_repository_names(), ['default'])
 
-    nxclient.delete(folder_1, use_trash=True)
-    nxclient.delete(folder_3, use_trash=False)
-    nxclient.unregister_as_root(folder_2)
-    assert_equal(nxclient.get_roots(), [])
+        # By default no root is synchronized
+        self.assertEquals(remote_client.get_roots(), [])
+
+        # Register one root explicitly
+        folder_1 = remote_client.make_folder(self.workspace, 'Folder 1')
+        folder_2 = remote_client.make_folder(self.workspace, 'Folder 2')
+        folder_3 = remote_client.make_folder(self.workspace, 'Folder 3')
+        remote_client.register_as_root(folder_1)
+
+        roots = remote_client.get_roots()
+        self.assertEquals(len(roots), 1)
+        self.assertEquals(roots[0].name, 'Folder 1')
+
+        # registetration is idem-potent
+        roots = remote_client.get_roots()
+        self.assertEquals(len(roots), 1)
+        self.assertEquals(roots[0].name, 'Folder 1')
+
+        remote_client.register_as_root(folder_2)
+        roots = remote_client.get_roots()
+        self.assertEquals(len(roots), 2)
+        self.assertEquals(roots[0].name, 'Folder 1')
+        self.assertEquals(roots[1].name, 'Folder 2')
+
+        remote_client.unregister_as_root(folder_1)
+        roots = remote_client.get_roots()
+        self.assertEquals(len(roots), 1)
+        self.assertEquals(roots[0].name, 'Folder 2')
+
+        # register new roots in another order
+        remote_client.register_as_root(folder_3)
+        remote_client.register_as_root(folder_1)
+        roots = remote_client.get_roots()
+        self.assertEquals(len(roots), 3)
+        self.assertEquals(roots[0].name, 'Folder 1')
+        self.assertEquals(roots[1].name, 'Folder 2')
+        self.assertEquals(roots[2].name, 'Folder 3')
+
+        remote_client.delete(folder_1, use_trash=True)
+        remote_client.delete(folder_3, use_trash=False)
+        remote_client.unregister_as_root(folder_2)
+        self.assertEquals(remote_client.get_roots(), [])

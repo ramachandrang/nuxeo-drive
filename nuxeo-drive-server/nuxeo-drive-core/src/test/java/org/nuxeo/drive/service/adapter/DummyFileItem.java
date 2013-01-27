@@ -28,18 +28,25 @@ import org.nuxeo.ecm.core.api.DocumentModel;
  */
 public class DummyFileItem extends DocumentBackedFileItem {
 
+    private static final long serialVersionUID = 1L;
+
     public DummyFileItem(String factoryName, DocumentModel doc)
             throws ClientException {
         super(factoryName, doc);
     }
 
+    public DummyFileItem(String factoryName, String parentId, DocumentModel doc)
+            throws ClientException {
+        super(factoryName, parentId, doc);
+    }
+
     @Override
-    public String getName() throws ClientException {
+    public String getName() {
         return "Dummy file with id " + docId;
     }
 
     @Override
-    public String getFileName(DocumentModel doc) {
+    protected String getFileName(DocumentModel doc) throws ClientException {
         return null;
     }
 

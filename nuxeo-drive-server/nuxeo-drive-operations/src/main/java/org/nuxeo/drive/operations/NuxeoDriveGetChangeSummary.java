@@ -16,15 +16,14 @@
  */
 package org.nuxeo.drive.operations;
 
-import java.io.ByteArrayInputStream;
 import java.io.StringWriter;
+import java.util.Map;
+import java.util.Set;
 
-import javax.servlet.http.HttpServletRequest;
-
-import org.apache.commons.lang.StringUtils;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.nuxeo.drive.service.NuxeoDriveManager;
 import org.nuxeo.drive.service.impl.FileSystemChangeSummary;
+import org.nuxeo.drive.service.impl.RootDefinitionsHelper;
 import org.nuxeo.ecm.automation.OperationContext;
 import org.nuxeo.ecm.automation.core.Constants;
 import org.nuxeo.ecm.automation.core.annotations.Context;
@@ -32,8 +31,8 @@ import org.nuxeo.ecm.automation.core.annotations.Operation;
 import org.nuxeo.ecm.automation.core.annotations.OperationMethod;
 import org.nuxeo.ecm.automation.core.annotations.Param;
 import org.nuxeo.ecm.core.api.Blob;
-import org.nuxeo.ecm.core.api.CoreSession;
-import org.nuxeo.ecm.core.api.impl.blob.InputStreamBlob;
+import org.nuxeo.ecm.core.api.IdRef;
+import org.nuxeo.ecm.core.api.impl.blob.StreamingBlob;
 import org.nuxeo.runtime.api.Framework;
 
 /**
@@ -50,36 +49,25 @@ public class NuxeoDriveGetChangeSummary {
     @Context
     protected OperationContext ctx;
 
-    @Context
-    protected CoreSession session;
+    @Param(name = "lastSyncDate", required = false)
+    protected Long lastSyncDate = -1L;
 
-    @Param(name = "lastSuccessfulSync")
-    protected Long lastSuccessfulSync;
+    // Expect a String structure with form:
+    // repo-1:root-ref-1,repo-1:root-ref-2,repo-2:root-ref-3
+    @Param(name = "lastSyncActiveRootDefinitions", required = false)
+    protected String lastSyncActiveRootDefinitions;
 
     @OperationMethod
     public Blob run() throws Exception {
-
-        // By default look for document changes in all repositories, except if a
-        // specific repository name is passed as a request header
-        boolean allRepositores = true;
-        HttpServletRequest request = (HttpServletRequest) ctx.get("request");
-        if (request != null) {
-            String respositoryName = request.getHeader("X-NXRepository");
-            if (!StringUtils.isEmpty(respositoryName)) {
-                allRepositores = false;
-            }
-        }
-
         NuxeoDriveManager driveManager = Framework.getLocalService(NuxeoDriveManager.class);
-        FileSystemChangeSummary docChangeSummary = driveManager.getDocumentChangeSummary(
-                allRepositores, session.getPrincipal().getName(), session,
-                lastSuccessfulSync);
-
+        Map<String, Set<IdRef>> lastActiveRootRefs = RootDefinitionsHelper.parseRootDefinitions(lastSyncActiveRootDefinitions);
+        FileSystemChangeSummary docChangeSummary = driveManager.getChangeSummary(
+                ctx.getPrincipal(), lastActiveRootRefs, lastSyncDate);
         ObjectMapper mapper = new ObjectMapper();
         StringWriter writer = new StringWriter();
         mapper.writeValue(writer, docChangeSummary);
-        return new InputStreamBlob(new ByteArrayInputStream(
-                writer.toString().getBytes("UTF-8")), "application/json");
+        return StreamingBlob.createFromString(writer.toString(),
+                "application/json");
     }
 
 }

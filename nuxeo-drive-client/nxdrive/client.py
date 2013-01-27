@@ -25,6 +25,7 @@ log = get_logger(__name__)
 # Make the following an optional binding configuration
 FILE_TYPE = 'File'
 FOLDER_TYPE = 'Folder'
+DEDUPED_BASENAME_PATTERN = r'^(.*)__(\d{1,3})$'
 
 BUFFER_SIZE = 1024 ** 2
 MAX_CHILDREN = 1000
@@ -142,7 +143,7 @@ DEFAULT_IGNORED_SUFFIXES = [
 class LocalClient(object):
     """Client API implementation for the local file system"""
 
-    # TODO: initialize the prefixes and sufffix with a dedicated Nuxeo
+    # TODO: initialize the prefixes and suffix with a dedicated Nuxeo
     # Automation operations fetched at controller init time.
 
     def __init__(self, base_folder, digest_func='md5', ignored_prefixes=None,
@@ -267,11 +268,7 @@ class LocalClient(object):
         name = safe_filename(orig_name)
 
         # decompose the name into actionable components
-        if "." in name:
-            name, extension = name.rsplit('.', 1)
-            suffix = "." + extension
-        else:
-            name, suffix = name, ""
+        name, suffix = os.path.splitext(name)
 
         for _ in range(1000):
             os_path = self._abspath(os.path.join(parent, name + suffix))
@@ -279,7 +276,7 @@ class LocalClient(object):
                 return os_path, name + suffix
 
             # the is a duplicated file, try to come with a new name
-            m = re.match(r'(.*)__(\d)', name)
+            m = re.match(DEDUPED_BASENAME_PATTERN, name)
             if m:
                 short_name, increment = m.groups()
                 name = "%s__%d" % (short_name, int(increment) + 1)
@@ -368,13 +365,14 @@ class NuxeoClient(object):
             self.auth[0]: self.auth[1],
         }
 
-    def request_token(self):
+    def request_token(self, revoke=False):
         """Request and return a new token for the user"""
 
         parameters = {
             'deviceId': self.device_id,
             'applicationName': self.application_name,
             'permission': self.permission,
+            'revoke': 'true' if revoke else 'false',
         }
         device_description = DEVICE_DESCRIPTIONS.get(sys.platform)
         if device_description:
@@ -406,8 +404,12 @@ class NuxeoClient(object):
                 e.msg = base_error_message + ": " + e.msg
             raise
         # Use the (potentially re-newed) token from now on
-        self._update_auth(token=token)
+        if not revoke:
+            self._update_auth(token=token)
         return token
+
+    def revoke_token(self):
+        self.request_token(revoke=True)
 
     def fetch_api(self):
         headers = self._get_common_headers()
@@ -438,20 +440,20 @@ class NuxeoClient(object):
     # Nuxeo Drive specific operations
 
     def get_repository_names(self):
-        return self._execute("GetRepositories")[u'value']
+        return self.execute("GetRepositories")[u'value']
 
     def get_roots(self):
-        entries = self._execute("NuxeoDrive.GetRoots")[u'entries']
+        entries = self.execute("NuxeoDrive.GetRoots")[u'entries']
         return self._filtered_results(entries, fetch_parent_uid=False)
 
     def register_as_root(self, ref):
         ref = self._check_ref(ref)
-        return self._execute("NuxeoDrive.SetSynchronization",
+        return self.execute("NuxeoDrive.SetSynchronization",
                              input="doc:" + ref, enable=True)
 
     def unregister_as_root(self, ref):
         ref = self._check_ref(ref)
-        return self._execute("NuxeoDrive.SetSynchronization",
+        return self.execute("NuxeoDrive.SetSynchronization",
                              input="doc:" + ref, enable=False)
 
     #
@@ -612,55 +614,55 @@ class NuxeoClient(object):
     # Document category
 
     def create(self, ref, type, name=None, properties=None):
-        return self._execute("Document.Create", input="doc:" + ref,
+        return self.execute("Document.Create", input="doc:" + ref,
             type=type, name=name, properties=properties)
 
     def update(self, ref, properties=None):
-        return self._execute("Document.Update", input="doc:" + ref,
+        return self.execute("Document.Update", input="doc:" + ref,
             properties=properties)
 
     def set_property(self, ref, xpath, value):
-        return self._execute("Document.SetProperty", input="doc:" + ref,
+        return self.execute("Document.SetProperty", input="doc:" + ref,
             xpath=xpath, value=value)
 
     def delete(self, ref, use_trash=True):
         input = "doc:" + self._check_ref(ref)
         if use_trash:
             try:
-                return self._execute("Document.SetLifeCycle", input=input,
+                return self.execute("Document.SetLifeCycle", input=input,
                                      value='delete')
             except urllib2.HTTPError as e:
                 if e.code == 500:
-                    return self._execute("Document.Delete", input=input)
+                    return self.execute("Document.Delete", input=input)
                 raise
         else:
-            return self._execute("Document.Delete", input=input)
+            return self.execute("Document.Delete", input=input)
 
     def get_children(self, ref):
-        return self._execute("Document.GetChildren", input="doc:" + ref)
+        return self.execute("Document.GetChildren", input="doc:" + ref)
 
     def get_parent(self, ref):
-        return self._execute("Document.GetParent", input="doc:" + ref)
+        return self.execute("Document.GetParent", input="doc:" + ref)
 
     def lock(self, ref):
-        return self._execute("Document.Lock", input="doc:" + ref)
+        return self.execute("Document.Lock", input="doc:" + ref)
 
     def unlock(self, ref):
-        return self._execute("Document.Unlock", input="doc:" + ref)
+        return self.execute("Document.Unlock", input="doc:" + ref)
 
     def move(self, ref, target, name=None):
-        return self._execute("Document.Move", input="doc:" + ref,
+        return self.execute("Document.Move", input="doc:" + ref,
             target=target, name=name)
 
     def copy(self, ref, target, name=None):
-        return self._execute("Document.Copy", input="doc:" + ref,
+        return self.execute("Document.Copy", input="doc:" + ref,
             target=target, name=name)
 
     # These ones are special: no 'input' parameter
 
     def fetch(self, ref):
         try:
-            return self._execute("Document.Fetch", value=ref)
+            return self.execute("Document.Fetch", value=ref)
         except urllib2.HTTPError as e:
             if e.code == 404:
                 raise NotFound("Failed to fetch document %r on server %r" % (
@@ -668,12 +670,12 @@ class NuxeoClient(object):
             raise e
 
     def query(self, query, language=None):
-        return self._execute("Document.Query", query=query, language=language)
+        return self.execute("Document.Query", query=query, language=language)
 
     # Blob category
 
     def get_blob(self, ref):
-        return self._execute("Blob.Get", input="doc:" + ref)
+        return self.execute("Blob.Get", input="doc:" + ref)
 
     def attach_blob(self, ref, blob, filename, **params):
         container = MIMEMultipart("related",
@@ -746,7 +748,7 @@ class NuxeoClient(object):
         s = resp.read()
         return s
 
-    def _execute(self, command, input=None, **params):
+    def execute(self, command, input=None, **params):
         if self._error is not None:
             # Simulate a configurable (e.g. network or server) error for the
             # tests
@@ -787,9 +789,13 @@ class NuxeoClient(object):
         info = resp.info()
         s = resp.read()
 
-        if info.get('content-type', '').startswith("application/json"):
+        content_type = info.get('content-type', '')
+        if content_type.startswith("application/json"):
+            log.trace("Response for '%s' with json payload: %r", url, s)
             return json.loads(s) if s else None
         else:
+            log.trace("Response for '%s' with content-type: %r", url,
+                      content_type)
             return s
 
     def _check_params(self, command, input, params):
@@ -828,3 +834,9 @@ class NuxeoClient(object):
                 # Error message should always be a JSON message,
                 # but sometimes it's not
                 log.debug(detail)
+
+    def get_changes(self, last_sync_date=None, last_root_definitions=None):
+        return self.execute(
+            'NuxeoDrive.GetChangeSummary',
+            lastSyncDate=last_sync_date,
+            lastSyncActiveRootDefinitions=last_root_definitions)
