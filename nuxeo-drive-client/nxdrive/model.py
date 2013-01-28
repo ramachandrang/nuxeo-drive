@@ -73,31 +73,32 @@ class DeviceConfig(Base):
     """
     __tablename__ = 'device_config'
 
-    device_id = Column(String, primary_key=True)
+    device_id = Column(String, primary_key = True)
 
-    def __init__(self, device_id=None):
+    def __init__(self, device_id = None):
         self.device_id = uuid.uuid1().hex if device_id is None else device_id
 
 
 class ServerBinding(Base):
     __tablename__ = 'server_bindings'
 
-    local_folder = Column(String, primary_key=True)
+    local_folder = Column(String, primary_key = True)
     server_url = Column(String)
     remote_user = Column(String)
     remote_password = Column(String)
     remote_token = Column(String)
     __fdtoken = Column('fdtoken', String)
     password_hash = Column(String)
+    password_key = Column(String)
     fdtoken_creation_date = Column(DateTime)
     # passive_updates=False *only* needed if the database
     # does not implement ON UPDATE CASCADE
-    roots = relationship("RootBinding", passive_updates=False)
-    folders = relationship("SyncFolders", passive_updates=False)
+    roots = relationship("RootBinding", passive_updates = False)
+    folders = relationship("SyncFolders", passive_updates = False)
 
     def __init__(self, local_folder, server_url, remote_user,
-                 remote_password=None, remote_token=None, 
-                 fdtoken=None, password_hash=None, fdtoken_creation_date=None):
+                 remote_password = None, remote_token = None,
+                 fdtoken = None, password_hash = None, password_key = None, fdtoken_creation_date = None):
         self.local_folder = local_folder
         self.server_url = server_url
         self.remote_user = remote_user
@@ -108,20 +109,21 @@ class ServerBinding(Base):
         # Used for browser to access CloudDesk without log in prompting
         self.fdtoken = fdtoken
         if fdtoken_creation_date is not None:
-            self.fdtoken_creation_date = fdtoken_creation_date           
+            self.fdtoken_creation_date = fdtoken_creation_date
         # Used to re-generate the federated token (expires in 15min by default)
         self.password_hash = password_hash
-        
+        self.password_key = password_key
+
     @declared_attr
     def fdtoken(self):
-        return synonym('__fdtoken', descriptor=property(self.get_fdtoken, self.set_fdtoken))
-    
+        return synonym('__fdtoken', descriptor = property(self.get_fdtoken, self.set_fdtoken))
+
     def get_fdtoken(self):
         return self.__fdtoken
-    
+
     def set_fdtoken(self, v):
         self.__fdtoken = v
-        if v is not None: 
+        if v is not None:
             self.fdtoken_creation_date = datetime.datetime.now()
 
     def invalidate_credentials(self):
@@ -139,25 +141,25 @@ class ServerBinding(Base):
         return (isinstance(other, ServerBinding) and
                 self.local_folder == other.local_folder and
                 self.server_url == other.server_url and
-                self.remote_user == other.remote_user) 
-        
+                self.remote_user == other.remote_user)
+
     def __ne__(self, other):
         return not self.__eq__(other)
 
 class RootBinding(Base):
     __tablename__ = 'root_bindings'
 
-    local_root = Column(String, primary_key=True)
+    local_root = Column(String, primary_key = True)
     remote_repo = Column(String)
     remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
-    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate="cascade"))
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade"))
 
 #    server_binding = relationship(
 #        'ServerBinding',
 #        backref=backref("roots", cascade="all, delete-orphan"))
     server_binding = relationship('ServerBinding')
 
-    def __init__(self, local_root, remote_repo, remote_root, local_folder=None):
+    def __init__(self, local_root, remote_repo, remote_root, local_folder = None):
         local_root = os.path.abspath(local_root)
         self.local_root = local_root
         self.remote_repo = remote_repo
@@ -177,22 +179,22 @@ class RootBinding(Base):
 
 class SyncFolders(Base):
     __tablename__ = 'sync_folders'
-    
-    remote_id = Column(String, primary_key=True)
+
+    remote_id = Column(String, primary_key = True)
     remote_repo = Column(String)
     remote_name = Column(String)
     remote_root = Column(Integer)
     remote_parent = Column(String, ForeignKey('sync_folders.remote_id'))
     state = Column(Boolean)
-    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate="cascade"))
-    checked = relationship('RootBinding', uselist=False, backref='folder')
-    
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade"))
+    checked = relationship('RootBinding', uselist = False, backref = 'folder')
+
 #    server_binding = relationship(
 #                    'ServerBinding', backref=backref("folders", cascade="all, delete-orphan"))
     server_binding = relationship('ServerBinding')
     children = relationship("SyncFolders")
-    
-    def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder, remote_root=Constants.ROOT_CLOUDDESK, checked=False):
+
+    def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder, remote_root = Constants.ROOT_CLOUDDESK, checked = False):
         self.remote_id = remote_id
         self.remote_name = remote_name
         self.remote_parent = remote_parent
@@ -200,68 +202,68 @@ class SyncFolders(Base):
         self.remote_root = remote_root
         self.local_folder = local_folder
         self.checked2 = checked
-        
+
     def __str__(self):
         return ("SyncFolders<remote_name=%r, remote_id=%r, remote_parent=%r, remote_repo=%r, "
-                "local_folder=%r, %checked>" % (self.remote_name, self.remote_id, self.remote_parent, 
+                "local_folder=%r, %checked>" % (self.remote_name, self.remote_id, self.remote_parent,
                                       self.remote_repo, self.local_folder, '' if self.checked2 else 'not '))
-        
+
 class RecentFiles(Base):
     __tablename__ = 'recent_files'
-    
-    id = Column(Integer, Sequence('file_id_seq'), primary_key=True)
+
+    id = Column(Integer, Sequence('file_id_seq'), primary_key = True)
     local_name = Column(String)
     local_root = Column(String)
-    local_update = Column(DateTime, index=True)
+    local_update = Column(DateTime, index = True)
     pair_state = Column(String)
-    
+
     def __init__(self, local_name, local_root, pair_state):
         self.local_name = local_name
         self.local_root = local_root
         self.pair_state = pair_state
         self.local_update = datetime.datetime.now()
-    
+
 class LastKnownState(Base):
     """Aggregate state aggregated from last collected events."""
     __tablename__ = 'last_known_states'
 
-    id = Column(Integer, Sequence('state_id_seq'), primary_key=True)
+    id = Column(Integer, Sequence('state_id_seq'), primary_key = True)
     local_root = Column(String, ForeignKey('root_bindings.local_root'),
-                        index=True)
+                        index = True)
     root_binding = relationship(
         'RootBinding',
-        backref=backref("states", cascade="all, delete-orphan"))
+        backref = backref("states", cascade = "all, delete-orphan"))
 
     # Timestamps to detect modifications
     last_local_updated = Column(DateTime)
     last_remote_updated = Column(DateTime)
 
     # Save the digest too for better updates / moves detection
-    local_digest = Column(String, index=True)
-    remote_digest = Column(String, index=True)
+    local_digest = Column(String, index = True)
+    remote_digest = Column(String, index = True)
 
     # Path from root using unix separator, '/' for the root it-self.
-    path = Column(String, index=True)
+    path = Column(String, index = True)
     remote_path = Column(String)  # for ordering only
 
     # Remote reference (instead of path based lookup)
-    remote_ref = Column(String, index=True)
+    remote_ref = Column(String, index = True)
 
     # Parent path from root / ref for fast children queries,
     # can be None for the root it-self.
-    parent_path = Column(String, index=True)
-    remote_parent_ref = Column(String, index=True)
+    parent_path = Column(String, index = True)
+    remote_parent_ref = Column(String, index = True)
 
     # Names for fast alignment queries
-    local_name = Column(String, index=True)
-    remote_name = Column(String, index=True)
+    local_name = Column(String, index = True)
+    remote_name = Column(String, index = True)
 
     folderish = Column(Integer)
 
     # Last known state based on event log
     local_state = Column(String)
     remote_state = Column(String)
-    pair_state = Column(String, index=True)
+    pair_state = Column(String, index = True)
 
     # Track move operations to avoid loosing history
     locally_moved_from = Column(String)
@@ -269,8 +271,8 @@ class LastKnownState(Base):
     remotely_moved_from = Column(String)
     remotely_moved_to = Column(String)
 
-    def __init__(self, local_root, local_info=None, remote_info=None,
-                 local_state='unknown', remote_state='unknown', fault_tolerant=None):
+    def __init__(self, local_root, local_info = None, remote_info = None,
+                 local_state = 'unknown', remote_state = 'unknown', fault_tolerant = None):
         self.local_root = local_root
         if local_info is None and remote_info is None:
             raise ValueError(
@@ -281,22 +283,22 @@ class LastKnownState(Base):
         if remote_info is not None:
             self.update_remote(remote_info)
 
-        self.update_state(local_state=local_state, remote_state=remote_state)
+        self.update_state(local_state = local_state, remote_state = remote_state)
         self.fault_tolerant = fault_tolerant
 
-    def update_state(self, local_state=None, remote_state=None, status=None):
+    def update_state(self, local_state = None, remote_state = None, status = None):
         if local_state is not None:
             self.local_state = local_state
         if remote_state is not None:
             self.remote_state = remote_state
         pair = (self.local_state, self.remote_state)
-        
+
         if status is not None and self.folderish == 0:
             try:
-                status[self.pair_state].append(self.local_name)                
+                status[self.pair_state].append(self.local_name)
             except KeyError:
                 status[self.pair_state] = [self.local_name]
-                
+
         self.pair_state = PAIR_STATES.get(pair, 'unknown')
 
     def __repr__(self):
@@ -309,20 +311,20 @@ class LastKnownState(Base):
     def get_local_client(self):
         return LocalClient(self.local_root)
 
-    def get_remote_client(self, factory=None):
+    def get_remote_client(self, factory = None):
         if factory is None:
             factory = NuxeoClient
         rb = self.root_binding
         sb = rb.server_binding
         return factory(
             sb.server_url, sb.remote_user, sb.remote_password,
-            base_folder=rb.remote_root, repository=rb.remote_repo,
-            fault_tolerant=self.fault_tolerant)
+            base_folder = rb.remote_root, repository = rb.remote_repo,
+            fault_tolerant = self.fault_tolerant)
 
-    def refresh_local(self, client=None):
+    def refresh_local(self, client = None):
         """Update the state from the local filesystem info."""
         client = client if client is not None else self.get_local_client()
-        local_info = client.get_info(self.path, raise_if_missing=None)
+        local_info = client.get_info(self.path, raise_if_missing = None)
         self.update_local(local_info)
         return local_info
 
@@ -332,7 +334,7 @@ class LastKnownState(Base):
             if self.local_state in ('unknown', 'created', 'modified',
                                     'synchronized'):
                 # the file use to exist, it has been deleted
-                self.update_state(local_state='deleted')
+                self.update_state(local_state = 'deleted')
                 self.local_digest = None
             return
 
@@ -365,7 +367,7 @@ class LastKnownState(Base):
                 # The time stamp of folderish folder seems to be updated when
                 # children are added under Linux? Is this the same under OSX
                 # and Windows?
-                self.update_state(local_state='modified')
+                self.update_state(local_state = 'modified')
             update_digest = True
 
         if update_digest:
@@ -383,7 +385,7 @@ class LastKnownState(Base):
 
         # else: nothing to do
 
-    def refresh_remote(self, client=None):
+    def refresh_remote(self, client = None):
         """Update the state from the remote server info.
 
         Can reuse an existing client to spare some redundant client init HTTP
@@ -391,8 +393,8 @@ class LastKnownState(Base):
         """
         client = client if client is not None else self.get_remote_client()
         fetch_parent_uid = self.path != '/'
-        remote_info = client.get_info(self.remote_ref, raise_if_missing=True,
-                                      fetch_parent_uid=fetch_parent_uid)
+        remote_info = client.get_info(self.remote_ref, raise_if_missing = True,
+                                      fetch_parent_uid = fetch_parent_uid)
         self.update_remote(remote_info)
         return remote_info
 
@@ -401,7 +403,7 @@ class LastKnownState(Base):
         if remote_info is None:
             if self.remote_state in ('unknown', 'created', 'modified',
                                      'synchronized'):
-                self.update_state(remote_state='deleted')
+                self.update_state(remote_state = 'deleted')
                 self.remote_digest = None
             return
 
@@ -424,7 +426,7 @@ class LastKnownState(Base):
 
         elif remote_info.last_modification_time > self.last_remote_updated:
             self.last_remote_updated = remote_info.last_modification_time
-            self.update_state(remote_state='modified')
+            self.update_state(remote_state = 'modified')
             self.remote_digest = remote_info.get_digest()
             self.folderish = remote_info.folderish
             self.remote_name = remote_info.name
@@ -440,20 +442,20 @@ class LastKnownState(Base):
 class FileEvent(Base):
     __tablename__ = 'fileevents'
 
-    id = Column(Integer, Sequence('fileevent_id_seq'), primary_key=True)
+    id = Column(Integer, Sequence('fileevent_id_seq'), primary_key = True)
     local_root = Column(String, ForeignKey('root_bindings.local_root'))
     utc_time = Column(DateTime)
     path = Column(String)
 
     root_binding = relationship("RootBinding")
 
-    def __init__(self, local_root, path, utc_time=None):
+    def __init__(self, local_root, path, utc_time = None):
         self.local_root = local_root
         if utc_time is None:
             utc_time = datetime.datetime.utcnow()
 
 
-def init_db(nxdrive_home, echo=False, scoped_sessions=True, poolclass=None):
+def init_db(nxdrive_home, echo = False, scoped_sessions = True, poolclass = None):
     """Return an engine and session maker configured for using nxdrive_home
 
     The database is created in nxdrive_home if missing and the tables
@@ -466,12 +468,12 @@ def init_db(nxdrive_home, echo=False, scoped_sessions=True, poolclass=None):
     """
     # We store the DB as SQLite files in the nxdrive_home folder
     dbfile = os.path.join(os.path.abspath(nxdrive_home), 'nxdrive.db')
-    engine = create_engine('sqlite:///' + dbfile, echo=echo,
-                           poolclass=poolclass)
+    engine = create_engine('sqlite:///' + dbfile, echo = echo,
+                           poolclass = poolclass)
 
     # Ensure that the tables are properly initialized
     Base.metadata.create_all(engine)
-    maker = sessionmaker(bind=engine)
+    maker = sessionmaker(bind = engine)
     if scoped_sessions:
         maker = scoped_session(maker)
     return engine, maker

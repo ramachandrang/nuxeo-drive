@@ -455,10 +455,11 @@ class Controller(object):
         except NoResultFound:
             log.info("Binding '%s' to '%s' with account '%s'",
                      local_folder, server_url, username)
-            password = encrypt_password(password)
+            password, key = encrypt_password(password)
             session.add(ServerBinding(local_folder, server_url, username,
                                       remote_password = password,
-                                      remote_token = token
+                                      remote_token = token,
+                                      password_key = key
 #                                      remote_token=token,
 #                                      fdtoken=fdtoken,
 #                                      password_hash=password_hash
@@ -1375,7 +1376,7 @@ class Controller(object):
         if remote_client is None:
             remote_client = self.nuxeo_client_factory(
                 sb.server_url, sb.remote_user, self.device_id,
-                token = sb.remote_token, password = decrypt_password(sb.remote_password),
+                token = sb.remote_token, password = decrypt_password(sb.remote_password, sb.password_key),
                 base_folder = base_folder, repository = repository)
             cache[cache_key] = remote_client
         # Make it possible to have the remote client simulate any kind of

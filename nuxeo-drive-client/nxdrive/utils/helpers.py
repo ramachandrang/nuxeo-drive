@@ -4,6 +4,7 @@ Created on Nov 7, 2012
 @author: mconstantin
 '''
 
+import sys
 import urllib2
 from PySide.QtCore import Signal, QObject, QCoreApplication, QSettings, QObject, QEvent
 from PySide.QtGui import QSystemTrayIcon, QMessageBox
@@ -129,18 +130,37 @@ try:
     from Crypto.Cipher import AES
     import hashlib
     import base64
+    import getpass
+    if sys.platform == 'win32':
+        import win32crypt
+    elif sys.platform == 'darwin':
+        import keyring
 
-    log.debug("Crypto.Cipher successfully imported")
+    log.debug("Crypto.Cipher, etc. successfully imported")
     def encrypt_password(pwd):
-        key = hashlib.md5(Constants.PRODUCT_NAME).digest()
+        key = hashlib.md5(getpass.getuser()).digest()
         mode = AES.MODE_ECB
         encryptor = AES.new(key, mode)
         pwd = pad_to_multiple_of_16(pwd)
         encpwd = encryptor.encrypt(pwd)
-        return base64.standard_b64encode(encpwd)
+        if sys.platform == 'win32':
+            pwdhash = win32crypt.CryptProtectData(key, Constants.SHORT_APP_NAME, None, None, None, 0)
+        elif sys.platform == 'darwin':
+            keyring.set_password(Constants.SHORT_APP_NAME, getpass.getuser(), key)
+            pwdhash = Constants.SHORT_APP_NAME
+        else:
+            pwdhash = key
+        return base64.standard_b64encode(encpwd), base64.standard_b64encode(pwdhash)
 
-    def decrypt_password(encpwd):
-        key = hashlib.md5(Constants.PRODUCT_NAME).digest()
+    def decrypt_password(encpwd, pwdhash = ''):
+        pwdhash = base64.standard_b64decode(pwdhash)
+        if sys.platform == 'win32':
+            desc = ''
+            key = win32crypt.CryptUnprotectData(pwdhash, desc, None, None, 0)[1]
+        elif sys.platform == 'darwin':
+            key = keyring.get_password(Constants.SHORT_APP_NAME, getpass.getuser())
+        else:
+            key = pwdhash
         mode = AES.MODE_ECB
         decryptor = AES.new(key, mode)
         encpwd = base64.standard_b64decode(encpwd)
@@ -148,27 +168,27 @@ try:
         pwd = remove_pad(pwd)
         return pwd
 
-except ImportError:
-    log.warning("Crypto.Cipher is not installed: password will not be encrypted")
+except ImportError as e:
+    log.warning("module is not installed (%s): password will not be encrypted", str(e))
     def encrypt_password(pwd):
         return pwd
 
-    def decrypt_password(encpwd):
+    def decrypt_password(encpwd, pwdhash = ''):
         return encpwd
 
 
-def pad_to_multiple_of_16(input):
-    if len(input) % 16 != 0:
-        diff = 16 - len(input) % 16
-        input += '\x80'
+def pad_to_multiple_of_16(indata):
+    if len(indata) % 16 != 0:
+        diff = 16 - len(indata) % 16
+        indata += '\x80'
         if diff > 1:
-            input += ' ' * (diff - 1)
+            indata += ' ' * (diff - 1)
 
-    return input
+    return indata
 
-def remove_pad(input):
-    pos = input.rfind('\x80')
+def remove_pad(indata):
+    pos = indata.rfind('\x80')
     if pos != -1:
-        input = input[0:pos]
+        indata = indata[0:pos]
 
-    return input
+    return indata

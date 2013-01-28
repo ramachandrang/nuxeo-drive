@@ -4,7 +4,6 @@ from nxdrive.client import Unauthorized
 from nxdrive.gui.resources import find_icon
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
-from nxdrive.utils.helpers import encrypt_password
 
 log = get_logger(__name__)
 
