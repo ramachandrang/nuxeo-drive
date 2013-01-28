@@ -4,6 +4,7 @@ from nxdrive.client import Unauthorized
 from nxdrive.gui.resources import find_icon
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
+from nxdrive.utils.helpers import encrypt_password
 
 log = get_logger(__name__)
 
@@ -44,8 +45,8 @@ def find_icon(icon_filename):
 class Dialog(QDialog):
     """Dialog box to prompt the user for Server Bind credentials"""
 
-    def __init__(self, fields_spec, title=None, fields_title=None,
-                 callback=None, parent=None):
+    def __init__(self, fields_spec, title = None, fields_title = None,
+                 callback = None, parent = None):
         super(Dialog, self).__init__(parent)
         if QtGui is None:
             raise RuntimeError("PySide is not installed.")
@@ -114,8 +115,8 @@ class Dialog(QDialog):
         super(Dialog, self).reject()
 
 
-def prompt_authentication(controller, local_folder, url=None, username=None,
-                          is_url_readonly=False, parent=None, app=None, update=True):
+def prompt_authentication(controller, local_folder, url = None, username = None,
+                          is_url_readonly = False, parent = None, app = None, update = True):
     """Prompt a QT dialog to ask for user credentials for binding a server"""
     global is_dialog_open
 
@@ -123,11 +124,11 @@ def prompt_authentication(controller, local_folder, url=None, username=None,
         # Qt / PySide is not installed
         log.error("QT / PySide is not installed:"
                   " use commandline options for binding a server.")
-        return False
+        return (False, None)
 
     if is_dialog_open:
         # Do not reopen the dialog multiple times
-        return False
+        return (False, None)
 
     # TODO: learn how to use QT i18n support to handle translation of labels
     fields_spec = [
@@ -166,8 +167,8 @@ def prompt_authentication(controller, local_folder, url=None, username=None,
             dialog.show_message("Connecting to %s ..." % url)
             if update:
                 controller.bind_server(local_folder, url, username, password)
-                #get federated token for CloudDesk
-                
+                # get federated token for CloudDesk
+
             else:
                 controller.validate_credentials(url, username, password)
             return True
@@ -176,7 +177,7 @@ def prompt_authentication(controller, local_folder, url=None, username=None,
             return False
         except:
             msg = "Unable to connect to " + url
-            log.debug(msg, exc_info=True)
+            log.debug(msg, exc_info = True)
             # TODO: catch a new ServerUnreachable catching network isssues
             dialog.show_message(msg)
             return False
@@ -187,8 +188,8 @@ def prompt_authentication(controller, local_folder, url=None, username=None,
         QApplicationSingleton()
 #        QtGui.QApplication([])
 
-    dialog = Dialog(fields_spec, title="%s Authentication" % Constants.APP_NAME,
-                    callback=bind_server)
+    dialog = Dialog(fields_spec, title = "%s Authentication" % Constants.APP_NAME,
+                    callback = bind_server)
     is_dialog_open = True
     try:
         dialog.exec_()
@@ -206,6 +207,6 @@ if __name__ == '__main__':
     local_folder = default_nuxeo_drive_folder()
     print prompt_authentication(
         ctl, local_folder,
-        url='http://localhost:8080/nuxeo',
-        username='Administrator',
+        url = 'http://localhost:8080/nuxeo',
+        username = 'Administrator',
     )

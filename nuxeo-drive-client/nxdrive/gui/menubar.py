@@ -301,18 +301,27 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.controller.open_local_file(self._get_local_folder())
         
     def openCloudDesk(self):
-        fdtoken = self.controller.get_browser_token(self.local_folder)
-        if fdtoken is None:
-            fdtoken = ''
+        # TODO Alternative solution to use for opening the site: keep the password (encrypt?)
+#        fdtoken = self.controller.get_browser_token(self.local_folder)
+#        if fdtoken is None:
+#            fdtoken = ''
         server_binding = self.controller.get_server_binding(self.local_folder)
         
         try:
             new = 2 #open in a new tab if possible
             url = server_binding.server_url
             if url[-1] != '/': url += '/'
+#            query_params = {
+#                            'user_name': '<SharpToken>',
+#                            'user_password': fdtoken,
+#                            'language': 'en_US',
+#                            'requestedUrl': '',
+#                            'form_submitted_marker': '',
+#                            'Submit': 'Log in'
+#                            }
             query_params = {
-                            'user_name': '<SharpToken>',
-                            'user_password': fdtoken,
+                            'user_name': server_binding.remote_user,
+                            'user_password': server_binding.remote_password,
                             'language': 'en_US',
                             'requestedUrl': '',
                             'form_submitted_marker': '',
@@ -457,11 +466,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.update_running_icon()
             self.communicator.menu.emit()
 
-        if code == 401:
+        if code == 401 or code == 403:
             log.debug('Detected invalid credentials for: %s', local_folder)
             self.communicator.invalid_credentials.emit(local_folder)
             
-        if code == 61 or code == 600 or code == 601:
+        elif code == 61 or code == 600 or code == 601:
             text = getattr(exception, 'text', None)
             msg = 'Detected invalid proxy server settings' + '' if text is None else ': %s' % text
             log.debug(msg)
@@ -767,9 +776,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     @QtCore.Slot(str)
     def handle_invalid_credentials(self, local_folder):
         sb = self.controller.get_server_binding(local_folder, raise_if_missing=False)
-        if sb is not None:
-            sb.invalidate_credentials()
-            self.controller.get_session().commit()
         # menu is updated when is activated 
 #        self.communicator.menu.emit()
         # show a notification
@@ -778,7 +784,19 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.handle_message(self.tr("%s Authentication") % Constants.APP_NAME, 
                            detail, 
                            QtGui.QSystemTrayIcon.Critical)
-        # TODO Pop authentication dialog
+        
+        # clicking on the message notification is not working on the Mac
+        if sys.platform == 'darwin':
+            if not self.get_binding_info(self.local_folder).online: 
+                # Launch the GUI to create a binding
+                from nxdrive.gui.authentication import prompt_authentication
+                server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing=False)
+                success = prompt_authentication(self.controller, self.local_folder,
+                                       url=server_binding.server_url,
+                                       username=server_binding.remote_user)
+                
+                if success:
+                    self.doWork()            
                 
     @QtCore.Slot()
     def handle_invalid_proxy(self, message):
@@ -797,16 +815,16 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         
     def handle_message_clicked(self):
         # handle only the click for entering credentials
-#        if not self.get_binding_info(self.local_folder).online:
-        # For TEST ONLY
         if not self.get_binding_info(self.local_folder).online: 
             # Launch the GUI to create a binding
             from nxdrive.gui.authentication import prompt_authentication
             server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing=False)
-            prompt_authentication(self.controller, self.local_folder,
+            success = prompt_authentication(self.controller, self.local_folder,
                                    url=server_binding.server_url,
                                    username=server_binding.remote_user)
             
+            if success[0]:
+                self.doWork()
                 
     def _getUserName(self):
 #        local_folder = default_nuxeo_drive_folder()
