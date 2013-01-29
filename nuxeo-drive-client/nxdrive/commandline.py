@@ -11,8 +11,9 @@ except ImportError:
     import pdb
     debugger = pdb
 
-import win32api
-import win32con
+if sys.platform == 'win32':
+    import win32api
+    import win32con
 
 from nxdrive.controller import Controller
 from nxdrive.daemon import daemonize

@@ -18,11 +18,13 @@ from folders_dlg import SyncFoldersDlg
 from nxdrive.utils.helpers import QApplicationSingleton, EventFilter
 from nxdrive.utils.helpers import Communicator
 from nxdrive.gui.menubar import DEFAULT_EX_NX_DRIVE_FOLDER
-from nxdrive.protocol_handler import win32
 from nxdrive import Constants
 import nxdrive.gui.qrc_resources
 
-
+if sys.platform == 'win32':
+    from nxdrive.protocol_handler import win32
+    
+    
 class CpoWizard(QWizard):
     pages = {
              'IntroPage': 1,

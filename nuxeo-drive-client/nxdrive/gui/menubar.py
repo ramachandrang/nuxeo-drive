@@ -21,7 +21,6 @@ from nxdrive import Constants
 from nxdrive.async.operations import SyncOperations
 # from utils.helpers import Communicator, ProxyInfo, RecoverableError
 from nxdrive.utils.helpers import Communicator, RecoverableError
-from nxdrive.protocol_handler import win32
 # this import is flagged erroneously as unused import - do not remove
 import nxdrive.gui.qrc_resources
 from nxdrive.async.worker import Worker
@@ -32,6 +31,9 @@ from nxdrive.utils.helpers import decrypt_password
 from nxdrive.model import RecentFiles
 from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
+
+if sys.platform == 'win32':
+    from nxdrive.protocol_handler import win32
 
 settings = create_settings()
 

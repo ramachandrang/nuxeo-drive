@@ -19,7 +19,6 @@ from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
 from nxdrive.utils.helpers import EventFilter
 from nxdrive.client import ProxyInfo
-from nxdrive.protocol_handler import win32
 from ui_preferences import Ui_preferencesDlg
 from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
@@ -29,6 +28,9 @@ import nxdrive.gui.qrc_resources
 # Under ZOL license - add license in documentation
 from icemac.truncatetext import truncate
 
+if sys.platform == 'win32':
+    from nxdrive.protocol_handler import win32
+    
 def default_expanded_nuxeo_drive_folder():
     return os.path.expanduser(DEFAULT_NX_DRIVE_FOLDER)
 
