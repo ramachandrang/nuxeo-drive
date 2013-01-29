@@ -384,8 +384,8 @@ class Controller(object):
         except NoResultFound:
             if raise_if_missing:
                 raise RuntimeError(
-                    "Folder '%s' is not bound to any Nuxeo server"
-                    % local_folder)
+                    "Folder '%s' is not bound to any %s server"
+                    % (local_folder, Constants.PRODUCT_NAME))
             return None
         except exc.InvalidRequestError:
             session.rollback()

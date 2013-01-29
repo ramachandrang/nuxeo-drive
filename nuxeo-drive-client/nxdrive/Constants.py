@@ -17,7 +17,7 @@ APP_STATE_QUITTING = 'quitting'
 
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 # TODO replace with CloudDesk url and admin(?) account
-DEFAULT_CLOUDDESK_URL = r'https://vpc.sharpb2bcloud.com/app1'
+DEFAULT_CLOUDDESK_URL = r'https://devdm.sharpb2bcloud.com/app1'
 DEFAULT_ACCOUNT = "user1@st.com"
 
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
@@ -31,7 +31,7 @@ RECENT_FILES_COUNT = 5
 
 ICON_ANIMATION_DELAY = 200
 ICON_ANIMATION_START_DELAY = 100
-NOTIFICATION_MESSAGE_DELAY = 3 #in seconds
+NOTIFICATION_MESSAGE_DELAY = 3  # in seconds
 FDTOKEN_DURATION = 15 * 60
 SYNC_STATUS_STOP = 1
 SYNC_STATUS_START = 2
@@ -44,7 +44,7 @@ APP_ICON_PATTERN_ANIMATION = ':/indicator_icon_%s_%s.png'
 APP_ICON_ABOUT = ':/about_icon.png'
 APP_ICON_TAB_GENERAL = ':/general.png'
 APP_ICON_TAB_ACCOUNT = ':/account.png'
-APP_ICON_TAB_NETWORK =':/network.png'
+APP_ICON_TAB_NETWORK = ':/network.png'
 APP_ICON_TAB_ADVANCED = ':/advanced.png'
 APP_ICON_WIZARD_RB = ':/rb_icon.png'
 
@@ -60,15 +60,15 @@ elif sys.platform == 'win32':
     APP_IMG_WIZARD_FINDER_FOLDERS = ':/explorer_folders.png'
     APP_IMG_WIZARD_ACCESS_FILES = ':/access_files_win32.png'
     APP_IMG_WIZARD_APPBAR = ':/systray.png'
-    APP_IMG_WIZARD_FINAL = ':/final_page_win32.png'  
+    APP_IMG_WIZARD_FINAL = ':/final_page_win32.png'
     APP_IMG_WIZARD_BKGRND = ':/bkgrnd.png'
-    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'  
+    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'
     APP_IMG_WIZARD_BANNER = ':/banner.png'
-    
+
 COPYRIGHT_FILE = r'nxdrive/data/CloudDesk_EULA.txt'
 ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
 ICON_APP_ENABLED = R'nuxeo_drive_icon_16_enabled.png'
 ICON_APP_DISABLED = R'nuxeo_drive_icon_16_disabled.png'
 
-__version__ = '1.0.0'
+__version__ = '0.1.3'
 

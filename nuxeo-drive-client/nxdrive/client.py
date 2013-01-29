@@ -41,14 +41,14 @@ DEVICE_DESCRIPTIONS = {
 }
 
 
-def safe_filename(name, replacement='-'):
+def safe_filename(name, replacement = '-'):
     """Replace invalid character in candidate filename"""
     return re.sub(r'(/|\\|\*)', replacement, name)
 
-    
+
 class Unauthorized(Exception):
 
-    def __init__(self, server_url, user_id, code=403):
+    def __init__(self, server_url, user_id, code = 403):
         self.server_url = server_url
         self.user_id = user_id
         self.code = code
@@ -68,7 +68,7 @@ class FileInfo(object):
     """Data Transfer Object for file info on the Local FS"""
 
     def __init__(self, root, path, folderish, last_modification_time,
-                 digest_func='md5'):
+                 digest_func = 'md5'):
         self.root = root  # the sync root folder local path
         self.path = path  # the truncated path (under the root)
         self.folderish = folderish  # True if a Folder
@@ -102,23 +102,23 @@ class FileInfo(object):
                     break
                 h.update(buffer)
         return h.hexdigest()
-    
+
 class FolderInfo(object):
     """Folder node for retrieving folder hierarchy"""
-    
+
     def __init__(self, docId, title, parentId):
         self.docId = docId
         self.title = title
         self.parentId = parentId
-        
+
     def __str__(self):
         return "folder '%s', docId=%s, parentId=%s" % (self.title, self.docId, self.parentId)
-    
+
 
 BaseNuxeoDocumentInfo = namedtuple('NuxeoDocumentInfo', [
     'root',  # ref of the document that serves as sync root
     'name',  # title of the document (not guaranteed to be locally unique)
-    'uid',   # ref of the document
+    'uid',  # ref of the document
     'parent_uid',  # ref of the parent document
     'path',  # remote path (useful for ordering)
     'folderish',  # True is can host child documents
@@ -153,15 +153,15 @@ DEFAULT_IGNORED_SUFFIXES = [
 
 class ProxyInfo(object):
     """Holder class for proxy information"""
-    
+
     PORT = '8090'
     PORT_INTEGER = int(PORT)
-    TYPES = ['HTTP','SOCKS4', 'SOCKS5']
+    TYPES = ['HTTP', 'SOCKS4', 'SOCKS5']
     PROXY_SERVER = 'server'
     PROXY_AUTODETECT = 'autodetect'
     PROXY_DIRECT = 'direct'
-    
-    def __init__(self, type='HTTP', server_url=None, port=None, authn_required=False, user=None, pwd=None):
+
+    def __init__(self, type = 'HTTP', server_url = None, port = None, authn_required = False, user = None, pwd = None):
         self.type = type
         if type != ProxyInfo.TYPES[0]:
             raise ProxyConfigurationError('protocol type not supported')
@@ -177,22 +177,22 @@ class ProxyInfo(object):
             raise ProxyConfigurationError('missing server or port')
         self.user = user
         self.pwd = pwd
-        
+
     @staticmethod
     def get_proxy():
         settings = create_settings()
         if settings is None:
             return None
-        
+
         useProxy = settings.value('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
         if useProxy == ProxyInfo.PROXY_DIRECT:
             return None
-        
+
         proxyType = settings.value('preferences/proxyType', 'HTTP')
         server = settings.value('preferences/proxyServer')
         user = settings.value('preferences/proxyUser')
         pwd = settings.value('preferences/proxyPwd')
-        
+
         if sys.platform == 'win32':
             authnAsString = settings.value('preferences/proxyAuthN', 'false')
             if authnAsString.lower() == 'true':
@@ -206,21 +206,21 @@ class ProxyInfo(object):
                 port = int(port)
             except ValueError:
                 port = 0
-            
+
         else:
             authN = settings.value('preferences/proxyAuthN', False)
             port = settings.value('preferences/proxyPort', 0)
-            
+
         return ProxyInfo(proxyType, server, port, authN, user, pwd)
-    
+
 class LocalClient(object):
     """Client API implementation for the local file system"""
 
     # TODO: initialize the prefixes and sufffix with a dedicated Nuxeo
     # Automation operations fetched at controller init time.
 
-    def __init__(self, base_folder, digest_func='md5', ignored_prefixes=None,
-                 ignored_suffixes=None, fault_tolerant=True):
+    def __init__(self, base_folder, digest_func = 'md5', ignored_prefixes = None,
+                 ignored_suffixes = None, fault_tolerant = True):
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -238,7 +238,7 @@ class LocalClient(object):
         self.fault_tolerant = fault_tolerant
 
     # Getters
-    def get_info(self, ref, raise_if_missing=None):
+    def get_info(self, ref, raise_if_missing = None):
         if raise_if_missing == None:
             raise_if_missing = not self.fault_tolerant
         os_path = self._abspath(ref)
@@ -258,7 +258,7 @@ class LocalClient(object):
         # to have Windows specific bugs, let's not use the unixe inode at all.
         # uid = str(stat_info.st_ino)
         return FileInfo(self.base_folder, path, folderish, mtime,
-                        digest_func=self._digest_func)
+                        digest_func = self._digest_func)
 
     def get_content(self, ref):
         return open(self._abspath(ref), "rb").read()
@@ -302,7 +302,7 @@ class LocalClient(object):
             return "/" + name
         return parent + "/" + name
 
-    def make_file(self, parent, name, content=None):
+    def make_file(self, parent, name, content = None):
         os_path, name = self._abspath_deduped(parent, name)
         with open(os_path, "wb") as f:
             if content:
@@ -339,9 +339,9 @@ class LocalClient(object):
         return os.path.abspath(os.path.join(self.base_folder, path_suffix))
 
     def _abspath_deduped(self, parent, orig_name):
-        
+
 #        import pdb; pdb.set_trace()
-        
+
         """Absolute path on the operating system with deduplicated names"""
         # make name safe by removing invalid chars
         name = safe_filename(orig_name)
@@ -377,19 +377,19 @@ class NuxeoClient(object):
 
     # Parameters used when negotiating authentication token:
 
-    application_name = 'Nuxeo Drive'
-    
+    application_name = Constants.APP_NAME
+
     _proxy = None
     _proxy_error_count = 0
     MAX_PROXY_ERROR_COUNT = 2
     MAX_CREDENTIAL_ERROR_COUNT = 2
-    
+
     @classproperty
     def proxy(cls):
         if cls._proxy is None:
             cls._proxy = ProxyInfo.get_proxy()
         return cls._proxy
-    
+
     @classproperty
     def proxy_error_count(cls):
         cls._proxy_error_count += 1
@@ -398,10 +398,10 @@ class NuxeoClient(object):
     permission = 'ReadWrite'
 
     def __init__(self, server_url, user_id, device_id,
-                 password=None, token=None,
-                 base_folder=None, repository="default",
-                 ignored_prefixes=None, ignored_suffixes=None, 
-                 fault_tolerant=True):
+                 password = None, token = None,
+                 base_folder = None, repository = "default",
+                 ignored_prefixes = None, ignored_suffixes = None,
+                 fault_tolerant = True):
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -422,7 +422,7 @@ class NuxeoClient(object):
 
         self.user_id = user_id
         self.device_id = device_id
-        self._update_auth(password=password, token=token)
+        self._update_auth(password = password, token = token)
 
         cookie_processor = urllib2.HTTPCookieProcessor()
         self.automation_url = server_url + 'site/automation/'
@@ -435,7 +435,7 @@ class NuxeoClient(object):
             else:
                 # autodetect uses the default ProxyServer
                 self.opener = urllib2.build_opener(cookie_processor)
-        else:    
+        else:
             # direct connection - disable autodetect
             proxy_support = urllib2.ProxyHandler({})
             self.opener = urllib2.build_opener(cookie_processor, proxy_support)
@@ -450,12 +450,12 @@ class NuxeoClient(object):
             self._base_folder_path = base_folder_doc['path']
         else:
             self._base_folder_ref, self._base_folder_path = None, None
-            
+
         self.fault_tolerant = fault_tolerant
 
         self.credential_error_count = 0
 
-    def _update_auth(self, password=None, token=None):
+    def _update_auth(self, password = None, token = None):
         """Select the most appropriate authentication heads based on credentials"""
         if token is not None:
             self.auth = ('X-Authentication-Token', token)
@@ -481,7 +481,7 @@ class NuxeoClient(object):
             'X-Application-Name': self.application_name,
             self.auth[0]: self.auth[1],
         }
-        
+
     def request_token(self):
         """Request and return a new token for the user"""
 
@@ -499,12 +499,12 @@ class NuxeoClient(object):
 
         headers = self._get_common_headers()
         base_error_message = (
-            "Failed not connect to Nuxeo Content Automation on server %r"
+            "Failed not connect to %s Content Automation on server %r"
             " with user %r"
-        ) % (self.server_url, self.user_id)
+        ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
-            req = urllib2.Request(url, headers=headers)
+            req = urllib2.Request(url, headers = headers)
             token = self.opener.open(req).read()
             NuxeoClient._proxy_error_count = 0
         except urllib2.HTTPError as e:
@@ -529,17 +529,17 @@ class NuxeoClient(object):
                 e.msg = base_error_message + ": " + e.msg
             raise
         # Use the (potentially re-newed) token from now on
-        self._update_auth(token=token)
+        self._update_auth(token = token)
         return token
 
     def fetch_api(self):
         headers = self._get_common_headers()
         base_error_message = (
-            "Failed not connect to Nuxeo Content Automation on server %r"
+            "Failed not connect to %s Content Automation on server %r"
             " with user %r"
-        ) % (self.server_url, self.user_id)
+        ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
-            req = urllib2.Request(self.automation_url, headers=headers)
+            req = urllib2.Request(self.automation_url, headers = headers)
             response = json.loads(self.opener.open(req).read())
             NuxeoClient._proxy_error_count = 0
         except urllib2.HTTPError as e:
@@ -574,39 +574,39 @@ class NuxeoClient(object):
 
     def get_roots(self):
         entries = self._execute("NuxeoDrive.GetRoots")[u'entries']
-        return self._filtered_results(entries, fetch_parent_uid=False)
-    
+        return self._filtered_results(entries, fetch_parent_uid = False)
+
     def get_mydocs(self):
         return self._execute("UserWorkspace.Get")
-    
+
     def get_othersdocs(self):
-        query = """SELECT * FROM Document WHERE 
-                   sh:rootshared = 1 AND 
-                   sh:isWritePermission = 1 AND 
+        query = """SELECT * FROM Document WHERE
+                   sh:rootshared = 1 AND
+                   sh:isWritePermission = 1 AND
                    ecm:currentLifeCycleState!= 'deleted' AND
-                   ecm:mixinType = 'Folderish' AND 
-                   dc:creator != 'system' AND 
-                   ecm:name != 'Guest Folder' AND 
-                   ecm:primaryType!='Domain' AND 
-                   ecm:primaryType!='SocialDomain' AND 
-                   ecm:mixinType != 'HiddenInNavigation' 
-                   AND ecm:mixinType!='HiddenInFacetedSearch' AND 
+                   ecm:mixinType = 'Folderish' AND
+                   dc:creator != 'system' AND
+                   ecm:name != 'Guest Folder' AND
+                   ecm:primaryType!='Domain' AND
+                   ecm:primaryType!='SocialDomain' AND
+                   ecm:mixinType != 'HiddenInNavigation'
+                   AND ecm:mixinType!='HiddenInFacetedSearch' AND
                    dc:creator != '"+username+"'
                    """
 
-        return self._execute('Document.Query', query=query)[u'entries']
+        return self._execute('Document.Query', query = query)[u'entries']
         # TODO return result - any filtering needed?
-        
+
     def get_subfolders(self, parent, nodes):
         docId = parent[u'uid']
         query = """SELECT * FROM Document WHERE
-                ecm:parentId = '%s' AND 
+                ecm:parentId = '%s' AND
                 ecm:currentLifeCycleState != 'deleted' AND
-                ecm:mixinType = 'Folderish' and 
+                ecm:mixinType = 'Folderish' and
                 ecm:mixinType != 'HiddenInNavigation' AND
                 ecm:isCheckedInVersion = 0""" % docId
-                
-        subfolders = result = self._execute('Document.Query', query=query)[u'entries']
+
+        subfolders = result = self._execute('Document.Query', query = query)[u'entries']
         for sf in subfolders:
             nodes[sf[u'title']]['value'] = FolderInfo(sf[u'uid'], sf[u'title'], docId)
             self.get_subfolders(sf, nodes[sf[u'title']])
@@ -614,18 +614,18 @@ class NuxeoClient(object):
     def register_as_root(self, ref):
         ref = self._check_ref(ref)
         return self._execute("NuxeoDrive.SetSynchronization",
-                             input="doc:" + ref, enable=True)
+                             input = "doc:" + ref, enable = True)
 
     def unregister_as_root(self, ref):
         ref = self._check_ref(ref)
         return self._execute("NuxeoDrive.SetSynchronization",
-                             input="doc:" + ref, enable=False)
+                             input = "doc:" + ref, enable = False)
 
     #
     # Client API common with the FS API
     #
 
-    def exists(self, ref, use_trash=True):
+    def exists(self, ref, use_trash = True):
         ref = self._check_ref(ref)
         id_prop = 'ecm:path' if ref.startswith('/') else 'ecm:uuid'
         if use_trash:
@@ -662,13 +662,13 @@ class NuxeoClient(object):
 
         return self._filtered_results(entries)
 
-    def _filtered_results(self, entries, fetch_parent_uid=True,
-                          parent_uid=None):
+    def _filtered_results(self, entries, fetch_parent_uid = True,
+                          parent_uid = None):
         # Filter out filenames that would be ignored by the file system client
         # so as to be consistent.
         filtered = []
-        for info in [self._doc_to_info(d, fetch_parent_uid=fetch_parent_uid,
-                                       parent_uid=parent_uid)
+        for info in [self._doc_to_info(d, fetch_parent_uid = fetch_parent_uid,
+                                       parent_uid = parent_uid)
                      for d in entries]:
             ignore = False
 
@@ -688,19 +688,19 @@ class NuxeoClient(object):
         return filtered
 
     # TEST: changed use_trash to False
-    def get_info(self, ref, raise_if_missing=None, fetch_parent_uid=True,
-                 use_trash=False):
+    def get_info(self, ref, raise_if_missing = None, fetch_parent_uid = True,
+                 use_trash = False):
         if raise_if_missing == None:
             raise_if_missing = not self.fault_tolerant
-        if not self.exists(ref, use_trash=use_trash):
+        if not self.exists(ref, use_trash = use_trash):
             if raise_if_missing:
                 raise NotFound("Could not find '%s' on '%s'" % (
                     self._check_ref(ref), self.server_url))
             return None
         return self._doc_to_info(self.fetch(self._check_ref(ref)),
-                                 fetch_parent_uid=fetch_parent_uid)
+                                 fetch_parent_uid = fetch_parent_uid)
 
-    def _doc_to_info(self, doc, fetch_parent_uid=True, parent_uid=None):
+    def _doc_to_info(self, doc, fetch_parent_uid = True, parent_uid = None):
         """Convert Automation document description to NuxeoDocumentInfo"""
         props = doc['properties']
         folderish = 'Folderish' in doc['facets']
@@ -736,7 +736,7 @@ class NuxeoClient(object):
         ref = self._check_ref(ref)
         return self.get_blob(ref)
 
-    def update_content(self, ref, content, name=None):
+    def update_content(self, ref, content, name = None):
         if name is None:
             name = self.get_info(ref).name
         self.attach_blob(self._check_ref(ref), content, name)
@@ -755,13 +755,13 @@ class NuxeoClient(object):
         # - Folder under Folder or Workspace
         # This configuration should be provided by a special operation on the
         # server.
-        doc = self.create(parent, FOLDER_TYPE, name=name,
-                    properties={'dc:title': name})
+        doc = self.create(parent, FOLDER_TYPE, name = name,
+                    properties = {'dc:title': name})
         return doc[u'uid']
 
-    def make_file(self, parent, name, content=None):
-        doc = self.create(parent, FILE_TYPE, name=name,
-                          properties={'dc:title': name})
+    def make_file(self, parent, name, content = None):
+        doc = self.create(parent, FILE_TYPE, name = name,
+                          properties = {'dc:title': name})
         ref = doc[u'uid']
         if content is not None:
             self.attach_blob(ref, content, name)
@@ -781,74 +781,74 @@ class NuxeoClient(object):
 
     # Document category
 
-    def create(self, ref, type, name=None, properties=None):
-        return self._execute("Document.Create", input="doc:" + ref,
-            type=type, name=name, properties=properties)
+    def create(self, ref, type, name = None, properties = None):
+        return self._execute("Document.Create", input = "doc:" + ref,
+            type = type, name = name, properties = properties)
 
-    def update(self, ref, properties=None):
-        return self._execute("Document.Update", input="doc:" + ref,
-            properties=properties)
+    def update(self, ref, properties = None):
+        return self._execute("Document.Update", input = "doc:" + ref,
+            properties = properties)
 
     def set_property(self, ref, xpath, value):
-        return self._execute("Document.SetProperty", input="doc:" + ref,
-            xpath=xpath, value=value)
+        return self._execute("Document.SetProperty", input = "doc:" + ref,
+            xpath = xpath, value = value)
 
-    def delete(self, ref, use_trash=True):
+    def delete(self, ref, use_trash = True):
         input = "doc:" + self._check_ref(ref)
         if use_trash:
             try:
-                return self._execute("Document.SetLifeCycle", input=input,
-                                     value='delete')
+                return self._execute("Document.SetLifeCycle", input = input,
+                                     value = 'delete')
             except urllib2.HTTPError as e:
                 if e.code == 500:
-                    return self._execute("Document.Delete", input=input)
+                    return self._execute("Document.Delete", input = input)
                 raise
         else:
-            return self._execute("Document.Delete", input=input)
+            return self._execute("Document.Delete", input = input)
 
     def get_children(self, ref):
-        return self._execute("Document.GetChildren", input="doc:" + ref)
+        return self._execute("Document.GetChildren", input = "doc:" + ref)
 
     def get_parent(self, ref):
-        return self._execute("Document.GetParent", input="doc:" + ref)
+        return self._execute("Document.GetParent", input = "doc:" + ref)
 
     def lock(self, ref):
-        return self._execute("Document.Lock", input="doc:" + ref)
+        return self._execute("Document.Lock", input = "doc:" + ref)
 
     def unlock(self, ref):
-        return self._execute("Document.Unlock", input="doc:" + ref)
+        return self._execute("Document.Unlock", input = "doc:" + ref)
 
-    def move(self, ref, target, name=None):
-        return self._execute("Document.Move", input="doc:" + ref,
-            target=target, name=name)
+    def move(self, ref, target, name = None):
+        return self._execute("Document.Move", input = "doc:" + ref,
+            target = target, name = name)
 
-    def copy(self, ref, target, name=None):
-        return self._execute("Document.Copy", input="doc:" + ref,
-            target=target, name=name)
+    def copy(self, ref, target, name = None):
+        return self._execute("Document.Copy", input = "doc:" + ref,
+            target = target, name = name)
 
     # These ones are special: no 'input' parameter
 
     def fetch(self, ref):
         try:
-            return self._execute("Document.Fetch", value=ref)
+            return self._execute("Document.Fetch", value = ref)
         except urllib2.HTTPError as e:
             if e.code == 404:
                 raise NotFound("Failed to fetch document %r on server %r" % (
                     ref, self.server_url))
             raise e
 
-    def query(self, query, language=None):
-        return self._execute("Document.Query", query=query, language=language)
+    def query(self, query, language = None):
+        return self._execute("Document.Query", query = query, language = language)
 
     # Blob category
 
     def get_blob(self, ref):
-        return self._execute("Blob.Get", input="doc:" + ref)
+        return self._execute("Blob.Get", input = "doc:" + ref)
 
     def attach_blob(self, ref, blob, filename, **params):
         container = MIMEMultipart("related",
-                type="application/json+nxrequest",
-                start="request")
+                type = "application/json+nxrequest",
+                start = "request")
 
         params['document'] = ref
         d = {'params': params}
@@ -867,16 +867,16 @@ class NuxeoClient(object):
         blob_part.add_header("Content-ID", "input")
         blob_part.add_header("Content-Transfer-Encoding", "binary")
         ascii_filename = filename.encode('ascii', 'ignore')
-        #content_disposition = "attachment; filename=" + ascii_filename
-        #quoted_filename = urllib.quote(filename.encode('utf-8'))
-        #content_disposition += "; filename filename*=UTF-8''" \
+        # content_disposition = "attachment; filename=" + ascii_filename
+        # quoted_filename = urllib.quote(filename.encode('utf-8'))
+        # content_disposition += "; filename filename*=UTF-8''" \
         #    + quoted_filename
-        #print content_disposition
-        #blob_part.add_header("Content-Disposition:", content_disposition)
+        # print content_disposition
+        # blob_part.add_header("Content-Disposition:", content_disposition)
 
         # XXX: Use ASCCI safe version of the filename for now
         blob_part.add_header('Content-Disposition', 'attachment',
-                             filename=ascii_filename)
+                             filename = ascii_filename)
 
         blob_part.set_payload(blob)
         container.attach(blob_part)
@@ -938,7 +938,7 @@ class NuxeoClient(object):
         s = resp.read()
         return s
 
-    def _execute(self, command, input=None, **params):
+    def _execute(self, command, input = None, **params):
         if self._error is not None:
             # Simulate a configurable (e.g. network or server) error for the
             # tests

@@ -57,190 +57,190 @@ PROTOCOL_COMMANDS = {
 DEBUGGING = 1
 
 
-def make_cli_parser(add_subparsers=True):
+def make_cli_parser(add_subparsers = True):
     """Parse commandline arguments using a git-like subcommands scheme"""
 
     common_parser = argparse.ArgumentParser(
-        add_help=False,
+        add_help = False,
     )
     common_parser.add_argument(
         "--nxdrive-home",
-        default="~/.nuxeo-drive",
-        help="Folder to store the Nuxeo Drive configuration."
+        default = "~/.nuxeo-drive",
+        help = "Folder to store the %s configuration." % Constants.APP_NAME
     )
     common_parser.add_argument(
         "--log-level-file",
-        default="DEBUG",
-        help="Minimum log level for the file log (under NXDRIVE_HOME/logs)."
+        default = "DEBUG",
+        help = "Minimum log level for the file log (under NXDRIVE_HOME/logs)."
     )
     common_parser.add_argument(
         "--log-level-console",
-        default="INFO",
-        help="Minimum log level for the console log."
+        default = "INFO",
+        help = "Minimum log level for the console log."
     )
     common_parser.add_argument(
         "--log-filename",
-        help=("File used to store the logs, default "
+        help = ("File used to store the logs, default "
               "NXDRIVE_HOME/logs/nxaudit.logs")
     )
     common_parser.add_argument(
-        "--debug", default=False, action="store_true",
-        help="Fire a debugger (ipdb or pdb) one uncaught error."
+        "--debug", default = False, action = "store_true",
+        help = "Fire a debugger (ipdb or pdb) one uncaught error."
     )
     common_parser.add_argument(
-        "--delay", default=DEFAULT_DELAY, type=float,
-        help="Delay in seconds between consecutive sync operations.")
+        "--delay", default = DEFAULT_DELAY, type = float,
+        help = "Delay in seconds between consecutive sync operations.")
     common_parser.add_argument(
         # XXX: Make it true by default as the fault tolerant mode is not yet
         # implemented
-        "--stop-on-error", default=True, action="store_true",
-        help="Stop the process on first unexpected error."
+        "--stop-on-error", default = True, action = "store_true",
+        help = "Stop the process on first unexpected error."
         "Useful for developers and Continuous Integration.")
-    
+
     common_parser.add_argument(
-        '--start', '-s', action='store_true', help='start synchronization as soon as the gui starts.')
+        '--start', '-s', action = 'store_true', help = 'start synchronization as soon as the gui starts.')
 
     parser = argparse.ArgumentParser(
-        parents=[common_parser],
-        description="Command line interface for Nuxeo Drive operations.",
-        usage=USAGE,
+        parents = [common_parser],
+        description = "Command line interface for %s operations." % Constants.APP_NAME,
+        usage = USAGE,
     )
 
     if not add_subparsers:
         return parser
 
     subparsers = parser.add_subparsers(
-        title='Commands',
+        title = 'Commands',
     )
 
     # Link to a remote Nuxeo server
     bind_server_parser = subparsers.add_parser(
-        'bind-server', help='Attach a local folder to a Nuxeo server.',
-        parents=[common_parser],
+        'bind-server', help = 'Attach a local folder to a %s server.' % Constants.PRODUCT_NAME,
+        parents = [common_parser],
     )
-    bind_server_parser.set_defaults(command='bind_server')
+    bind_server_parser.set_defaults(command = 'bind_server')
     bind_server_parser.add_argument(
-        "--password", help="Password for the Nuxeo account")
+        "--password", help = "Password for the %s account" % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument(
         "--local-folder",
-        help="Local folder that will host the list of synchronized"
-        " workspaces with a remote Nuxeo server.",
-        default=DEFAULT_NX_DRIVE_FOLDER,
+        help = "Local folder that will host the list of synchronized"
+        " workspaces with a remote %s server." % Constants.PRODUCT_NAME,
+        default = DEFAULT_NX_DRIVE_FOLDER,
     )
     bind_server_parser.add_argument(
-        "username", help="User account to connect to Nuxeo")
+        "username", help = "User account to connect to %s" % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument("nuxeo_url",
-                                    help="URL of the Nuxeo server.")
+                                    help = "URL of the %s server." % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument(
-        "--remote-roots", nargs="*", default=[],
-        help="Path synchronization roots (reference or path for"
-        " folderish Nuxeo documents such as Workspaces or Folders).")
+        "--remote-roots", nargs = "*", default = [],
+        help = "Path synchronization roots (reference or path for"
+        " folderish %s documents such as Workspaces or Folders)." % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument(
-        "--remote-repo", default='default',
-        help="Name of the remote repository.")
+        "--remote-repo", default = 'default',
+        help = "Name of the remote repository.")
 
     # Unlink from a remote Nuxeo server
     unbind_server_parser = subparsers.add_parser(
-        'unbind-server', help='Detach from a remote Nuxeo server.',
-        parents=[common_parser],
+        'unbind-server', help = 'Detach from a remote %s server.' % Constants.PRODUCT_NAME,
+        parents = [common_parser],
     )
-    unbind_server_parser.set_defaults(command='unbind_server')
+    unbind_server_parser.set_defaults(command = 'unbind_server')
     unbind_server_parser.add_argument(
         "--local-folder",
-        help="Local folder that hosts the list of synchronized"
-        " workspaces with a remote Nuxeo server.",
-        default=DEFAULT_NX_DRIVE_FOLDER,
+        help = "Local folder that hosts the list of synchronized"
+        " workspaces with a remote %s server." % Constants.PRODUCT_NAME,
+        default = DEFAULT_NX_DRIVE_FOLDER,
     )
 
     # Bind root folders
     bind_root_parser = subparsers.add_parser(
         'bind-root',
-        help='Attach a local folder as a root for synchronization.',
-        parents=[common_parser],
+        help = 'Attach a local folder as a root for synchronization.',
+        parents = [common_parser],
     )
-    bind_root_parser.set_defaults(command='bind_root')
+    bind_root_parser.set_defaults(command = 'bind_root')
     bind_root_parser.add_argument(
         "remote_root",
-        help="Remote path or id reference of a folder to synchronize.")
+        help = "Remote path or id reference of a folder to synchronize.")
     bind_root_parser.add_argument(
         "--local-folder",
-        help="Local folder that will host the list of synchronized"
-        " workspaces with a remote Nuxeo server. Must be bound with the"
-        " 'bind-server' command.",
-        default=DEFAULT_NX_DRIVE_FOLDER,
+        help = "Local folder that will host the list of synchronized"
+        " workspaces with a remote %s server. Must be bound with the"
+        " 'bind-server' command." % Constants.PRODUCT_NAME,
+        default = DEFAULT_NX_DRIVE_FOLDER,
     )
     bind_root_parser.add_argument(
-        "--remote-repo", default='default',
-        help="Name of the remote repository.")
+        "--remote-repo", default = 'default',
+        help = "Name of the remote repository.")
 
     # Unlink from a remote Nuxeo root
     unbind_root_parser = subparsers.add_parser(
-        'unbind-root', help='Detach from a remote Nuxeo root.',
-        parents=[common_parser],
+        'unbind-root', help = 'Detach from a remote %s root.' % Constants.PRODUCT_NAME,
+        parents = [common_parser],
     )
-    unbind_root_parser.set_defaults(command='unbind_root')
+    unbind_root_parser.set_defaults(command = 'unbind_root')
     unbind_root_parser.add_argument(
-        "local_root", help="Local sub-folder to de-synchronize.")
+        "local_root", help = "Local sub-folder to de-synchronize.")
 
     # Start / Stop the synchronization daemon
     start_parser = subparsers.add_parser(
-        'start', help='Start the synchronization as a GUI-less daemon',
-        parents=[common_parser],
+        'start', help = 'Start the synchronization as a GUI-less daemon',
+        parents = [common_parser],
     )
-    start_parser.set_defaults(command='start')
+    start_parser.set_defaults(command = 'start')
     stop_parser = subparsers.add_parser(
-        'stop', help='Stop the synchronization daemon',
-        parents=[common_parser],
+        'stop', help = 'Stop the synchronization daemon',
+        parents = [common_parser],
     )
-    stop_parser.set_defaults(command='stop')
+    stop_parser.set_defaults(command = 'stop')
     console_parser = subparsers.add_parser(
         'console',
-        help='Start a GUI-less synchronization without detaching the process.',
-        parents=[common_parser],
+        help = 'Start a GUI-less synchronization without detaching the process.',
+        parents = [common_parser],
     )
-    console_parser.set_defaults(command='console')
-        
+    console_parser.set_defaults(command = 'console')
+
     gui_parser = subparsers.add_parser(
         'gui',
-        help='Start as a TrayIcon application.',
-        parents=[common_parser],
+        help = 'Start as a TrayIcon application.',
+        parents = [common_parser],
     )
-    gui_parser.set_defaults(command='gui')
-    
+    gui_parser.set_defaults(command = 'gui')
+
     com_parser = subparsers.add_parser(
         'com',
-        help="Register or Unregister the COM Local Server",
+        help = "Register or Unregister the COM Local Server",
     )
-    
+
     if sys.platform == 'win32':
-        com_parser.set_defaults(command='com')
-        action = com_parser.add_mutually_exclusive_group(required=True)
+        com_parser.set_defaults(command = 'com')
+        action = com_parser.add_mutually_exclusive_group(required = True)
         action.add_argument(
-            '--register', required=False, action='store_true', help='Register COM Local Server')
+            '--register', required = False, action = 'store_true', help = 'Register COM Local Server')
         action.add_argument(
-            '--unregister', required=False, action='store_true', help='Unregister COM Local Server')    
-    
+            '--unregister', required = False, action = 'store_true', help = 'Unregister COM Local Server')
+
     # embedded test runner base on nose:
     test_parser = subparsers.add_parser(
         'test',
-        help='Run the Nuxeo Drive test suite.',
-        parents=[common_parser],
+        help = 'Run the %s test suite.' % Constants.APP_NAME,
+        parents = [common_parser],
     )
-    
+
     wizard_parser = subparsers.add_parser(
         'wizard',
-        help='Run the wizard.',
-        parents=[common_parser],
+        help = 'Run the wizard.',
+        parents = [common_parser],
     )
-    wizard_parser.set_defaults(command='wizard')
-    
-    test_parser.set_defaults(command='test')
+    wizard_parser.set_defaults(command = 'wizard')
+
+    test_parser.set_defaults(command = 'test')
     test_parser.add_argument(
-        "--with-coverage", default=False, action="store_true",
-        help="Compute coverage report.")
+        "--with-coverage", default = False, action = "store_true",
+        help = "Compute coverage report.")
     test_parser.add_argument(
-        "--with-profile", default=False, action="store_true",
-        help="Compute profiling report.")
+        "--with-profile", default = False, action = "store_true",
+        help = "Compute profiling report.")
 
     # TODO: add a parser for the "status" operation to list the synchronization
     # status of a given folder content so as to make it possible to display
@@ -275,7 +275,7 @@ class CliHandler(object):
                 has_command = True
             filtered_args.append(arg)
 
-        parser = make_cli_parser(add_subparsers=has_command)
+        parser = make_cli_parser(add_subparsers = has_command)
         options = parser.parse_args(filtered_args)
         if options.debug:
             # Install Post-Mortem debugger hook
@@ -305,9 +305,9 @@ class CliHandler(object):
 
         configure(
             filename,
-            file_level=options.log_level_file,
-            console_level=options.log_level_console,
-            command_name=options.command,
+            file_level = options.log_level_file,
+            console_level = options.log_level_console,
+            command_name = options.command,
         )
 
     def handle(self, argv):
@@ -330,7 +330,7 @@ class CliHandler(object):
 
         self.log = get_logger(__name__)
         self.log.debug("Command line: " + ' '.join(argv))
-  
+
         # Ensure that the protocol handler are registered:
         # this is useful for the edit / open link in the Nuxeo interface
         register_protocol_handlers(self.controller)
@@ -342,21 +342,21 @@ class CliHandler(object):
                 raise
             else:
                 self.log.error("Error executing '%s': %s", command, e,
-                          exc_info=True)
-    
-    def looper(self, options=None):
+                          exc_info = True)
+
+    def looper(self, options = None):
         def wrapper(operation):
             fault_tolerant = not getattr(options, 'stop_on_error', True)
-            delay=getattr(options, 'delay', DEFAULT_DELAY)
-            return self.controller.loop(fault_tolerant=fault_tolerant, delay=delay, sync_operation=operation)
+            delay = getattr(options, 'delay', DEFAULT_DELAY)
+            return self.controller.loop(fault_tolerant = fault_tolerant, delay = delay, sync_operation = operation)
         return wrapper
 
 
-    def default(self, options=None):
+    def default(self, options = None):
         # TODO: use the start method as default once implemented
-        return self.console(options=options)
- 
-    def launch(self, options=None):
+        return self.console(options = options)
+
+    def launch(self, options = None):
         """Launch the QT app in the main thread and sync in another thread."""
         # TODO: use the start method as default once implemented
 #        from nxdrive.gui.application import Application
@@ -364,7 +364,7 @@ class CliHandler(object):
 #        app.exec_()
         self.gui(options)
 
-    def start(self, options=None):
+    def start(self, options = None):
         """Launch the synchronization in a daemonized process (under POSIX)"""
         # Close DB connections before Daemonization
         self.controller.dispose()
@@ -375,8 +375,8 @@ class CliHandler(object):
         self.log.debug("Synchronization daemon started.")
 
         fault_tolerant = not getattr(options, 'stop_on_error', True)
-        self.controller.loop(fault_tolerant=fault_tolerant,
-                             delay=getattr(options, 'delay', DEFAULT_DELAY))
+        self.controller.loop(fault_tolerant = fault_tolerant,
+                             delay = getattr(options, 'delay', DEFAULT_DELAY))
         return 0
 
     def console(self, options):
@@ -386,33 +386,33 @@ class CliHandler(object):
 #        else: fault_tolerant = None
 
         fault_tolerant = not getattr(options, 'stop_on_error', True)
-        self.controller.loop(fault_tolerant=fault_tolerant,
-                             delay=getattr(options, 'delay', DEFAULT_DELAY))
+        self.controller.loop(fault_tolerant = fault_tolerant,
+                             delay = getattr(options, 'delay', DEFAULT_DELAY))
         return 0
-    
-    def gui(self, options=None):
+
+    def gui(self, options = None):
 #        sys.coinit_flags = 2
 #        import pythoncom
 #        import win32api
 #        from win32com.server import factory
 #        from nxdrive.icon_overlay.win32 import IconOverlay
 #        from win32com.server import localserver
-#        
+#
 #        sys.argv = sys.argv[:1]
 #        sys.argv.append(IconOverlay._reg_clsid_)
 #        localserver.main()
         # start the COM server
 #        infos = factory.RegisterClassFactories([IconOverlay._reg_clsid_])
         #=======================================================================
-        # pythoncom.EnableQuitMessage(win32api.GetCurrentThreadId())    
+        # pythoncom.EnableQuitMessage(win32api.GetCurrentThreadId())
         #=======================================================================
 #        pythoncom.CoResumeClassObjects()
 #        sys.argv.append('--register')
 #        register_iconovelay_handler()
 
         from nxdrive.gui.menubar import startApp
-        result =  startApp(self.controller, options)
-        
+        result = startApp(self.controller, options)
+
 #        sys.argv = sys.argv[:-1]
 #        sys.argv.append('--unregister')
 #        unregister_icon_ovelay_handler()
@@ -421,11 +421,11 @@ class CliHandler(object):
 #        pythoncom.CoUninitialize()
         return result
 
-    def wizard(self, options=None):
+    def wizard(self, options = None):
         from nxdrive.gui.wizard import startWizard
         return startWizard(self.controller, options)
-        
-    def stop(self, options=None):
+
+    def stop(self, options = None):
         self.controller.stop()
         return 0
 
@@ -449,7 +449,7 @@ class CliHandler(object):
                                     options.username, password)
         for root in options.remote_roots:
             self.controller.bind_root(options.local_folder, root,
-                                      repository=options.remote_repo)
+                                      repository = options.remote_repo)
         return 0
 
     def unbind_server(self, options):
@@ -458,7 +458,7 @@ class CliHandler(object):
 
     def bind_root(self, options):
         self.controller.bind_root(options.local_folder, options.remote_root,
-                                  repository=options.remote_repo)
+                                  repository = options.remote_repo)
         return 0
 
     def unbind_root(self, options):
@@ -471,7 +471,7 @@ class CliHandler(object):
         elif options.unregister:
             unregister_icon_ovelay_handler()
 
-        
+
     def test(self, options):
         import nose
         # Monkeypatch nose usage message as it's complicated to include
@@ -503,14 +503,14 @@ class CliHandler(object):
             "nxdrive.tests.test_integration_nuxeo_client",
             "nxdrive.tests.test_integration_synchronization",
         ]
-        return 0 if nose.run(argv=argv) else 1
+        return 0 if nose.run(argv = argv) else 1
 
 def register_iconovelay_handler():
     if sys.platform == 'win32':
         import win32com.server.register
         from nxdrive.icon_overlay.win32 import IconOverlay
-        win32com.server.register.UseCommandLine(IconOverlay, debug=DEBUGGING)
-        
+        win32com.server.register.UseCommandLine(IconOverlay, debug = DEBUGGING)
+
         keyname = r'Software\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\%sOverlay' % Constants.SHORT_APP_NAME
         key = win32api.RegCreateKey (win32con.HKEY_LOCAL_MACHINE, keyname)
         win32api.RegSetValue (key, None, win32con.REG_SZ, IconOverlay._reg_clsid_)
@@ -523,7 +523,7 @@ def unregister_icon_ovelay_handler():
         import pywintypes
         from nxdrive.icon_overlay.win32 import IconOverlay
         win32com.server.register.UseCommandLine(IconOverlay)
-        
+
         keyname = r'Software\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers'
         key = win32api.RegOpenKey(win32con.HKEY_LOCAL_MACHINE, keyname)
         try:
@@ -533,7 +533,7 @@ def unregister_icon_ovelay_handler():
     else:
         pass
 
-def main(argv=None):
+def main(argv = None):
     if argv is None:
         argv = sys.argv
     return CliHandler().handle(argv)

@@ -128,6 +128,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.setupMenu()
         self.setupMisc()
         self.update_running_icon()
+        self.setToolTip('%s %s' % (Constants.APP_NAME, Constants.__version__))
         self.preferencesDlg = None
         if options.start:
             self.doWork()
