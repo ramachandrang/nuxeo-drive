@@ -93,8 +93,9 @@ class ServerBinding(Base):
     fdtoken_creation_date = Column(DateTime)
     # passive_updates=False *only* needed if the database
     # does not implement ON UPDATE CASCADE
-    roots = relationship("RootBinding", passive_updates = False)
-    folders = relationship("SyncFolders", passive_updates = False)
+    roots = relationship("RootBinding", passive_updates = False, passive_deletes = True, cascade = "all, delete, delete-orphan")
+    folders = relationship("SyncFolders", passive_updates = False, passive_deletes = True, cascade = "all, delete, delete-orphan")
+
 
     def __init__(self, local_folder, server_url, remote_user,
                  remote_password = None, remote_token = None,
@@ -152,7 +153,7 @@ class RootBinding(Base):
     local_root = Column(String, primary_key = True)
     remote_repo = Column(String)
     remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
-    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade"))
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
 
 #    server_binding = relationship(
 #        'ServerBinding',
@@ -186,7 +187,7 @@ class SyncFolders(Base):
     remote_root = Column(Integer)
     remote_parent = Column(String, ForeignKey('sync_folders.remote_id'))
     state = Column(Boolean)
-    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade"))
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
     checked = relationship('RootBinding', uselist = False, backref = 'folder')
 
 #    server_binding = relationship(

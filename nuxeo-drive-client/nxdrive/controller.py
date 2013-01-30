@@ -484,6 +484,17 @@ class Controller(object):
 
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
+
+        # delete all binding roots for this server
+        root_bindings = session.query(RootBinding).filter(RootBinding.local_folder == binding.local_folder).all()
+        for rb in root_bindings:
+            session.delete(rb)
+
+        # delete all sync folders
+        sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == binding.local_folder).all()
+        for sf in sync_folders:
+            session.delete(sf)
+
         session.delete(binding)
         session.commit()
 
@@ -1789,6 +1800,12 @@ class Controller(object):
                 bindings = session.query(RootBinding).all()
                 server_bindings = session.query(RootBinding.server_binding).all()
                 server_bindings2 = [sb for sb in server_bindings[1:] if sb != server_bindings[0]]
+                if len(server_bindings) == 0:
+                    # sync shouldn't have started!!
+                    if frontend is not None:
+                        error = Unauthorized(Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_ACCOUNT)
+                        frontend.notify_offline(Constants.DEFAULT_NXDRIVE_FOLDER, error)
+                    break;
 
                 status = {}
                 for rb in bindings:

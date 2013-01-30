@@ -164,6 +164,7 @@ try:
         mode = AES.MODE_ECB
         decryptor = AES.new(key, mode)
         encpwd = base64.standard_b64decode(encpwd)
+        encpwd = pad_to_multiple_of_16(encpwd)
         pwd = decryptor.decrypt(encpwd)
         pwd = remove_pad(pwd)
         return pwd
@@ -180,14 +181,12 @@ except ImportError as e:
 def pad_to_multiple_of_16(indata):
     if len(indata) % 16 != 0:
         diff = 16 - len(indata) % 16
-        indata += '\x80'
-        if diff > 1:
-            indata += ' ' * (diff - 1)
+        indata += ' ' * diff
 
     return indata
 
 def remove_pad(indata):
-    pos = indata.rfind('\x80')
+    pos = indata.find(' ')
     if pos != -1:
         indata = indata[0:pos]
 

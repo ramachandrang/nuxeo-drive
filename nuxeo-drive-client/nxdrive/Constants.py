@@ -4,6 +4,11 @@ Created on Oct 28, 2012
 @author: mconstantin
 '''
 import sys
+try:
+    import _version
+    __version__ = _version.__version__
+except ImportError:
+    __version__ = "unknown"
 
 COMPANY_NAME = 'SHARP'
 PRODUCT_NAME = 'Cloud Portal Office'
@@ -70,5 +75,4 @@ ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
 ICON_APP_ENABLED = R'nuxeo_drive_icon_16_enabled.png'
 ICON_APP_DISABLED = R'nuxeo_drive_icon_16_disabled.png'
 
-__version__ = '0.1.3'
 

@@ -5,13 +5,14 @@
 
 import sys
 import os
-import platform
-import subprocess
 from datetime import datetime
+import re
 
 from distutils.core import setup
 if sys.platform == 'win32':
     import py2exe
+
+VERSIONFILE = r"nuxeo-drive-client/nxdrive/_version.py"
 
 PRODUCT_NAME = 'Cloud Portal Office'
 APP_NAME = PRODUCT_NAME + ' Desktop'
@@ -19,7 +20,25 @@ WIZARD_NAME = PRODUCT_NAME + ' Wizard'
 SHORT_APP_NAME = 'CpoDesktop'
 SHORT_WIZARD_NAME = 'CpoWizard'
 DEFAULT_ROOT_FOLDER = PRODUCT_NAME
-version = '0.1.3'
+
+def get_version():
+    VERSIONPATH = os.path.join(os.path.dirname(__file__), VERSIONFILE)
+    verstr = "unknown"
+    try:
+        with open(VERSIONPATH, "rt") as f:
+            verstrline = f.read()
+    except EnvironmentError:
+        # Okay, there is no version file.
+        raise RuntimeError("there is no version file %s" % VERSIONFILE)
+    else:
+        VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
+        mo = re.search(VSRE, verstrline, re.M)
+        if mo:
+            verstr = mo.group(1)
+            return verstr
+        else:
+            raise RuntimeError("if %s.py exists, it is required to be well-formed" % (VERSIONFILE,))
+
 
 def create_shortcut(path, target, wDir = '', icon = ''):
     shell = Dispatch('WScript.Shell')
@@ -50,6 +69,8 @@ def default_nuxeo_drive_folder():
 
     return os.path.expanduser(path)
 
+
+version = get_version()
 script = 'nuxeo-drive-client/scripts/ndrive.py'
 scriptwzd = 'nuxeo-drive-client/scripts/ndrivewzd.py'
 scripts = [script, scriptwzd]

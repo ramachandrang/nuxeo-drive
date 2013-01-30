@@ -362,7 +362,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self._icon_state = state
             return True
         except Exception as ex:
-            log.debug("set_icon_state() error: %s" % str(ex))
+            log.debug("set_icon_state(%s) error: %s" % (state, str(ex)))
             return False
 
     def get_icon_state(self):
