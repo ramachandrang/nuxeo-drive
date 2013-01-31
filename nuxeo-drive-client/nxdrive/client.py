@@ -430,7 +430,7 @@ class NuxeoClient(object):
         if NuxeoClient.proxy is not None:
             if not NuxeoClient.proxy.autodetect and NuxeoClient.proxy.type == 'HTTP':
                 proxy_url = '%s:%d' % (NuxeoClient.proxy.server_url, NuxeoClient.proxy.port)
-                proxy_support = urllib2.ProxyHandler({NuxeoClient.proxy.type.lower() : proxy_url})
+                proxy_support = urllib2.ProxyHandler({'http' : proxy_url, 'https' : proxy_url})
                 self.opener = urllib2.build_opener(cookie_processor, proxy_support)
             else:
                 # autodetect uses the default ProxyServer

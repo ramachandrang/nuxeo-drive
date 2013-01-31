@@ -1824,11 +1824,12 @@ class Controller(object):
                         if rb.server_binding.has_invalid_credentials():
                             # Skip roots for servers with missing credentials
                             # if all roots belong to same bind, prompt for credentials and stop sync
-                            if len(server_bindings2) == 0:
-                                exception = Exception()
-                                exception.code = 401
-                                if frontend is not None:
-                                    frontend.notify_offline(rb.server_binding.local_folder, exception)
+                            exception = Exception()
+                            exception.code = 401
+                            if frontend is not None:
+                                frontend.notify_offline(rb.server_binding.local_folder, exception)
+
+                            if len(server_bindings2) < 2:
                                 raise exception
                             else:
                                 continue
@@ -1953,11 +1954,13 @@ class Controller(object):
             session.commit()
 
             try:
+                log.debug('trying to get a new token [calling bind_server]')
                 self.bind_server(folder, url, user, pwd)
                 return False
-            except POSSIBLE_NETWORK_ERROR_TYPES:
+            except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # This may be the case when the password has changed
-                # gettinbg the token will still fail (unauthorized)
+                # getting the token will still fail (unauthorized)
+                log.debug('failed to get a new token (error: %s)', str(e))
                 code = getattr(exception, 'code', None)
                 if code == 401 or code == 403:
                     if frontend is not None:
