@@ -27,7 +27,6 @@ from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
-from nxdrive.utils.helpers import decrypt_password
 from nxdrive.model import RecentFiles
 from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
@@ -310,7 +309,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 #        if fdtoken is None:
 #            fdtoken = ''
         server_binding = self.controller.get_server_binding(self.local_folder)
-        pwd = decrypt_password(server_binding.remote_password, server_binding.password_hash)
+#        pwd = decrypt_password(server_binding.remote_password, server_binding.password_key)
         try:
             new = 2  # open in a new tab if possible
             url = server_binding.server_url

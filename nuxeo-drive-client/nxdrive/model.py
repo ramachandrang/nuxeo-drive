@@ -19,6 +19,7 @@ from sqlalchemy.ext.declarative import declared_attr
 
 from nxdrive.client import NuxeoClient
 from nxdrive.client import LocalClient
+from nxdrive.utils.helpers import encrypt_password, decrypt_password
 from nxdrive import Constants
 
 WindowsError = None
@@ -86,6 +87,7 @@ class ServerBinding(Base):
     server_url = Column(String)
     remote_user = Column(String)
     remote_password = Column(String)
+    __remote_password = Column('remote_password', String)
     remote_token = Column(String)
     __fdtoken = Column('fdtoken', String)
     password_hash = Column(String)
@@ -99,7 +101,7 @@ class ServerBinding(Base):
 
     def __init__(self, local_folder, server_url, remote_user,
                  remote_password = None, remote_token = None,
-                 fdtoken = None, password_hash = None, password_key = None, fdtoken_creation_date = None):
+                 fdtoken = None, password_hash = None, fdtoken_creation_date = None):
         self.local_folder = local_folder
         self.server_url = server_url
         self.remote_user = remote_user
@@ -113,7 +115,6 @@ class ServerBinding(Base):
             self.fdtoken_creation_date = fdtoken_creation_date
         # Used to re-generate the federated token (expires in 15min by default)
         self.password_hash = password_hash
-        self.password_key = password_key
 
     @declared_attr
     def fdtoken(self):
@@ -126,6 +127,17 @@ class ServerBinding(Base):
         self.__fdtoken = v
         if v is not None:
             self.fdtoken_creation_date = datetime.datetime.now()
+
+    @declared_attr
+    def remote_password(self):
+        return synonym('__remote_password', descriptor = property(self.get_remote_password, self.set_remote_password))
+
+    def get_remote_password(self):
+        return decrypt_password(self.__remote_password, self.password_key)
+
+    def set_remote_password(self, v):
+        if v is not None:
+            self.__remote_password, self.password_key = encrypt_password(v)
 
     def invalidate_credentials(self):
         """Ensure that all stored credentials are zeroed."""

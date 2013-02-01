@@ -32,7 +32,6 @@ from nxdrive.logging_config import get_logger
 from nxdrive import Constants
 from nxdrive.utils.helpers import RecoverableError, ProxyConnectionError, ProxyConfigurationError
 # from nxdrive.utils.helpers import Notifier
-from nxdrive.utils.helpers import encrypt_password, decrypt_password
 
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy import func
@@ -455,11 +454,10 @@ class Controller(object):
         except NoResultFound:
             log.info("Binding '%s' to '%s' with account '%s'",
                      local_folder, server_url, username)
-            password, key = encrypt_password(password)
+
             session.add(ServerBinding(local_folder, server_url, username,
                                       remote_password = password,
-                                      remote_token = token,
-                                      password_key = key
+                                      remote_token = token
 #                                      remote_token=token,
 #                                      fdtoken=fdtoken,
 #                                      password_hash=password_hash
@@ -966,7 +964,8 @@ class Controller(object):
                 self._log_offline(e, "update roots")
                 log.trace("Traceback of ignored network error:",
                         exc_info = True)
-                self.switch_offline(sb, e, session = session, frontend = frontend)
+                if self.switch_offline(sb, e, session = session, frontend = frontend):
+                    raise
 
         if frontend is not None:
             local_folders = [sb.local_folder
@@ -1387,7 +1386,7 @@ class Controller(object):
         if remote_client is None:
             remote_client = self.nuxeo_client_factory(
                 sb.server_url, sb.remote_user, self.device_id,
-                token = sb.remote_token, password = decrypt_password(sb.remote_password, sb.password_key),
+                token = sb.remote_token, password = sb.remote_password,
                 base_folder = base_folder, repository = repository)
             cache[cache_key] = remote_client
         # Make it possible to have the remote client simulate any kind of

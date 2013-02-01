@@ -422,6 +422,7 @@ class NuxeoClient(object):
 
         self.user_id = user_id
         self.device_id = device_id
+
         self._update_auth(password = password, token = token)
 
         cookie_processor = urllib2.HTTPCookieProcessor()
@@ -460,6 +461,8 @@ class NuxeoClient(object):
         if token is not None:
             self.auth = ('X-Authentication-Token', token)
         elif password is not None:
+#            if key is not None:
+#                password = decrypt_password(password, key)
             basic_auth = 'Basic %s' % base64.b64encode(
                     self.user_id + ":" + password).strip()
             self.auth = ("Authorization", basic_auth)
