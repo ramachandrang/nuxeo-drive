@@ -309,7 +309,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 #        if fdtoken is None:
 #            fdtoken = ''
         server_binding = self.controller.get_server_binding(self.local_folder)
-#        pwd = decrypt_password(server_binding.remote_password, server_binding.password_key)
         try:
             new = 2  # open in a new tab if possible
             url = server_binding.server_url
@@ -324,7 +323,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 #                            }
             query_params = {
                             'user_name': server_binding.remote_user,
-                            'user_password': pwd,
+                            'user_password': server_binding.remote_password,
                             'language': 'en_US',
                             'requestedUrl': '',
                             'form_submitted_marker': '',

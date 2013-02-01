@@ -102,30 +102,34 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
                 mbox.setInformativeText(self.tr('Must be between 1024 and 65535.'))
                 mbox.exec_()
                 return
+            
+            server_ip = socket.gethostbyname(self.server)
             host = '127.0.0.1'
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                s.bind((host, port))
-                s.listen(5)
-                s.close()
-            except Exception as e:
-                mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, \
-                                   self.tr('port %s is in use.') % self.txtPort.text(), \
-                                   QMessageBox.Yes | QMessageBox.No)
-                mbox.setInformativeText(self.tr('If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.'))
-                if mbox.exec_() == QMessageBox.No:
-                    return
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            try:
-                s.connect((host, port))
-                s.shutdown(2)
-            except:
-                mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, \
-                                   self.tr('port %s is in use.') % self.txtPort.text(), \
-                                   QMessageBox.Yes | QMessageBox.No)
-                mbox.setInformativeText(self.tr('If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.'))
-                if mbox.exec_() == QMessageBox.No:
-                    return
+            if server_ip == host:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                try:
+                    s.bind((host, port))
+                    s.listen(5)
+                    s.close()
+                except Exception as e:
+                    mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, \
+                                       self.tr('port %s is in use.') % self.txtPort.text(), \
+                                       QMessageBox.Yes | QMessageBox.No)
+                    mbox.setInformativeText(self.tr('If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.'))
+                    if mbox.exec_() == QMessageBox.No:
+                        return
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    s.bind((host, port))
+                    s.listen(5)
+                    s.close()
+                except:
+                    mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, \
+                                       self.tr('port %s is in use.') % self.txtPort.text(), \
+                                       QMessageBox.Yes | QMessageBox.No)
+                    mbox.setInformativeText(self.tr('If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.'))
+                    if mbox.exec_() == QMessageBox.No:
+                        return
         except ValueError:
             mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, self.tr('port %s is invalid.') % self.txtPort.text())
             mbox.setInformativeText(self.tr('Must be a numeric value.'))
