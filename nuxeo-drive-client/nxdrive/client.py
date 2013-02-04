@@ -532,7 +532,25 @@ class NuxeoClient(object):
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers = headers)
             NuxeoClient.cookiejar.add_cookie_header(req)
-            token = self.opener.open(req).read()
+            # --- BEGIN DEBUG ----
+            log.debug('------request-------')
+            log.debug('request url: %s', req.get_full_url())
+            log.debug('request host: %s', req.get_host())
+            log.debug('original request host: %s', req.get_origin_req_host())
+            log.debug('request type: %s', req.get_type())
+            if req.has_data():
+                log.debug('request data: %s...', str(req.get_data())[0:500])
+            # --- END DEBUG ----
+            resp = self.opener.open(req)
+            token = resp.read()
+            log.debug('------response------')
+            log.debug('response code: %d', resp.code)
+            log.debug('--response headers--')
+            for key, value in resp.headers.dict.items():
+                log.debug('%s: %s', key, value)
+            log.debug('----response data---')
+            log.debug('data: %s', token)            
+            # --- END DEBUG ----
             NuxeoClient._proxy_error_count = 0
         except urllib2.HTTPError as e:
             if e.code == 401 or e.code == 403:
@@ -567,7 +585,26 @@ class NuxeoClient(object):
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
             req = urllib2.Request(self.automation_url, headers = headers)
-            response = json.loads(self.opener.open(req).read())
+            # --- BEGIN DEBUG ----
+            log.debug('------request-------')
+            log.debug('request url: %s', req.get_full_url())
+            log.debug('request host: %s', req.get_host())
+            log.debug('original request host: %s', req.get_origin_req_host())
+            log.debug('request type: %s', req.get_type())
+            if req.has_data():
+                log.debug('request data: %s...', str(req.get_data())[0:500])
+            # --- END DEBUG ----
+            raw_response = self.opener.open(req)
+            response = json.loads(raw_response.read())
+            # --- BEGIN DEBUG ----
+            log.debug('------response------')
+            log.debug('response code: %d', raw_response.code)
+            log.debug('--response headers--')
+            for key, value in raw_response.headers.dict.items():
+                log.debug('%s: %s', key, value)
+            log.debug('----response data---')
+            log.debug('data: %s...', str(response)[0:200])
+            # --- END DEBUG ----
             NuxeoClient._proxy_error_count = 0
         except urllib2.HTTPError as e:
             if e.code == 401 or e.code == 403:
@@ -940,6 +977,15 @@ class NuxeoClient(object):
         ) % (self.server_url, self.user_id)
         req = urllib2.Request(url, data, headers)
         NuxeoClient.cookiejar.add_cookie_header(req)
+        # --- BEGIN DEBUG ----
+        log.debug('------request-------')
+        log.debug('request url: %s', req.get_full_url())
+        log.debug('request host: %s', req.get_host())
+        log.debug('original request host: %s', req.get_origin_req_host())
+        log.debug('request type: %s', req.get_type())
+        if req.has_data():
+            log.debug('request data: %s...', str(req.get_data())[0:500])
+        # --- END DEBUG ----
         try:
             resp = self.opener.open(req)
             NuxeoClient._proxy_error_count = 0
@@ -964,6 +1010,14 @@ class NuxeoClient(object):
             self._log_details(e)
             raise
         s = resp.read()
+        log.debug('------response------')
+        log.debug('response code: %d', resp.code)
+        log.debug('--response headers--')
+        for key, value in resp.headers.dict.items():
+            log.debug('%s: %s', key, value)
+        log.debug('----response data---')
+        log.debug('data: %s...', str(s)[0.500])
+        # --- END DEBUG ----
         return s
 
     def _execute(self, command, input = None, **params):
@@ -1003,6 +1057,15 @@ class NuxeoClient(object):
         ) % (self.server_url, self.user_id)
         req = urllib2.Request(url, data, headers)
         NuxeoClient.cookiejar.add_cookie_header(req)
+        # --- BEGIN DEBUG ----
+        log.debug('------request-------')
+        log.debug('request url: %s', req.get_full_url())
+        log.debug('request host: %s', req.get_host())
+        log.debug('original request host: %s', req.get_origin_req_host())
+        log.debug('request type: %s', req.get_type())
+        if req.has_data():
+            log.debug('request data: %s...', str(req.get_data())[0:500])
+        # --- END DEBUG ----
         try:
             resp = self.opener.open(req)
             NuxeoClient._proxy_error_count = 0
@@ -1029,7 +1092,15 @@ class NuxeoClient(object):
 
         info = resp.info()
         s = resp.read()
-
+        # --- BEGIN DEBUG ----
+        log.debug('------response------')
+        log.debug('response code: %d', resp.code)
+        log.debug('--response headers--')
+        for key, value in resp.headers.dict.items():
+            log.debug('%s: %s', key, value)
+        log.debug('----response data---')
+        log.debug('data: %s', s)
+        # --- END DEBUG ----
         if info.get('content-type', '').startswith("application/json"):
             return json.loads(s) if s else None
         else:
