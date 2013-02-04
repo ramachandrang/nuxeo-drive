@@ -14,6 +14,7 @@ import shutil
 import time
 import urllib2
 from urllib import urlencode
+from cookielib import CookieJar
 import re
 import sys
 
@@ -213,6 +214,20 @@ class ProxyInfo(object):
 
         return ProxyInfo(proxyType, server, port, authN, user, pwd)
 
+    def __eq__(self, other):
+        if other is None or not isinstance(other, ProxyInfo):
+            return False
+        
+        ret = self.server_url == other.server_url \
+              and self.port == other.port \
+              and self.authn_required == other.authn_required
+        if ret and self.authn_required:
+            ret = self.user and self.pwd
+        return ret
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    
 class LocalClient(object):
     """Client API implementation for the local file system"""
 
@@ -385,23 +400,31 @@ class NuxeoClient(object):
     MAX_CREDENTIAL_ERROR_COUNT = 2
 
     @classproperty
+    @classmethod
     def proxy(cls):
         if cls._proxy is None:
             cls._proxy = ProxyInfo.get_proxy()
         return cls._proxy
+    
+    @proxy.setter
+    @classmethod
+    def proxy(cls, val):
+        cls._proxy = val
 
     @classproperty
+    @classmethod
     def proxy_error_count(cls):
         cls._proxy_error_count += 1
         return cls._proxy_error_count
 
     permission = 'ReadWrite'
+    cookiejar = CookieJar()
 
     def __init__(self, server_url, user_id, device_id,
                  password = None, token = None,
                  base_folder = None, repository = "default",
                  ignored_prefixes = None, ignored_suffixes = None,
-                 fault_tolerant = True):
+                 fault_tolerant = True, cookiejar = None):
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -425,7 +448,7 @@ class NuxeoClient(object):
 
         self._update_auth(password = password, token = token)
 
-        cookie_processor = urllib2.HTTPCookieProcessor()
+        cookie_processor = urllib2.HTTPCookieProcessor(NuxeoClient.cookiejar)
         self.automation_url = server_url + 'site/automation/'
 
         if NuxeoClient.proxy is not None:
@@ -508,6 +531,7 @@ class NuxeoClient(object):
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers = headers)
+            NuxeoClient.cookiejar.add_cookie_header(req)
             token = self.opener.open(req).read()
             NuxeoClient._proxy_error_count = 0
         except urllib2.HTTPError as e:
@@ -915,6 +939,7 @@ class NuxeoClient(object):
             " with user %r"
         ) % (self.server_url, self.user_id)
         req = urllib2.Request(url, data, headers)
+        NuxeoClient.cookiejar.add_cookie_header(req)
         try:
             resp = self.opener.open(req)
             NuxeoClient._proxy_error_count = 0
@@ -977,6 +1002,7 @@ class NuxeoClient(object):
             " with user %r"
         ) % (self.server_url, self.user_id)
         req = urllib2.Request(url, data, headers)
+        NuxeoClient.cookiejar.add_cookie_header(req)
         try:
             resp = self.opener.open(req)
             NuxeoClient._proxy_error_count = 0

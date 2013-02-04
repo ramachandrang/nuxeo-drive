@@ -44,8 +44,12 @@ class RecoverableError(Exception):
 class ProxyConnectionError(Exception):
     def __init__(self, urlerror):
         if type(urlerror) == urllib2.URLError:
-            self.code = urlerror.reason.args[0]
-            self.text = urlerror.reason.args[1]
+            if len(urlerror.reason.args) < 2:
+                self.code = 600
+                self.text = urlerror.reason.args[0]
+            else:
+                self.code = urlerror.reason.args[0]
+                self.text = urlerror.reason.args[1]
         else:
             self.code = 600
             self.text = ','.join(self.args)
@@ -97,7 +101,9 @@ class QApplicationSingleton(object):
 
 class classproperty(property):
     def __get__(self, cls, owner):
-        return classmethod(self.fget).__get__(None, owner)()
+#        return classmethod(self.fget).__get__(None, owner)()
+        return self.fget.__get__(None, owner)()
+
 
 #    def __set__(self, cls, owner, value):
 #        return classmethod(self.fset).__set__(None, owner, value)()

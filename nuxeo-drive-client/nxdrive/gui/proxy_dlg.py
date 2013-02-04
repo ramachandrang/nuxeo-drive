@@ -12,6 +12,7 @@ from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
 from nxdrive.client import ProxyInfo
 from nxdrive import Constants
+from nxdrive.gui.progress_dlg import ProgressDialog
 
 settings = create_settings()
 PORT = '8090'
@@ -106,30 +107,34 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
             server_ip = socket.gethostbyname(self.server)
             host = '127.0.0.1'
             if server_ip == host:
+                show_mb = True
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 try:
                     s.bind((host, port))
                     s.listen(5)
                     s.close()
-                except Exception as e:
+                except Exception:
                     mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, \
                                        self.tr('port %s is in use.') % self.txtPort.text(), \
                                        QMessageBox.Yes | QMessageBox.No)
                     mbox.setInformativeText(self.tr('If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.'))
                     if mbox.exec_() == QMessageBox.No:
                         return
+                    show_mb = False
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 try:
                     s.bind((host, port))
                     s.listen(5)
                     s.close()
                 except:
-                    mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, \
-                                       self.tr('port %s is in use.') % self.txtPort.text(), \
-                                       QMessageBox.Yes | QMessageBox.No)
-                    mbox.setInformativeText(self.tr('If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.'))
-                    if mbox.exec_() == QMessageBox.No:
-                        return
+                    if show_mb:
+                        mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, \
+                                           self.tr('port %s is in use.') % self.txtPort.text(), \
+                                           QMessageBox.Yes | QMessageBox.No)
+                        mbox.setInformativeText(self.tr('If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.'))
+                        if mbox.exec_() == QMessageBox.No:
+                            return
+                    show_mb = False
         except ValueError:
             mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, self.tr('port %s is invalid.') % self.txtPort.text())
             mbox.setInformativeText(self.tr('Must be a numeric value.'))
@@ -151,17 +156,21 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
                 self.pwd = pwd
                 invalidate = True
 
-        settings.setValue('preferences/proxyType', self.proxyType)
-        settings.setValue('preferences/proxyServer', self.server)
-        settings.setValue('preferences/proxyUser', self.user)
-        settings.setValue('preferences/proxyPwd', self.pwd)
-        settings.setValue('preferences/proxyAuthN', self.AuthN)
-        settings.setValue('preferences/proxyPort', self.port)
-        settings.sync()
-
-        # invalidate remote client cache if necessary
-        if invalidate and self.frontend is not None:
-            cache = self.frontend.controller._get_client_cache()
-            cache.clear()
-
+        if invalidate:
+            result = ProgressDialog.stopServer(self.frontend, parent = self)
+            if result == ProgressDialog.CANCELLED:
+                return QDialog.Rejected   
+            
+            settings.setValue('preferences/proxyType', self.proxyType)
+            settings.setValue('preferences/proxyServer', self.server)
+            settings.setValue('preferences/proxyUser', self.user)
+            settings.setValue('preferences/proxyPwd', self.pwd)
+            settings.setValue('preferences/proxyAuthN', self.AuthN)
+            settings.setValue('preferences/proxyPort', self.port)
+            settings.sync()
+        else:
+            result = ProgressDialog.OK_AND_NO_RESTART
+                    
         self.done(QDialog.Accepted)
+        return result
+    

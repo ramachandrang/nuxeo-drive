@@ -18,7 +18,7 @@ from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import create_settings
 from nxdrive.utils.helpers import EventFilter
-from nxdrive.client import ProxyInfo
+from nxdrive.client import ProxyInfo, NuxeoClient
 from ui_preferences import Ui_preferencesDlg
 from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
@@ -41,13 +41,6 @@ settings = create_settings()
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_EX_NX_DRIVE_FOLDER = default_expanded_nuxeo_drive_folder()
 
-OK_AND_RESTART = 1
-OK_AND_NO_RESTART = 2
-CANCELLED = 3
-PROGRESS_DLG_RESULT = {QDialog.Accepted: OK_AND_RESTART,
-                       QDialog.Rejected: CANCELLED,
-                       }
-
 settings = QSettings()
 
 class PreferencesDlg(QDialog, Ui_preferencesDlg):
@@ -67,6 +60,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.label_7.setText(product_name_5 + self.tr(' location'))
         self.frontend = frontend
         self.controller = frontend.controller
+        self.result = ProgressDialog.OK_AND_NO_RESTART
         self.values = None
         self.stop_on_apply = False
         self.local_folder = frontend._get_local_folder() if frontend is not None else DEFAULT_EX_NX_DRIVE_FOLDER
@@ -220,11 +214,13 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
 
     def configProxy(self):
-        # Proxy... button is only enable in this case
+        # Proxy... button is only enabled in this case
         self.useProxy = ProxyInfo.PROXY_SERVER
+        # retrieve current proxy
+        # NOTE: will not work for a different remote client
+        proxy = NuxeoClient.proxy
         dlg = ProxyDlg(frontend = self.frontend)
-        if dlg.exec_() == QDialog.Rejected:
-            return
+        self.result = dlg.exec_()    
 
     def setAutostart(self, state):
         self.autostart = True if state == Qt.Checked else False
@@ -339,12 +335,12 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if self.previous_local_folder is not None:
             previous_binding = self.controller.get_server_binding(local_folder = self.previous_local_folder, raise_if_missing = False)
         same_binding = self.server_binding == previous_binding
-
+        
         if not same_binding:
             try:
                 if previous_binding is not None:
-                    result = self._stopServer()
-                    if result == QDialog.Rejected:
+                    self.result = ProgressDialog.stopServer(self.frontend, parent = self)
+                    if self.result == ProgressDialog.CANCELLED:
                         return QDialog.Rejected
                     # disconnect
                     self.controller.unbind_server(self.previous_local_folder)
@@ -402,8 +398,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #                if mbox.exec_() == QMessageBox.No:
 #                    return QDialog.Rejected
 
-            result = self._stopServer()
-            if result == QDialog.Rejected:
+            self.result = self._stopServer(self.frontend, parent = self)
+            if self.result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected
             try:
                 shutil.move(self.local_folder, self.move_to_folder)
@@ -438,9 +434,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                     sb.local_folder = self.move_to_folder
                 session.commit()
 
-                # restart syncing if it was stopped
-                if result == OK_AND_RESTART and self.frontend.state == Constants.APP_STATE_STOPPED:
-                    self.frontend._doSync()
                 self.frontend.local_folder = self.local_folder = self.move_to_folder
 
         # Update the Favorites link (Windows only)
@@ -473,12 +466,17 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 dlg = ProxyDlg(frontend = self)
                 if dlg.exec_() == QDialog.Rejected:
                     return
+            elif useProxy == ProxyInfo.PROXY_DIRECT:
+                # restart sync to clear all cached remote clients using the proxy
+                self.result = ProgressDialog.stopServer(self.frontend, parent = self)
+                if self.result == ProgressDialog.CANCELLED:
+                    return QDialog.Rejected
+#                self.controller.nuxeo_client_factory(...).proxy = None
+                #NOTE: this will not work for a remote client factory different from NuxeoClient
+                # but requires at least 4 params
+                NuxeoClient.proxy = None
+                
             self.useProxy = useProxy
-            # invalidate remote client cache if necessary
-            if self.frontend is not None:
-                cache = self.frontend.controller._get_client_cache()
-                cache.clear()
-
             if self.useProxy == ProxyInfo.PROXY_AUTODETECT or self.useProxy == ProxyInfo.PROXY_DIRECT:
                 settings.setValue('preferences/proxyServer', '')
                 settings.setValue('preferences/proxyPort', '')
@@ -486,6 +484,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 settings.setValue('preferences/proxyUser', '')
                 settings.setValue('preferences/proxyPwd', '')
                 settings.setValue('preferences/proxyAuthN', False)
+        elif useProxy and NuxeoClient.proxy != ProxyInfo.get_proxy():
+            self.result = ProgressDialog.stopServer(self.frontend, parent = self)
+            if self.result == ProgressDialog.CANCELLED:
+                return QDialog.Rejected
+            NuxeoClient.proxy = ProxyInfo.get_proxy()
 
         settings.setValue('preferences/useProxy', self.useProxy)
         settings.setValue('preferences/notifications', self.notifications)
@@ -525,25 +528,13 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 plist_settings.remove('KeepAlive')
 
         settings.sync()
-        # TEST: useProxy was not saved!
-        result = settings.status()
-        if result != QSettings.NoError:
-            log.error('settings saving error: %s', str(result))
 
+        self.check_and_restart(self.result)                    
         self.done(QDialog.Accepted)
 
-    def _stopServer(self, cancel = True):
-        if self.frontend.worker is not None and self.frontend.worker.isAlive():
-            # Ask the controller to stop: the synchronization loop will in turn
-            # call notify_sync_stopped and finally handle_stop (without quitting the app)
-            self.controller.stop()
-
-            # wait in a loop while displaying a message...
-            self.dlg = ProgressDialog(self, cancel = cancel)
-            return PROGRESS_DLG_RESULT[self.dlg.exec_()]
-        else:
-            return OK_AND_NO_RESTART
-
-    def timeout(self):
-        if self.frontend.worker is None or not self.frontend.worker.isAlive():
-            self.dlg.ok()
+    def check_and_restart(self, result):
+        """Restart syncing if it was stopped."""
+        
+        if self.result == ProgressDialog.OK_AND_RESTART and self.frontend.state == Constants.APP_STATE_STOPPED:
+            self.frontend._doSync()
+            
