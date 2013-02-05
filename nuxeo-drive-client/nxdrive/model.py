@@ -17,6 +17,7 @@ from sqlalchemy.orm import scoped_session
 
 from nxdrive.client import NuxeoClient
 from nxdrive.client import LocalClient
+from nxdrive.utils import normalized_path
 
 WindowsError = None
 try:
@@ -84,6 +85,8 @@ class ServerBinding(Base):
     remote_user = Column(String)
     remote_password = Column(String)
     remote_token = Column(String)
+    last_sync_date = Column(Integer)
+    last_root_definitions = Column(String)
 
     def __init__(self, local_folder, server_url, remote_user,
                  remote_password=None, remote_token=None):
@@ -118,13 +121,13 @@ class RootBinding(Base):
         backref=backref("roots", cascade="all, delete-orphan"))
 
     def __init__(self, local_root, remote_repo, remote_root):
-        local_root = os.path.abspath(local_root)
+        local_root = normalized_path(local_root)
         self.local_root = local_root
         self.remote_repo = remote_repo
         self.remote_root = remote_root
 
         # expected local folder should be the direct parent of the
-        local_folder = os.path.abspath(os.path.join(local_root, '..'))
+        local_folder = normalized_path(os.path.join(local_root, '..'))
         self.local_folder = local_folder
 
     def __repr__(self):
@@ -328,8 +331,9 @@ class LastKnownState(Base):
             self.remote_path = remote_info.path
 
         if self.remote_ref != remote_info.uid:
-            raise ValueError("State %r cannot be mapped to remote doc %r" % (
-                self, remote_info.name))
+            raise ValueError("State %r (%s) cannot be mapped to remote"
+                             " doc %r (%s)" % (
+                self, self.remote_ref, remote_info.name, remote_info.uid))
 
         # Use last known modification time to detect updates
         if self.last_remote_updated is None:
@@ -378,7 +382,7 @@ def init_db(nxdrive_home, echo=False, scoped_sessions=True, poolclass=None):
 
     """
     # We store the DB as SQLite files in the nxdrive_home folder
-    dbfile = os.path.join(os.path.abspath(nxdrive_home), 'nxdrive.db')
+    dbfile = os.path.join(normalized_path(nxdrive_home), 'nxdrive.db')
     engine = create_engine('sqlite:///' + dbfile, echo=echo,
                            poolclass=poolclass)
 

@@ -34,6 +34,7 @@ import org.junit.runner.RunWith;
 import org.nuxeo.drive.adapter.FileItem;
 import org.nuxeo.drive.adapter.FileSystemItem;
 import org.nuxeo.drive.adapter.FolderItem;
+import org.nuxeo.drive.adapter.impl.FileSystemItemHelper;
 import org.nuxeo.drive.service.FileSystemItemAdapterService;
 import org.nuxeo.drive.service.FileSystemItemFactory;
 import org.nuxeo.drive.service.NuxeoDriveManager;
@@ -369,24 +370,26 @@ public class TestDefaultFileSystemItemFactory {
         // FileItem#getDownloadURL
         // ------------------------------------------------------
         FileItem fileItem = (FileItem) defaultFileSystemItemFactory.getFileSystemItem(file);
-        String baseURL = "http://myServer/nuxeo/";
-        String downloadURL = fileItem.getDownloadURL(baseURL);
-        assertEquals("http://myServer/nuxeo/nxbigfile/test/" + file.getId()
-                + "/blobholder:0/Joe.odt", downloadURL);
+        String downloadURL = fileItem.getDownloadURL();
+        assertEquals(
+                "nxbigfile/test/" + file.getId() + "/blobholder:0/Joe.odt",
+                downloadURL);
 
         // ------------------------------------------------------------
         // FileItem#getDigestAlgorithm
         // ------------------------------------------------------------
-        assertEquals("MD5", fileItem.getDigestAlgorithm());
+        assertEquals("md5", fileItem.getDigestAlgorithm());
+        FileItem noteItem = (FileItem) defaultFileSystemItemFactory.getFileSystemItem(note);
+        assertEquals("md5", noteItem.getDigestAlgorithm());
 
         // ------------------------------------------------------------
         // FileItem#getDigest
         // ------------------------------------------------------------
         assertEquals(file.getAdapter(BlobHolder.class).getBlob().getDigest(),
                 fileItem.getDigest());
-        assertEquals(
-                note.getAdapter(BlobHolder.class).getBlob().getDigest(),
-                ((FileItem) defaultFileSystemItemFactory.getFileSystemItem(note)).getDigest());
+        String noteDigest = FileSystemItemHelper.getDigest(
+                note.getAdapter(BlobHolder.class).getBlob(), "md5");
+        assertEquals(noteDigest, noteItem.getDigest());
         assertEquals(
                 custom.getAdapter(BlobHolder.class).getBlob().getDigest(),
                 ((FileItem) defaultFileSystemItemFactory.getFileSystemItem(custom)).getDigest());

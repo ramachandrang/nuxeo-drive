@@ -43,7 +43,7 @@ public class DocumentBackedFileItem extends
 
     private static final Log log = LogFactory.getLog(DocumentBackedFileItem.class);
 
-    private static final String MD5_DIGEST_ALGORITHM = "MD5";
+    protected String downloadURL;
 
     protected String digestAlgorithm;
 
@@ -82,6 +82,7 @@ public class DocumentBackedFileItem extends
         session.save();
         // Update FileSystemItem attributes
         this.name = name;
+        updateDownloadURL();
         updateLastModificationDate(doc);
     }
 
@@ -93,18 +94,8 @@ public class DocumentBackedFileItem extends
     }
 
     @Override
-    public String getDownloadURL(String baseURL) throws ClientException {
-        StringBuilder downloadURLSb = new StringBuilder();
-        downloadURLSb.append(baseURL);
-        downloadURLSb.append("nxbigfile/");
-        downloadURLSb.append(repositoryName);
-        downloadURLSb.append("/");
-        downloadURLSb.append(docId);
-        downloadURLSb.append("/");
-        downloadURLSb.append("blobholder:0");
-        downloadURLSb.append("/");
-        downloadURLSb.append(URIUtils.quoteURIPathComponent(name, true));
-        return downloadURLSb.toString();
+    public String getDownloadURL() throws ClientException {
+        return downloadURL;
     }
 
     @Override
@@ -136,6 +127,7 @@ public class DocumentBackedFileItem extends
         } else {
             updateDocTitleIfNeeded(doc, blobFileName);
             name = blobFileName;
+            updateDownloadURL();
         }
         BlobHolder bh = getBlobHolder(doc);
         bh.setBlob(blob);
@@ -143,18 +135,21 @@ public class DocumentBackedFileItem extends
         session.save();
         /* Update FileSystemItem attributes */
         updateLastModificationDate(doc);
-        updateDigest();
-
+        updateDigest(doc);
     }
 
     /*--------------------- Protected -----------------*/
     protected void initialize(DocumentModel doc) throws ClientException {
         this.name = getFileName(doc);
         this.folder = false;
+        updateDownloadURL();
         // TODO: should get the digest algorithm from the binary store
         // configuration, but it is not exposed as a public API for now
-        this.digestAlgorithm = MD5_DIGEST_ALGORITHM;
-        updateDigest();
+        this.digestAlgorithm = FileSystemItemHelper.MD5_DIGEST_ALGORITHM;
+        updateDigest(doc);
+        if (this.digest == null) {
+            this.digestAlgorithm = null;
+        }
         this.canUpdate = this.canRename;
     }
 
@@ -198,8 +193,24 @@ public class DocumentBackedFileItem extends
         }
     }
 
-    protected void updateDigest() throws ClientException {
-        digest = getBlob().getDigest();
+    protected void updateDownloadURL() throws ClientException {
+        StringBuilder downloadURLSb = new StringBuilder();
+        downloadURLSb.append("nxbigfile/");
+        downloadURLSb.append(repositoryName);
+        downloadURLSb.append("/");
+        downloadURLSb.append(docId);
+        downloadURLSb.append("/");
+        downloadURLSb.append("blobholder:0");
+        downloadURLSb.append("/");
+        downloadURLSb.append(URIUtils.quoteURIPathComponent(name, true));
+        downloadURL = downloadURLSb.toString();
+    }
+
+    protected void updateDigest(DocumentModel doc) throws ClientException {
+        Blob blob = getBlob(doc);
+        // Force digest computation for a StringBlob,
+        // typically the note:note property of a Note document
+        digest = FileSystemItemHelper.getDigest(blob, digestAlgorithm);
     }
 
     protected void versionIfNeeded(DocumentModel doc, CoreSession session)
@@ -249,6 +260,10 @@ public class DocumentBackedFileItem extends
     }
 
     /*---------- Needed for JSON deserialization ----------*/
+    protected void setDownloadURL(String downloadURL) {
+        this.downloadURL = downloadURL;
+    }
+
     protected void setDigestAlgorithm(String digestAlgorithm) {
         this.digestAlgorithm = digestAlgorithm;
     }

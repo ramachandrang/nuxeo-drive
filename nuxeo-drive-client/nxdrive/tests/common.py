@@ -8,6 +8,7 @@ import shutil
 from nxdrive.model import LastKnownState
 from nxdrive.client import NuxeoClient
 from nxdrive.controller import Controller
+from nxdrive.client.remote_file_system_client import RemoteFileSystemClient
 
 
 class IntegrationTestCase(unittest.TestCase):
@@ -45,14 +46,25 @@ class IntegrationTestCase(unittest.TestCase):
         self.workspace = ws_info['uid']
         self.workspace_title = ws_info['title']
 
-        # Client to be use to create remote test documents and folders
-        remote_client_1 = NuxeoClient(
+        # Document client to be used to create remote test documents
+        # and folders
+        remote_document_client_1 = NuxeoClient(
             self.nuxeo_url, self.user_1, 'nxdrive-test-device-1',
             self.password_1, base_folder=self.workspace)
 
-        remote_client_2 = NuxeoClient(
+        remote_document_client_2 = NuxeoClient(
             self.nuxeo_url, self.user_2, 'nxdrive-test-device-2',
             self.password_2, base_folder=self.workspace)
+
+        # File system client to be used to create remote test documents
+        # and folders
+        remote_file_system_client_1 = RemoteFileSystemClient(
+            self.nuxeo_url, self.user_1, 'nxdrive-test-device-1',
+            self.password_1)
+
+        remote_file_system_client_2 = RemoteFileSystemClient(
+            self.nuxeo_url, self.user_2, 'nxdrive-test-device-2',
+            self.password_2)
 
         # Check the local filesystem test environment
         self.local_test_folder_1 = tempfile.mkdtemp('-nxdrive-tests-user-1')
@@ -76,14 +88,18 @@ class IntegrationTestCase(unittest.TestCase):
         self.controller_1 = Controller(nxdrive_conf_folder_1)
         self.controller_2 = Controller(nxdrive_conf_folder_2)
         self.root_remote_client = root_remote_client
-        self.remote_client_1 = remote_client_1
-        self.remote_client_2 = remote_client_2
+        self.remote_document_client_1 = remote_document_client_1
+        self.remote_document_client_2 = remote_document_client_2
+        self.remote_file_system_client_1 = remote_file_system_client_1
+        self.remote_file_system_client_2 = remote_file_system_client_2
 
     def tearDown(self):
         self.controller_1.unbind_all()
         self.controller_2.unbind_all()
-        self.remote_client_1.revoke_token()
-        self.remote_client_2.revoke_token()
+        self.remote_document_client_1.revoke_token()
+        self.remote_document_client_2.revoke_token()
+        # Don't need to revoke tokens for the file system remote clients
+        # since they use the same users as the remote document clients
         self.root_remote_client.execute("NuxeoDrive.TearDownIntegrationTests")
 
         self.root_remote_client.revoke_token()
@@ -104,7 +120,7 @@ class IntegrationTestCase(unittest.TestCase):
         return [(p.path, p.local_state, p.remote_state) for p in pairs]
 
     def make_server_tree(self):
-        remote_client = self.remote_client_1
+        remote_client = self.remote_document_client_1
         # create some folders on the server
         folder_1 = remote_client.make_folder(self.workspace, 'Folder 1')
         folder_1_1 = remote_client.make_folder(folder_1, 'Folder 1.1')
@@ -122,3 +138,6 @@ class IntegrationTestCase(unittest.TestCase):
         remote_client.make_file(folder_1_2, 'File 3.txt', content="ccc")
         remote_client.make_file(folder_2, 'File 4.txt', content="ddd")
         remote_client.make_file(self.workspace, 'File 5.txt', content="eee")
+
+    def wait(self):
+        self.root_remote_client.wait()
