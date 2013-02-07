@@ -6,13 +6,78 @@
 import os
 import sys
 from datetime import datetime
+import re
 
 from distutils.core import setup
+if sys.platform == 'win32':
+    import py2exe
 
-scripts = ["nuxeo-drive-client/scripts/ndrive"]
+VERSIONFILE = r"nuxeo-drive-client/nxdrive/_version.py"
+
+PRODUCT_NAME = 'Cloud Portal Office'
+APP_NAME = PRODUCT_NAME + ' Desktop'
+WIZARD_NAME = PRODUCT_NAME + ' Wizard'
+SHORT_APP_NAME = 'CpoDesktop'
+SHORT_WIZARD_NAME = 'CpoWizard'
+DEFAULT_ROOT_FOLDER = PRODUCT_NAME
+
+def get_version():
+    VERSIONPATH = os.path.join(os.path.dirname(__file__), VERSIONFILE)
+    verstr = "unknown"
+    try:
+        with open(VERSIONPATH, "rt") as f:
+            verstrline = f.read()
+    except EnvironmentError:
+        # Okay, there is no version file.
+        raise RuntimeError("there is no version file %s" % VERSIONFILE)
+    else:
+        VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
+        mo = re.search(VSRE, verstrline, re.M)
+        if mo:
+            verstr = mo.group(1)
+            return verstr
+        else:
+            raise RuntimeError("if %s.py exists, it is required to be well-formed" % (VERSIONFILE,))
+
+
+def create_shortcut(path, target, wDir = '', icon = ''):
+    shell = Dispatch('WScript.Shell')
+    shortcut = shell.CreateShortCut(path)
+    shortcut.Targetpath = target
+    shortcut.WorkingDirectory = wDir
+    if icon == '':
+        pass
+    else:
+        shortcut.iconLocation = icon
+    shortcut.save()
+
+def default_nuxeo_drive_folder():
+    """Find a reasonable location for the root Nuxeo Drive folder
+    This folder is user specific, typically under the home folder.
+    """
+    path = None
+    if sys.platform == "win32":
+        if os.path.exists(os.path.expanduser(r'~\My Documents')):
+            # Compat for Windows XP
+            path = os.path.join(r'~\My Documents', PRODUCT_NAME)
+        else:
+            # Default Documents folder with navigation shortcuts in Windows 7
+            # and up.
+            path = os.path.join(r'~\Documents', PRODUCT_NAME)
+    else:
+        path = os.path.join('~', PRODUCT_NAME)
+
+    return os.path.expanduser(path)
+
+
+version = get_version()
+script = 'nuxeo-drive-client/scripts/ndrive.py'
+scriptwzd = 'nuxeo-drive-client/scripts/ndrivewzd.py'
+scripts = [script, scriptwzd]
+
 freeze_options = {}
 
-name = 'nuxeo-drive'
+name = SHORT_APP_NAME
 packages = [
     'nxdrive',
     'nxdrive.client',
@@ -21,12 +86,18 @@ packages = [
     'nxdrive.protocol_handler',
     'nxdrive.data',
     'nxdrive.data.icons',
+    'nxdrive.async',
+    'nxdrive.utils',
 ]
 package_data = {
-    'nxdrive.data.icons': ['*.png', '*.svg', '*.ico', '*.icns'],
+    'nxdrive.data.icons': ['*.png', '*.gif', '*.svg', '*.ico', '*.icns'],
+    'nxdrive.data': ['*.txt', '*.xml'],
 }
-script = 'nuxeo-drive-client/scripts/ndrive'
+
+# TODO: icons are already copied into 'icons' subfolder - investigate this
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
+images_home = 'nuxeo-drive-client/nxdrive/data/images'
+
 win_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.ico')
 png_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.png')
 osx_icon = os.path.join(icons_home, 'nuxeo_drive_app_icon_128.icns')
@@ -44,7 +115,28 @@ for filename in os.listdir(icons_home):
     if os.path.isfile(filepath):
         icons_files.append(filepath)
 
-version = '0.1.0'
+images_files = []
+for filename in os.listdir(images_home):
+    filepath = os.path.join(images_home, filename)
+    if os.path.isfile(filepath):
+        images_files.append(filepath)
+
+others_home = 'nuxeo-drive-client/nxdrive/data'
+others_files = []
+for filename in os.listdir(others_home):
+    filepath = os.path.join(others_home, filename)
+    if os.path.isfile(filepath) and os.path.splitext(filename)[1] not in ['.py', '.pyc', '.pyd']:
+        others_files.append(filepath)
+
+if sys.platform == 'win32':
+    bin_files = []
+    arch = '64bit' if 'PROGRAMFILES(X86)' in os.environ else '32bit'
+    bin_home = os.path.join('nuxeo-drive-client/nxdrive/data/bin/', arch)
+    for filename in os.listdir(bin_home):
+        filepath = os.path.normpath(os.path.join(bin_home, filename))
+        if os.path.isfile(filepath) and os.path.splitext(filepath)[1] == '.dll':
+            bin_files.append(filepath)
+
 
 if '--dev' in sys.argv:
     # timestamp the dev artifacts for continuous integration
@@ -74,29 +166,51 @@ if '--freeze' in sys.argv:
     # build_exe does not seem to take the package_dir info into account
     sys.path.append('nuxeo-drive-client')
 
-    executables = [Executable(script, base=None)]
+    executables = []
 
     if sys.platform == "win32":
         # Windows GUI program that can be launched without a cmd console
         executables.append(
-            Executable(script, targetName="ndrivew.exe", base="Win32GUI",
-                       icon=icon, shortcutDir="ProgramMenuFolder",
-                       shortcutName="Nuxeo Drive"))
-    scripts = []
+            Executable(script, targetName = SHORT_APP_NAME + '.exe', base = "Win32GUI",
+                       icon = icon, shortcutDir = "ProgramMenuFolder",
+                       shortcutName = APP_NAME))
+
+        executables.append(
+            Executable(scriptwzd, targetName = SHORT_WIZARD_NAME + '.exe', base = "Win32GUI",
+                       icon = icon, shortcutDir = "ProgramMenuFolder",
+                       shortcutName = WIZARD_NAME))
+
     # special handling for data files
     packages.remove('nxdrive.data')
     packages.remove('nxdrive.data.icons')
     package_data = {}
-    icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
-    include_files = [(os.path.join(icons_home, f), "icons/%s" % f)
-                     for f in os.listdir(icons_home)]
+
+    include_files = [
+                    icons_home + "/nuxeo_drive_icon_%d.png" % i
+                        for i in [16, 32, 48, 64]
+    ]
+
+    includes = [
+                "PySide",
+                "PySide.QtCore",
+                "PySide.QtNetwork",
+                "PySide.QtGui",
+                "atexit",  # implicitly required by PySide
+                "sqlalchemy.dialects.sqlite",
+                ]
     freeze_options = dict(
-        executables=executables,
-        options={
+        executables = executables,
+        data_files = [('icons', icons_files),
+                    ('data', others_files),
+                    ('bin', bin_files),
+                    ('images', images_files),
+                    ],
+        options = {
             "build_exe": {
                 "includes": includes,
                 "packages": packages + [
                     "nose",
+                    "icemac.truncatetext",
                 ],
                 "excludes": [
                     "ipdb",
@@ -116,7 +230,6 @@ if '--freeze' in sys.argv:
     # TODO: investigate with esky to get an auto-updateable version but
     # then make sure that we can still have .msi and .dmg packages
     # instead of simple zip files.
-
 elif sys.platform == 'darwin':
     # Under OSX we use py2app instead of cx_Freeze because we need:
     # - argv_emulation=True for nxdrive:// URL scheme handling
@@ -124,40 +237,44 @@ elif sys.platform == 'darwin':
     import py2app  # install the py2app command
 
     freeze_options = dict(
-        app=["nuxeo-drive-client/scripts/ndrive.py"],
-        data_files=[('icons', icons_files)],
-        options=dict(
-            py2app=dict(
-                iconfile=osx_icon,
-                argv_emulation=False,  # We use QT for URL scheme handling
-                plist=dict(
-                    CFBundleDisplayName="Nuxeo Drive",
-                    CFBundleName="Nuxeo Drive",
-                    CFBundleIdentifier="org.nuxeo.drive",
-                    LSUIElement=True,  # Do not launch as a Dock application
-                    CFBundleURLTypes=[
+        app = [script],
+        data_files = [('icons', icons_files),
+                    ('nxdrive/data', others_files)],
+        options = dict(
+            py2app = dict(
+                iconfile = osx_icon,
+                argv_emulation = False,  # We use QT for URL scheme handling
+                plist = dict(
+                    CFBundleDisplayName = APP_NAME,
+                    CFBundleName = APP_NAME,
+                    CFBundleIdentifier = "com.sharpb2bcloud.cpo.desktop",
+                    LSUIElement = True,  # Do not launch as a Dock application
+                    CFBundleURLTypes = [
                         dict(
-                            CFBundleURLName='Nuxeo Drive URL',
-                            CFBundleURLSchemes=['nxdrive'],
+                            CFBundleURLName = '%s URL' % APP_NAME,
+                            CFBundleURLSchemes = [SHORT_APP_NAME],
                         )
                     ]
                 ),
-                includes=includes,
+                includes = includes,
             )
         )
     )
 
+
 setup(
-    name=name,
-    version=version,
-    description="Desktop synchronization client for Nuxeo.",
-    author="Nuxeo",
-    author_email="contact@nuxeo.com",
-    url='http://github.com/nuxeo/nuxeo-drive',
-    packages=packages,
-    package_dir={'nxdrive': 'nuxeo-drive-client/nxdrive'},
-    package_data=package_data,
-    scripts=scripts,
-    long_description=open('README.rst').read(),
+    name = APP_NAME,
+    version = version,
+    description = "Desktop synchronization client for %s." % PRODUCT_NAME,
+    author = "SHARP",
+    author_email = "contact@sharplabs.com",
+    url = 'https://github.com/SharpCD/clouddesk_applications.git',
+    packages = packages,
+    package_dir = {'nxdrive': 'nuxeo-drive-client/nxdrive'},
+    package_data = package_data,
+    scripts = scripts,
+    long_description = open('README.rtf').read(),
     **freeze_options
 )
+
+

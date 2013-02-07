@@ -8,12 +8,16 @@ import mimetypes
 import random
 import time
 from urllib import urlencode
+from cookielib import CookieJar
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from nxdrive.logging_config import get_logger
 from nxdrive.client.common import DEFAULT_IGNORED_PREFIXES
 from nxdrive.client.common import DEFAULT_IGNORED_SUFFIXES
-
+from nxdrive.utils.helpers import create_settings
+from nxdrive.utils.helpers import classproperty
+from nxdrive.utils.exceptions import ProxyConnectionError, ProxyConfigurationError
+from nxdrive import Constants
 
 log = get_logger(__name__)
 
@@ -37,6 +41,82 @@ class Unauthorized(Exception):
         return ("'%s' is not authorized to access '%s' with"
                 " the provided credentials" % (self.user_id, self.server_url))
 
+class ProxyInfo(object):
+    """Holder class for proxy information"""
+
+    PORT = '8090'
+    PORT_INTEGER = int(PORT)
+    TYPES = ['HTTP', 'SOCKS4', 'SOCKS5']
+    PROXY_SERVER = 'server'
+    PROXY_AUTODETECT = 'autodetect'
+    PROXY_DIRECT = 'direct'
+
+    def __init__(self, type = 'HTTP', server_url = None, port = None, authn_required = False, user = None, pwd = None):
+        self.type = type
+        if type != ProxyInfo.TYPES[0]:
+            raise ProxyConfigurationError('protocol type not supported')
+        self.autodetect = False
+        if not server_url:
+            self.autodetect = True
+        self.authn_required = authn_required
+        if not user and authn_required:
+            raise ProxyConfigurationError('missing username')
+        self.server_url = server_url
+        self.port = port
+        if server_url is None or port is None:
+            raise ProxyConfigurationError('missing server or port')
+        self.user = user
+        self.pwd = pwd
+
+    @staticmethod
+    def get_proxy():
+        settings = create_settings()
+        if settings is None:
+            return None
+
+        useProxy = settings.value('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
+        if useProxy == ProxyInfo.PROXY_DIRECT:
+            return None
+
+        proxyType = settings.value('preferences/proxyType', 'HTTP')
+        server = settings.value('preferences/proxyServer')
+        user = settings.value('preferences/proxyUser')
+        pwd = settings.value('preferences/proxyPwd')
+
+        if sys.platform == 'win32':
+            authnAsString = settings.value('preferences/proxyAuthN', 'false')
+            if authnAsString.lower() == 'true':
+                authN = True
+            elif authnAsString.lower() == 'false':
+                authN = False
+            else:
+                authN = False
+            try:
+                port = settings.value('preferences/proxyPort', ProxyInfo.PORT)
+                port = int(port)
+            except ValueError:
+                port = 0
+
+        else:
+            authN = settings.value('preferences/proxyAuthN', False)
+            port = settings.value('preferences/proxyPort', 0)
+
+        return ProxyInfo(proxyType, server, port, authN, user, pwd)
+
+    def __eq__(self, other):
+        if other is None or not isinstance(other, ProxyInfo):
+            return False
+
+        ret = self.server_url == other.server_url \
+              and self.port == other.port \
+              and self.authn_required == other.authn_required
+        if ret and self.authn_required:
+            ret = self.user and self.pwd
+        return ret
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    
 
 class BaseAutomationClient(object):
     """Client for the Nuxeo Content Automation HTTP API"""
@@ -44,10 +124,37 @@ class BaseAutomationClient(object):
     # Used for testing network errors
     _error = None
 
-    # Parameters used when negotiating authentication token:
-    application_name = 'Nuxeo Drive'
+    application_name = Constants.APP_NAME
 
+    _proxy = None
+    _proxy_error_count = 0
+    MAX_PROXY_ERROR_COUNT = 2
+
+    @classproperty
+    @classmethod
+    def proxy(cls):
+        if cls._proxy is None:
+            cls._proxy = ProxyInfo.get_proxy()
+        return cls._proxy
+
+    @proxy.setter
+    @classmethod
+    def proxy(cls, val):
+        cls._proxy = val
+
+    @classproperty
+    @classmethod
+    def proxy_error_count(cls):
+        cls._proxy_error_count += 1
+        return cls._proxy_error_count
+    
+    @proxy_error_count.setter
+    @classmethod
+    def proxy_error_count(cls, val):
+        cls._proxy_error_count = val
+        
     permission = 'ReadWrite'
+    cookiejar = CookieJar()
 
     def __init__(self, server_url, user_id, device_id,
                  password=None, token=None, repository="default",
@@ -66,17 +173,30 @@ class BaseAutomationClient(object):
             server_url += '/'
         self.server_url = server_url
 
+        BaseAutomationClient.proxy_error_count = 0
         # TODO: actually use the repository info in the requests
         self.repository = repository
 
         self.user_id = user_id
         self.device_id = device_id
         self._update_auth(password=password, token=token)
-
-        cookie_processor = urllib2.HTTPCookieProcessor()
-        self.opener = urllib2.build_opener(cookie_processor)
+        cookie_processor = urllib2.HTTPCookieProcessor(BaseAutomationClient.cookiejar)
+        
+        if BaseAutomationClient.proxy is not None:
+            if not BaseAutomationClient.proxy.autodetect and BaseAutomationClient.proxy.type == 'HTTP':
+                proxy_url = '%s:%d' % (BaseAutomationClient.proxy.server_url, BaseAutomationClient.proxy.port)
+                proxy_support = urllib2.ProxyHandler({'http' : proxy_url, 'https' : proxy_url})
+                self.opener = urllib2.build_opener(cookie_processor, proxy_support)
+            else:
+                # Autodetect uses the default ProxyServer
+                # Autodetect is not implemented
+                self.opener = urllib2.build_opener(cookie_processor)
+        else:
+            # direct connection - disable autodetect
+            proxy_support = urllib2.ProxyHandler({})
+            self.opener = urllib2.build_opener(cookie_processor, proxy_support)
+            
         self.automation_url = server_url + 'site/automation/'
-
         self.fetch_api()
 
     def make_raise(self, error):
@@ -86,22 +206,32 @@ class BaseAutomationClient(object):
     def fetch_api(self):
         headers = self._get_common_headers()
         base_error_message = (
-            "Failed not connect to Nuxeo Content Automation on server %r"
+            "Failed not connect to %s Content Automation on server %r"
             " with user %r"
-        ) % (self.server_url, self.user_id)
+        ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
             req = urllib2.Request(self.automation_url, headers=headers)
-            response = json.loads(self.opener.open(req).read())
+            # --- BEGIN DEBUG ----
+            self.log_request(req)
+            # --- END DEBUG ----
+            raw_response = self.opener.open(req)
+            response = json.loads(raw_response.read())
+            # --- BEGIN DEBUG ----
+            self.log_response(raw_response)
+            # --- END DEBUG ----
         except urllib2.HTTPError as e:
             if e.code == 401 or e.code == 403:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
             else:
+                self._log_details(e)
                 e.msg = base_error_message + ": HTTP error %d" % e.code
                 raise e
         except Exception as e:
+            self._log_details(e)
             if hasattr(e, 'msg'):
                 e.msg = base_error_message + ": " + e.msg
             raise
+        
         self.operations = {}
         for operation in response["operations"]:
             self.operations[operation['id']] = operation
@@ -137,13 +267,44 @@ class BaseAutomationClient(object):
 
         url = self.automation_url + command
         log.trace("Calling '%s' with json payload: %r", url, data)
+        base_error_message = (
+            "Failed not connect to %s Content Automation on server %r"
+            " with user %r"
+        ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
+        
         req = urllib2.Request(url, data, headers)
+        BaseAutomationClient.cookiejar.add_cookie_header(req)
+        # --- BEGIN DEBUG ----
+        self.log_request(req)
+        # ---- END DEBUG -----
         try:
             resp = self.opener.open(req)
+        except urllib2.HTTPError as e:
+            self._log_details(e)
+            if e.code == 401 or e.code == 403:
+                raise Unauthorized(self.server_url, self.user_id, e.code)
+            elif e.code == 404:
+                # Token based auth is not supported by this server
+                return None
+            else:
+                e.msg = base_error_message + ": HTTP error %d" % e.code
+                raise e
+        except urllib2.URLError, e:
+            self._log_details(e)
+            # NOTE the Proxy handler not always shown in the dictionary
+#            if urllib2.getproxies().has_key('http'):
+            if BaseAutomationClient.proxy is not None and \
+                BaseAutomationClient.proxy_error_count < BaseAutomationClient.MAX_PROXY_ERROR_COUNT:
+                raise ProxyConnectionError(e)
+            else:
+                raise
         except Exception, e:
             self._log_details(e)
             raise
 
+        # --- BEGIN DEBUG ----
+        self.log_response(resp)
+        # ---- END DEBUG -----
         info = resp.info()
         s = resp.read()
 
@@ -220,14 +381,42 @@ class BaseAutomationClient(object):
             boundary,
         )
         url = self.automation_url.encode('ascii') + command
+        base_error_message = (
+            "Failed not connect to %s Content Automation on server %r"
+            " with user %r"
+        ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         log.trace("Calling '%s' for file '%s'", url, filename)
         req = urllib2.Request(url, data, headers)
+        BaseAutomationClient.cookiejar.add_cookie_header(req)
+        # --- BEGIN DEBUG ----
+        self.log_request(req)
+        # ---- END DEBUG -----
         try:
             resp = self.opener.open(req)
+        except urllib2.HTTPError as e:
+            self._log_details(e)
+            if e.code == 401 or e.code == 403:
+                raise Unauthorized(self.server_url, self.user_id, e.code)
+            elif e.code == 404:
+                # Token based auth is not supported by this server
+                return None
+            else:
+                e.msg = base_error_message + ": HTTP error %d" % e.code
+                raise e
+        except urllib2.URLError, e:
+            self._log_details(e)
+            if BaseAutomationClient.proxy is not None and \
+                BaseAutomationClient.proxy_error_count < BaseAutomationClient.MAX_PROXY_ERROR_COUNT:
+                raise ProxyConnectionError(e)
+            else:
+                raise
         except Exception as e:
             self._log_details(e)
             raise
 
+        # --- BEGIN DEBUG ----
+        self.log_response(resp)
+        # ---- END DEBUG -----
         info = resp.info()
         s = resp.read()
 
@@ -261,14 +450,23 @@ class BaseAutomationClient(object):
 
         headers = self._get_common_headers()
         base_error_message = (
-            "Failed to connect to Nuxeo Content Automation server %r"
+            "Failed not connect to %s Content Automation on server %r"
             " with user %r"
-        ) % (self.server_url, self.user_id)
+        ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers=headers)
-            token = self.opener.open(req).read()
+            BaseAutomationClient.cookiejar.add_cookie_header(req)
+            # --- BEGIN DEBUG ----
+            self.log_request(req)
+            # ---- END DEBUG -----
+            resp = self.opener.open(req)
+            # --- BEGIN DEBUG ----
+            self.log_response(resp)
+            # ---- END DEBUG -----
+            token = resp.read()
         except urllib2.HTTPError as e:
+            self._log_details(e)
             if e.code == 401 or e.code == 403:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
             elif e.code == 404:
@@ -277,10 +475,19 @@ class BaseAutomationClient(object):
             else:
                 e.msg = base_error_message + ": HTTP error %d" % e.code
                 raise e
+        except urllib2.URLError, e:
+            self._log_details(e)
+            if BaseAutomationClient.proxy is not None and \
+                BaseAutomationClient.proxy_error_count < BaseAutomationClient.MAX_PROXY_ERROR_COUNT:
+                raise ProxyConnectionError(e)
+            else:
+                raise
         except Exception as e:
+            self._log_details(e)
             if hasattr(e, 'msg'):
                 e.msg = base_error_message + ": " + e.msg
             raise
+        
         # Use the (potentially re-newed) token from now on
         if not revoke:
             self._update_auth(token=token)
@@ -355,3 +562,23 @@ class BaseAutomationClient(object):
                 # Error message should always be a JSON message,
                 # but sometimes it's not
                 log.debug(detail)
+
+    def log_request(self, req):
+        log.debug('------request-------')
+        log.debug('request url: %s', req.get_full_url())
+        log.debug('request host: %s', req.get_host())
+        log.debug('original request host: %s', req.get_origin_req_host())
+        log.debug('request type: %s', req.get_type())
+        if req.has_data():
+            log.debug('request data: %s...', str(req.get_data())[0:200])
+                
+    def log_response(self, rsp):
+        log.debug('------response------')
+        log.debug('response code: %d', rsp.code)
+        log.debug('--response headers--')
+        for key, value in rsp.info().items():
+            log.debug('%s: %s', key, value)
+        log.debug('----response data---')
+        log.debug('data: %s...', str(rsp)[0:200])
+            
+            

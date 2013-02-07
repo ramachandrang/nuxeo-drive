@@ -45,7 +45,18 @@ class NuxeoDocumentInfo(BaseNuxeoDocumentInfo):
     def get_digest(self):
         return self.digest
 
+class FolderInfo(object):
+    """Folder node for retrieving folder hierarchy"""
 
+    def __init__(self, docId, title, parentId):
+        self.docId = docId
+        self.title = title
+        self.parentId = parentId
+
+    def __str__(self):
+        return "folder '%s', docId=%s, parentId=%s" % (self.title, self.docId, self.parentId)
+    
+    
 class RemoteDocumentClient(BaseAutomationClient):
     """Nuxeo document oriented Automation client
 
@@ -313,6 +324,41 @@ class RemoteDocumentClient(BaseAutomationClient):
         self.execute("NuxeoDrive.SetSynchronization", input="doc:" + ref,
                      enable=False)
         return True
+
+    def get_mydocs(self):
+        return self._execute("UserWorkspace.Get")
+
+    def get_othersdocs(self):
+        query = """SELECT * FROM Document WHERE
+                   sh:rootshared = 1 AND
+                   sh:isWritePermission = 1 AND
+                   ecm:currentLifeCycleState!= 'deleted' AND
+                   ecm:mixinType = 'Folderish' AND
+                   dc:creator != 'system' AND
+                   ecm:name != 'Guest Folder' AND
+                   ecm:primaryType!='Domain' AND
+                   ecm:primaryType!='SocialDomain' AND
+                   ecm:mixinType != 'HiddenInNavigation'
+                   AND ecm:mixinType!='HiddenInFacetedSearch' AND
+                   dc:creator != '"+username+"'
+                   """
+
+        return self._execute('Document.Query', query = query)[u'entries']
+        # TODO return result - any filtering needed?
+
+    def get_subfolders(self, parent, nodes):
+        docId = parent[u'uid']
+        query = """SELECT * FROM Document WHERE
+                ecm:parentId = '%s' AND
+                ecm:currentLifeCycleState != 'deleted' AND
+                ecm:mixinType = 'Folderish' and
+                ecm:mixinType != 'HiddenInNavigation' AND
+                ecm:isCheckedInVersion = 0""" % docId
+
+        subfolders = self._execute('Document.Query', query = query)[u'entries']
+        for sf in subfolders:
+            nodes[sf[u'title']]['value'] = FolderInfo(sf[u'uid'], sf[u'title'], docId)
+            self.get_subfolders(sf, nodes[sf[u'title']])
 
     def get_changes(self, last_sync_date=None, last_root_definitions=None):
         return self.execute(

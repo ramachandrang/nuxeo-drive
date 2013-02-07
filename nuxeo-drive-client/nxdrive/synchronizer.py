@@ -6,18 +6,26 @@ from time import sleep
 import urllib2
 import socket
 import httplib
+import psutil
+from collections import defaultdict, Iterable
 
 from sqlalchemy import not_
-import psutil
+from sqlalchemy import or_
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
 from nxdrive.client import DEDUPED_BASENAME_PATTERN
 from nxdrive.client.remote_document_client import DEFAULT_TYPES
 from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
 from nxdrive.client import Unauthorized
+from nxdrive.client.remote_document_client import FolderInfo
 from nxdrive.model import ServerBinding
 from nxdrive.model import LastKnownState
+from nxdrive.model import RecentFiles
+from nxdrive.model import SyncFolders
 from nxdrive.logging_config import get_logger
+from nxdrive import Constants
+from nxdrive.utils import exceptions
 
 WindowsError = None
 try:
@@ -25,12 +33,15 @@ try:
 except ImportError:
     pass  # this will never be raised under unix
 
+
 POSSIBLE_NETWORK_ERROR_TYPES = (
     Unauthorized,
     urllib2.URLError,
     urllib2.HTTPError,
     httplib.HTTPException,
     socket.error,
+    exceptions.ProxyConnectionError,
+    exceptions.ProxyConfigurationError,
 )
 
 
@@ -81,7 +92,18 @@ def find_first_name_match(name, possible_pairs):
                 return pair
     return None
 
+def tree():
+    """Tree structure for returning folder hierarchy"""
+    return defaultdict(tree)
 
+def dicts(t):
+    """Used for printing tree structure"""
+    if isinstance(t, Iterable):
+        return {k: dicts(t[k]) for k in t}
+    else:
+        return str(t)
+    
+    
 class Synchronizer(object):
     """Handle synchronization operations between the client FS and Nuxeo"""
 
@@ -100,9 +122,11 @@ class Synchronizer(object):
     # frontend)
     limit_pending = 100
 
-    def __init__(self, controller):
+    def __init__(self, controller, sync_operation=None):
         self._controller = controller
         self._frontend = None
+        self._sync_operation = sync_operation
+        self.loop_count = 0
 
     def register_frontend(self, frontend):
         self._frontend = frontend
@@ -378,20 +402,28 @@ class Synchronizer(object):
             if sb.has_invalid_credentials():
                 # Skip servers with missing credentials
                 continue
-            nxclient = self.get_remote_client(sb)
-            if not nxclient.is_addon_installed():
-                continue
-            if repository is not None:
-                repositories = [repository]
-            else:
-                repositories = nxclient.get_repository_names()
-            for repo in repositories:
-                nxclient = self.get_remote_client(sb, repository=repo)
-                remote_roots = nxclient.get_roots()
-                local_roots = [r for r in sb.roots
-                                if r.remote_repo == repo]
-                self._controller.update_server_roots(
-                    sb, session, local_roots, remote_roots, repo)
+            try:
+                nxclient = self.get_remote_client(sb)
+                if not nxclient.is_addon_installed():
+                    continue
+                if repository is not None:
+                    repositories = [repository]
+                else:
+                    repositories = nxclient.get_repository_names()
+                for repo in repositories:
+                    nxclient = self.get_remote_client(sb, repository=repo)
+                    remote_roots = nxclient.get_roots()
+                    local_roots = [r for r in sb.roots
+                                    if r.remote_repo == repo]
+                    self._controller.update_server_roots(
+                        sb, session, local_roots, remote_roots, repo)
+            except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                # Ignore expected possible network related errors
+                self._log_offline(e, "update roots")
+                log.trace("Traceback of ignored network error:",
+                        exc_info = True)
+                if self._controller.switch_offline(sb, e, session = session):
+                    raise
 
         if self._frontend is not None:
             local_folders = [sb.local_folder
@@ -405,7 +437,7 @@ class Synchronizer(object):
         return self.get_remote_client(sb, base_folder=rb.remote_root,
                                       repository=rb.remote_repo)
 
-    def synchronize_one(self, doc_pair, session=None):
+    def synchronize_one(self, doc_pair, session=None, status=None):
         """Refresh state a perform network transfer for a pair of documents."""
         if session is None:
             session = self.get_session()
@@ -461,6 +493,7 @@ class Synchronizer(object):
                 try:
                     local_client.update_content(doc_pair.path, content)
                     doc_pair.refresh_local(local_client)
+                    self.update_recent_files(doc_pair, status = status, session = session)
                     doc_pair.update_state('synchronized', 'synchronized')
                 except (IOError, WindowsError):
                     log.debug("Delaying update for remotely modified "
@@ -469,7 +502,7 @@ class Synchronizer(object):
             else:
                 # digest agree, no need to transfer additional bytes over the
                 # network
-                doc_pair.update_state('synchronized', 'synchronized')
+                doc_pair.update_state('synchronized', 'synchronized', status = status)
 
         elif doc_pair.pair_state == 'locally_created':
             name = os.path.basename(doc_pair.path)
@@ -533,6 +566,7 @@ class Synchronizer(object):
                 log.debug("Creating local document '%s' in '%s'", name,
                           parent_pair.get_local_abspath())
             doc_pair.update_local(local_client.get_info(path))
+            self.update_recent_files(doc_pair, status = status, session = session)
             doc_pair.update_state('synchronized', 'synchronized')
 
         elif doc_pair.pair_state == 'locally_deleted':
@@ -557,6 +591,7 @@ class Synchronizer(object):
                     # TODO: handle OS-specific trash management?
                     log.debug("Deleting local doc '%s'",
                               doc_pair.get_local_abspath())
+                    self.update_recent_files(doc_pair, status = status, session = session)
                     local_client.delete(doc_pair.path)
                     session.delete(doc_pair)
                     # XXX: shall we also delete all the subcontent / folder at
@@ -577,13 +612,14 @@ class Synchronizer(object):
             # No need to store this information any further
             log.debug('Deleting doc pair %s deleted on both sides',
                 doc_pair.path)
+            self.update_recent_files(doc_pair, status = status, session = session)
             session.delete(doc_pair)
             session.commit()
 
         elif doc_pair.pair_state == 'conflicted':
             if doc_pair.local_digest == doc_pair.remote_digest != None:
                 # Automated conflict resolution based on digest content:
-                doc_pair.update_state('synchronized', 'synchronized')
+                doc_pair.update_state('synchronized', 'synchronized', status = status)
             log.debug('Conflict detected for %s', doc_pair.path)
         else:
             log.warning("Unhandled pair_state: %r for %r",
@@ -596,22 +632,55 @@ class Synchronizer(object):
         if len(session.dirty) != 0 or len(session.deleted) != 0:
             session.commit()
 
-    def synchronize(self, limit=None, local_root=None):
+    def synchronize(self, limit=None, local_root=None, status=None):
         """Synchronize one file at a time from the pending list."""
         synchronized = 0
         session = self.get_session()
         doc_pair = self._controller.next_pending(local_root=local_root,
                                                  session=session)
         while doc_pair is not None and (limit is None or synchronized < limit):
+            if self.should_stop_synchronization(delete_stop_file = False):
+                pid = os.getpid()
+                log.info("Stopping synchronization for document %s (pid=%d)", doc_pair.local_name, pid)
+                break
+            if self.should_pause_synchronization():
+                break
+
             # TODO: make it possible to catch unexpected exceptions here so as
             # to black list the pair of document and ignore it for a while
             # using a TTL for the blacklist token in the state DB
-            self.synchronize_one(doc_pair, session=session)
+            self.synchronize_one(doc_pair, session=session, status=status)
             synchronized += 1
             doc_pair = self._controller.next_pending(local_root=local_root,
                                                      session=session)
         return synchronized
 
+    def update_recent_files(self, doc_pair, status = None, session = None):
+        if doc_pair.folderish == 1:
+            return
+        if session is None:
+            session = self.get_session()
+
+        if status is not None:
+            try:
+                status[doc_pair.pair_state].append(doc_pair.local_name)
+            except KeyError:
+                status[doc_pair.pair_state] = [doc_pair.local_name]
+                
+        session.add(RecentFiles(doc_pair.local_name, doc_pair.local_root, doc_pair.pair_state))
+        to_be_deleted = session.query(RecentFiles).\
+                                order_by(RecentFiles.local_update.desc()).\
+                                offset(Constants.RECENT_FILES_COUNT).all()
+        map(session.delete, to_be_deleted)
+        # if the same file appears as created, modified, etc. AND delete, keep only the deleted one
+        stmt = session.query(RecentFiles).\
+            filter(or_(RecentFiles.pair_state == 'remotely_deleted', RecentFiles.pair_state == 'deleted')).subquery()
+        duplicate_files = session.query(RecentFiles).\
+            filter(RecentFiles.local_name == stmt.c.local_name).\
+            filter(or_(RecentFiles.pair_state != 'remotely_deleted', RecentFiles.pair_state != 'deleted')).all()
+        map(session.delete, duplicate_files)
+        session.commit()
+        
     def _get_sync_pid_filepath(self, process_name="sync"):
         return os.path.join(self._controller.config_folder,
                             'nxdrive_%s.pid' % process_name)
@@ -656,15 +725,48 @@ class Synchronizer(object):
                 return None
         return None
 
-    def should_stop_synchronization(self):
+    def should_stop_synchronization(self, delete_stop_file = True):
         """Check whether another process has told the synchronizer to stop"""
-        stop_file = os.path.join(self._controller.config_folder,
-                                 "stop_%d" % os.getpid())
+        stop_file = os.path.join(self.config_folder, "stop_%d" % os.getpid())
         if os.path.exists(stop_file):
-            os.unlink(stop_file)
+            if delete_stop_file:
+                os.unlink(stop_file)
             return True
         return False
 
+    def should_pause_synchronization(self):
+        """Check if GUI paused the synchronization.
+        User can use "Pause" and "Resume" actions.
+        Alternatively, check whether another process has told the synchronizer to stop.
+        """
+        if not self._sync_operation == None:
+            paused = False
+            with self._sync_operation.lock:
+                if self._sync_operation.pause:
+                    paused = self._sync_operation.paused = True
+                    self._sync_operation.pause = False
+
+            while paused:
+                log.debug("pausing synchronization")
+                if self._frontend is not None:
+                    self._frontend.notify_pause_transfer()
+                self._sync_operation.event.wait()
+                # check whether should stop instead of resuming
+                if self.should_stop_synchronization(delete_stop_file = False):
+                    return True
+                log.debug("resuming synchronization")
+                if self._frontend is not None:
+                    self._frontend.notify_sync_started()
+                paused = False
+                with self._sync_operation.lock:
+                    if self._sync_operation.pause:
+                        paused = self._sync_operation.paused = True
+                        self._sync_operation.pause = False
+                    else:
+                        self._sync_operation.paused = False
+
+            return False
+        
     def loop(self, max_loops=None, delay=None):
         """Forever loop to scan / refresh states and perform sync"""
 
@@ -690,26 +792,39 @@ class Synchronizer(object):
 
         previous_time = time()
         session = self.get_session()
-        loop_count = 0
+        self.loop_count = 0
         try:
             while True:
                 n_synchronized = 0
                 if self.should_stop_synchronization():
                     log.info("Stopping synchronization (pid=%d)", pid)
                     break
-                if (max_loops is not None and loop_count > max_loops):
+                if self.should_pause_synchronization():
+                    break;
+                if (max_loops is not None and self.loop_count > max_loops):
                     log.info("Stopping synchronization after %d loops",
-                             loop_count)
+                             self.loop_count)
                     break
 
-                for sb in session.query(ServerBinding).all():
+                server_bindings = session.query(ServerBinding).all()
+                if len(server_bindings) == 0:
+                    self._controller.notify_to_signin()
+                    break
+                for sb in server_bindings:
                     if sb.has_invalid_credentials():
-                        # Let's wait for the user to (re-)enter valid
-                        # credentials
-                        continue
+                        if len(server_bindings) == 1:
+                            # Let's wait for the user to (re-)enter valid credentials
+                            self._controller.notify_to_signin(sb)
+                        else:
+                            continue
+                        
+                    status = {}
                     n_synchronized += self.update_synchronize_server(
-                        sb, session=session)
+                        sb, session=session, status=status)
 
+                if self.frontend is not None:
+                    self.frontend.notify_sync_completed(status)
+                    
                 # safety net to ensure that Nuxeo Drive won't eat all the CPU,
                 # disk and network resources of the machine scanning over an
                 # over the bound folders too often.
@@ -720,7 +835,8 @@ class Synchronizer(object):
                     log.debug("Sleeping %0.3fs", sleep_time)
                     sleep(sleep_time)
                 previous_time = time()
-                loop_count += 1
+                log.debug("iteration %d, synchronized %d", self.loop_count, n_synchronized)
+                self.loop_count += 1
 
         except KeyboardInterrupt:
             self.get_session().rollback()
@@ -890,7 +1006,7 @@ class Synchronizer(object):
         # moved = sorted(moved, key=lambda m: m.path)
 
     def update_synchronize_server(self, server_binding, session=None,
-                                  full_scan=False):
+                                  full_scan=False, status=None):
         """Do one pass of synchronization for given server binding."""
         session = self.get_session() if session is None else session
         local_scan_is_done = False
@@ -909,6 +1025,8 @@ class Synchronizer(object):
             if roots_changed:
                 self.update_roots(server_binding=server_binding,
                                   session=session)
+            
+            self.get_folders(server_binding=server_binding, session=session)
             if full_scan or summary['hasTooManyChanges'] or first_pass:
                 # Force remote full scan
                 log.debug("Remote full scan of %s. Reasons: "
@@ -956,7 +1074,7 @@ class Synchronizer(object):
 
             for rb in server_binding.roots:
                 n_synchronized += self.synchronize(
-                    limit=self.max_sync_step, local_root=rb.local_root)
+                    limit=self.max_sync_step, local_root=rb.local_root, status=status)
             synchronization_duration = time() - tick
 
             log.debug("[%s] - [%s]: synchronized: %d, pending: %d, "
@@ -981,17 +1099,207 @@ class Synchronizer(object):
         return n_synchronized
 
     def _handle_network_error(self, server_binding, e):
-        _log_offline(e, "synchronization loop")
+        self._controller._log_offline(e, "synchronization loop")
         log.trace("Traceback of ignored network error:",
                   exc_info=True)
-        if self._frontend is not None:
-            self._frontend.notify_offline(
-                server_binding.local_folder, e)
+        if not self._controller.recover_from_inavalid_credentials(server_binding, e):
+            if self._frontend is not None:
+                self._frontend.notify_offline(
+                    server_binding.local_folder, e)
 
-        self._controller.invalidate_client_cache(
-            server_binding.server_url)
+            self._controller.invalidate_client_cache(
+                server_binding.server_url)
 
     def get_remote_client(self, server_binding, base_folder=None,
                           repository='default'):
         return self._controller.get_remote_client(
             server_binding, base_folder=base_folder, repository='default')
+
+    def children_states(self, folder_path):
+        """List the status of the children of a folder
+
+        The state of the folder is a summary of their descendant rather
+        than their own instric synchronization step which is of little
+        use for the end user.
+
+        """
+        session = self.get_session()
+        server_binding = self.get_server_binding(folder_path, session = session)
+        if server_binding is not None:
+            # if folder_path is the top level Nuxeo Drive folder, list
+            # all the root binding states
+            root_states = []
+            for rb in server_binding.roots:
+                root_state = 'synchronized'
+                for _, child_state in self.children_states(rb.local_root):
+                    if child_state != 'synchronized':
+                        root_state = 'children_modified'
+                        break
+                root_states.append(
+                        (os.path.basename(rb.local_root), root_state))
+            return root_states
+
+        # Find the root binding for this absolute path
+        try:
+            binding, path = self._binding_path(folder_path, session=session)
+        except NotFound:
+            return []
+
+        try:
+            folder_state = session.query(LastKnownState).filter_by(
+                local_root = binding.local_root,
+                path = path,
+            ).one()
+        except NoResultFound:
+            return []
+
+        states = self._pair_states_recursive(binding.local_root, session,
+                                             folder_state)
+
+        return [(os.path.basename(s.path), pair_state)
+                for s, pair_state in states
+                if s.parent_path == path]
+        
+    def get_folders(self, session = None, server_binding = None,
+                    repository = None):
+        """Retrieve all folder hierarchy from server.
+        If a server is not responding it is skipped.
+        """
+
+        dirty = {}
+        dirty['add'] = 0
+        dirty['del'] = 0
+        if session is None:
+            session = self.get_session()
+        if server_binding is not None:
+            server_bindings = [server_binding]
+        else:
+            server_bindings = session.query(ServerBinding).all()
+        for sb in server_bindings:
+            if sb.has_invalid_credentials():
+                # Skip servers with missing credentials
+                continue
+            try:
+                nxclient = self.get_remote_client(sb)
+                if not nxclient.is_addon_installed():
+                    continue
+                if repository is not None:
+                    repositories = [repository]
+                else:
+                    repositories = nxclient.get_repository_names()
+                for repo in repositories:
+                    nxclient = self.get_remote_client(sb, repository = repo)
+                    self._update_clouddesk_root(repo, sb.local_folder)
+                    mydocs_folder = nxclient.get_mydocs()
+                    mydocs_folder[u'title'] = Constants.MY_DOCS
+
+                    nodes = tree()
+                    nxclient.get_subfolders(mydocs_folder, nodes)
+
+                    self._update_docs(mydocs_folder, nodes, sb.local_folder, session = session, dirty = dirty)
+
+                    othersdocs_folders = nxclient.get_othersdocs()
+
+                    # create a fake Others' Docs folder
+                    othersdocs_folder = {
+                                         u'uid': Constants.OTHERS_DOCS_UID,
+                                         u'title': Constants.OTHERS_DOCS,
+                                         u'repository': mydocs_folder[u'repository'],
+                                         }
+                    nodes = tree()
+                    for fld in othersdocs_folders:
+                        nodes[fld[u'title']]['value'] = FolderInfo(fld[u'uid'], fld[u'title'], othersdocs_folder[u'uid'])
+                        nxclient.get_subfolders(fld, nodes[fld[u'title']])
+
+                    self._update_docs(othersdocs_folder, nodes, sb.local_folder, session = session, dirty = dirty)
+
+            except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                # Ignore expected possible network related errors
+                self._log_offline(e, "get folders")
+                log.trace("Traceback of ignored network error:",
+                        exc_info = True)
+                self.switch_offline(sb, e, session = session)
+
+        if self.frontend is not None:
+            try:
+                if dirty['add'] > 0 or dirty['del'] > 0:
+                    self.frontend.notify_folders_changed()
+            except KeyError:
+                pass
+        
+    def _update_clouddesk_root(self, repo, local_folder, session = None):
+        if session is None:
+            session = self.get_session()
+        try:
+            folder = session.query(SyncFolders).filter_by(remote_id = Constants.CLOUDDESK_UID).one()
+        except MultipleResultsFound:
+            log.error("more than one %s folder found!" % Constants.APP_NAME)
+        except NoResultFound:
+            # Other's Doc is not a real remote folder
+            folder = SyncFolders(Constants.CLOUDDESK_UID,
+                                 Constants.DEFAULT_NXDRIVE_FOLDER,
+                                 None,
+                                 repo,
+                                 local_folder
+                                 )
+
+            session.add(folder)
+            session.commit()
+
+    def _update_docs(self, docs, nodes, local_folder, session = None, dirty = None):
+        if session is None:
+            session = self.get_session()
+
+        repo = docs[u'repository']
+        docId = docs[u'uid']
+        # check if already exists
+        try:
+            folder = session.query(SyncFolders).filter_by(remote_id = docId).one()
+        except MultipleResultsFound:
+            log.error("more than one of 'My Docs' or 'Others' Docs' folder each found!")
+        except NoResultFound:
+            # Other's Doc is not a real remote folder
+            folder = SyncFolders(docId,
+                                 docs[u'title'],
+                                 Constants.CLOUDDESK_UID,
+                                 repo,
+                                 local_folder
+                                 )
+
+            session.add(folder)
+
+        # add all subfolders
+        root_folder = Constants.ROOT_OTHERS_DOCS if docId == Constants.OTHERS_DOCS_UID else Constants.ROOT_MYDOCS
+        self._remove_folders(nodes, docId, session, dirty = dirty)
+        self._add_folders(nodes, repo, local_folder, root_folder, session, dirty = dirty)
+        session.commit()
+
+    def _add_folders(self, t, repo, local_folder, root_folder, session = None, dirty = None):
+        if isinstance(t, Iterable):
+            for k in t:
+                self._add_folders(t[k], repo, local_folder, root_folder, session, dirty)
+        else:
+            self._add_folder(t, repo, local_folder, root_folder, session, dirty)
+
+    def _add_folder(self, folder_info, repo, local_folder, root_folder, session = None, dirty = None):
+        if session is None:
+            session = self.get_session()
+        folder = SyncFolders(folder_info.docId, folder_info.title, folder_info.parentId, repo, local_folder, remote_root = root_folder)
+
+        try:
+            sync_folder = session.query(SyncFolders).filter_by(remote_id = folder_info.docId).one()
+        except NoResultFound:
+            session.add(folder)
+            if dirty is not None:
+                dirty['add'] += 1
+
+    def _remove_folders(self, t, docId, session = None, dirty = None):
+        if session is None:
+            session = self.get_session()
+        for folder in session.query(SyncFolders).filter(SyncFolders.remote_parent == docId).all():
+            if not t.has_key(folder.remote_name):
+                session.delete(folder)
+                if dirty is not None:
+                    dirty['del'] += 1
+            else:
+                self._remove_folders(t[folder.remote_name], folder.remote_id, session, dirty)

@@ -1,31 +1,60 @@
 """Main API to perform Nuxeo Drive operations"""
 
-import os
 import sys
+import os.path
+from datetime import datetime
+from time import sleep
 from threading import local
+import urllib2
+import md5
+import suds
+import base64
+import socket
+import httplib
 import subprocess
-
-from sqlalchemy.orm.exc import NoResultFound
-from sqlalchemy import asc
-from sqlalchemy import or_
+import logging
 
 import nxdrive
-from nxdrive.client import NuxeoClient, Unauthorized
+from nxdrive.client import NuxeoClient
 from nxdrive.client import LocalClient
 from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
+from nxdrive.client import Unauthorized
 from nxdrive.model import init_db
 from nxdrive.model import DeviceConfig
 from nxdrive.model import ServerBinding
 from nxdrive.model import RootBinding
 from nxdrive.model import LastKnownState
+from nxdrive.model import SyncFolders
 from nxdrive.synchronizer import Synchronizer
 from nxdrive.logging_config import get_logger
-from nxdrive.utils import normalized_path
+from nxdrive.utils.helpers import normalized_path
+from nxdrive import Constants
+from nxdrive.utils.exceptions import RecoverableError, ProxyConnectionError, ProxyConfigurationError
 
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+from sqlalchemy import func
+from sqlalchemy import asc
+from sqlalchemy import or_
+
+
+POSSIBLE_NETWORK_ERROR_TYPES = (
+    Unauthorized,
+    urllib2.URLError,
+    urllib2.HTTPError,
+    httplib.HTTPException,
+    socket.error,
+    ProxyConnectionError,
+    ProxyConfigurationError,
+)
+
+schema_url = r'federatedloginservices.xml'
+# service_url = 'https://swee.sharpb2bcloud.com/login/auth.ejs'
+service_url = r'http://login.sharpb2bcloud.com'
+ns = r'http://www.inventua.com/federatedloginservices/'
+CLOUDDESK_SCOPE = r'clouddesk'
 
 log = get_logger(__name__)
-
 
 def default_nuxeo_drive_folder():
     """Find a reasonable location for the root Nuxeo Drive folder
@@ -40,14 +69,77 @@ def default_nuxeo_drive_folder():
         my_documents = os.path.expanduser(r'~\My Documents')
         if os.path.exists(documents):
             # Regular location for documents under Windows 7 and up
-            return os.path.join(documents, 'Nuxeo Drive')
+            return os.path.join(documents, Constants.DEFAULT_NXDRIVE_FOLDER)
         elif os.path.exists(my_documents):
             # Compat for Windows XP
-            return os.path.join(my_documents, 'Nuxeo Drive')
+            return os.path.join(my_documents, Constants.DEFAULT_NXDRIVE_FOLDER)
 
-    # Fallback to home folder otherwise
-    return os.path.join(os.path.expanduser('~'), 'Nuxeo Drive')
+    # Fallback to home folder otherwiseConstants.DEFAULT_NXDRIVE_FOLDER)
+    return os.path.join(os.path.expanduser('~'), Constants.DEFAULT_NXDRIVE_FOLDER)
 
+class Event(object):
+    def __init__(self, name = 'none'):
+        self.__name = name
+
+    @property
+    def name(self):
+        return self.__name
+
+class ExceptionEvent(Event):
+    evant_names = {401: 'unauthorized',
+                   61: 'invalid_proxy',
+                   600: 'invalid_proxy',
+                   601: 'invalid_proxy',
+                   0: 'none'
+                   }
+
+    def __init__(self, exception):
+        code = getattr(exception, 'code', 0)
+        self.text = getattr(exception, 'text', None)
+        super(ExceptionEvent, self).__init__(ExceptionEvent.event_names[code])
+
+class EventHandler:
+    def __init__(self, parent = None):
+        self.__parent = parent
+    def Handle(self, event, **kvargs):
+        handler = 'Handle_' + event.name
+        if hasattr(self, handler):
+            method = getattr(self, handler)
+            if method(event, **kvargs):
+                return True
+        if self.__parent:
+            if self.__parent.Handle(event, **kvargs):
+                return True
+        if hasattr(self, 'HandleDefault'):
+            return self.HandleDefault(event, **kvargs)
+
+class ContinueLoopingHandler(EventHandler):
+    def Handler_unauthorized(self, event, **kvargs):
+        server_binding = kvargs['server_binding']
+        session = kvargs['session']
+        frontend = kvargs['frontend']
+        log.debug('Detected invalid credentials for: %s', server_binding.local_folder)
+        Controller.getController()._invalidate_client_cache(server_binding.server_url)
+        pwd = server_binding.remote_password
+        if not server_binding.has_invalid_credentials():
+            server_binding.invalidate_credentials()
+            if session is None:
+                session = self.get_session()
+            session.commit()
+
+        try:
+            self.bind_server(server_binding.local_folder, server_binding.server_url,
+                             server_binding.remote_user, pwd)
+            return True
+        except:
+            return False
+
+class StopSyncingHandler(EventHandler):
+    def Handle_unauthorized(self, event, **kvargs):
+        server_binding = kvargs['server_binding']
+        frontend = kvargs['frontend']
+        if frontend is not None:
+            frontend.notify_offline(server_binding.local_folder, event)
 
 class Controller(object):
     """Manage configuration and perform Nuxeo Drive Operations
@@ -56,8 +148,19 @@ class Controller(object):
     as DB sessions and Nuxeo clients are thread locals.
     """
 
-    def __init__(self, config_folder, nuxeo_client_factory=None, echo=None,
-                 poolclass=None):
+    __instance = None
+
+    @staticmethod
+    def getController():
+        # not exactly a singleton
+        return Controller.__instance
+
+    def __init__(self, config_folder, nuxeo_client_factory = None, echo = None,
+                 poolclass = None):
+
+        if Controller.__instance:
+            raise Controller.__instance
+
         # Log the installation location for debug
         nxdrive_install_folder = os.path.dirname(nxdrive.__file__)
         nxdrive_install_folder = os.path.realpath(nxdrive_install_folder)
@@ -76,7 +179,7 @@ class Controller(object):
         # Handle connection to the local Nuxeo Drive configuration and
         # metadata sqlite database.
         self._engine, self._session_maker = init_db(
-            self.config_folder, echo=echo, poolclass=poolclass)
+            self.config_folder, echo = echo, poolclass = poolclass)
 
         # Make it possible to pass an arbitrary nuxeo client factory
         # for testing
@@ -88,6 +191,9 @@ class Controller(object):
         self._local = local()
         self._remote_error = None
         self.device_id = self.get_device_config().device_id
+        self.fault_tolerant = True
+        self.loop_count = 0
+        Controller.__instance = self
         self.synchronizer = Synchronizer(self)
 
     def get_session(self):
@@ -98,7 +204,10 @@ class Controller(object):
         """
         return self._session_maker()
 
-    def get_device_config(self, session=None):
+    def get_loop_count(self):
+        return self.loop_count
+
+    def get_device_config(self, session = None):
         """Fetch the singleton configuration object for this device"""
         if session is None:
             session = self.get_session()
@@ -130,51 +239,6 @@ class Controller(object):
         else:
             log.info("No running synchronization process to stop.")
 
-    def children_states(self, folder_path):
-        """List the status of the children of a folder
-
-        The state of the folder is a summary of their descendant rather
-        than their own instric synchronization step which is of little
-        use for the end user.
-
-        """
-        session = self.get_session()
-        server_binding = self.get_server_binding(folder_path, session=session)
-        if server_binding is not None:
-            # if folder_path is the top level Nuxeo Drive folder, list
-            # all the root binding states
-            root_states = []
-            for rb in server_binding.roots:
-                root_state = 'synchronized'
-                for _, child_state in self.children_states(rb.local_root):
-                    if child_state != 'synchronized':
-                        root_state = 'children_modified'
-                        break
-                root_states.append(
-                        (os.path.basename(rb.local_root), root_state))
-            return root_states
-
-        # Find the root binding for this absolute path
-        try:
-            binding, path = self._binding_path(folder_path, session=session)
-        except NotFound:
-            return []
-
-        try:
-            folder_state = session.query(LastKnownState).filter_by(
-                local_root=binding.local_root,
-                path=path,
-            ).one()
-        except NoResultFound:
-            return []
-
-        states = self._pair_states_recursive(binding.local_root, session,
-                                             folder_state)
-
-        return [(os.path.basename(s.path), pair_state)
-                for s, pair_state in states
-                if s.parent_path == path]
-
     def _pair_states_recursive(self, local_root, session, doc_pair):
         """Recursive call to collect pair state under a given location."""
         if not doc_pair.folderish:
@@ -194,7 +258,7 @@ class Controller(object):
                              " should be not None." % doc_pair)
 
         children_states = session.query(LastKnownState).filter_by(
-            local_root=local_root).filter(f).order_by(
+            local_root = local_root).filter(f).order_by(
                 asc(LastKnownState.local_name),
                 asc(LastKnownState.remote_name),
             ).all()
@@ -215,7 +279,7 @@ class Controller(object):
         # Pre-pend the folder state to the descendants
         return [(doc_pair, pair_state)] + results
 
-    def _binding_path(self, folder_path, session=None):
+    def _binding_path(self, folder_path, session = None):
         """Find a root binding and relative path for a given FS path"""
         folder_path = normalized_path(folder_path)
 
@@ -241,20 +305,23 @@ class Controller(object):
         path = path.replace(os.path.sep, '/')
         return binding, path
 
-    def get_server_binding(self, local_folder, raise_if_missing=False,
+    def get_server_binding(self, local_folder=None, raise_if_missing=False,
                            session=None):
         """Find the ServerBinding instance for a given local_folder"""
         local_folder = normalized_path(local_folder)
         if session is None:
             session = self.get_session()
         try:
-            return session.query(ServerBinding).filter(
+            if local_folder is None:
+                return session.query(ServerBinding).first()
+            else:
+                return session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
         except NoResultFound:
             if raise_if_missing:
                 raise RuntimeError(
-                    "Folder '%s' is not bound to any Nuxeo server"
-                    % local_folder)
+                    "Folder '%s' is not bound to any %s server"
+                    % (local_folder, Constants.PRODUCT_NAME))
             return None
 
     def list_server_bindings(self, session=None):
@@ -273,10 +340,6 @@ class Controller(object):
         nxclient = self.nuxeo_client_factory(server_url, username, self.device_id,
                                              password)
         token = nxclient.request_token()
-        if token is not None:
-            # The server supports token based identification: do not store the
-            # password in the DB
-            password = None
         try:
             server_binding = session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
@@ -287,7 +350,8 @@ class Controller(object):
                         local_folder, server_binding.server_url,
                         server_binding.remote_user))
 
-            if token is None and server_binding.remote_password != password:
+            # Alternative solution to use for opening the site: keep the password (encrypted)
+            if server_binding.remote_password != password:
                 # Update password info if required
                 server_binding.remote_password = password
                 log.info("Updating password for user '%s' on server '%s'",
@@ -298,10 +362,6 @@ class Controller(object):
                         username, server_url)
                 # Update the token info if required
                 server_binding.remote_token = token
-
-                # Ensure that the password is not stored in the DB
-                if server_binding.remote_password is not None:
-                    server_binding.remote_password = None
 
         except NoResultFound:
             log.info("Binding '%s' to '%s' with account '%s'",
@@ -347,6 +407,17 @@ class Controller(object):
         # Delete binding info in local DB
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
+
+        # delete all binding roots for this server
+        root_bindings = session.query(RootBinding).filter(RootBinding.local_folder == binding.local_folder).all()
+        for rb in root_bindings:
+            session.delete(rb)
+
+        # delete all sync folders
+        sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == binding.local_folder).all()
+        for sf in sync_folders:
+            session.delete(sf)
+
         session.delete(binding)
         session.commit()
 
@@ -379,7 +450,116 @@ class Controller(object):
                     % local_root)
             return None
 
-    def bind_root(self, local_folder, remote_root, repository='default'):
+    def validate_credentials(self, server_url, username, password):
+        # check the connection to the server by issuing an authenticated 'fetch API' request
+        # if invalid credentials, raises Unauthorized, or for invalid url, a generic exception
+        server_url = self._normalize_url(server_url)
+        nxclient = self.nuxeo_client_factory(server_url, username, self.device_id,
+                                             password)
+
+    def _update_hash(self, password):
+        return md5.new(password).digest()
+
+    def find_data_path(self):
+        """Introspect the Python runtime to find the frozen 'data' path."""
+
+        nxdrive_path = os.path.dirname(nxdrive.__file__)
+        data_path = os.path.join(nxdrive_path, 'data')
+        frozen_suffix = os.path.join('library.zip', 'nxdrive')
+        if nxdrive_path.endswith(frozen_suffix):
+            # installed version
+            data_path = os.path.join(os.path.dirname(os.path.dirname(nxdrive_path)), 'data')
+        # TODO: handle the python.exe + python script as sys.argv[0] case as well
+        return data_path
+
+    def _rerequest_clouddesk_token(self, username, pwdhash):
+        """Request and return a token for CloudDesk (federated authentication)"""
+
+        data_path = self.find_data_path()
+        location = os.path.join(data_path, schema_url)
+        logging.getLogger('suds.client').setLevel(logging.DEBUG)
+
+        try:
+            cli = suds.client.Client('file:///' + location)
+            cli.wsdl.services[0].setlocation(service_url)
+            validateUserActionFlags = cli.factory.create('ValidateUserActionFlags')
+            log.trace("calling %s to validate user", service_url)
+            result = cli.service.ValidateUser(username, pwdhash, validateUserActionFlags.Login, CLOUDDESK_SCOPE)
+            status = cli.factory.create('ResultStatus')
+            if result.Status == status.Validated or result.Status == status.LoggedIn:
+                return result.ID
+            else:
+                return None
+
+        except urllib2.URLError as e:
+            log.error('error connecting to %s: %s', service_url, str(e))
+            return None
+        except suds.WebFault as fault:
+            log.error('error connecting to %s: %s', service_url, fault)
+            return None
+        except Exception as e:
+            log.error('error retrieving %s token: %s', Constants.APP_NAME, str(e))
+            return None
+
+    def _request_clouddesk_token(self, username, password):
+        pwdhash = base64.b16encode(md5.new(password).digest()).lower()
+        return self._rerequest_clouddesk_token(username, pwdhash), pwdhash
+
+    def get_browser_token(self, local_folder, session = None):
+        """Retrieve federated token if it exists and is still valid, or request a new one"""
+
+        server_binding = self.get_server_binding(local_folder, raise_if_missing = False)
+        if server_binding is None:
+            return None
+
+        fdtoken = server_binding.fdtoken
+        if fdtoken is not None:
+            duration = datetime.now() - server_binding.fdtoken_creation_date
+            if duration.total_seconds() > Constants.FDTOKEN_DURATION:
+                fdtoken = None
+
+        if fdtoken is not None:
+            return fdtoken
+
+        try:
+            fdtoken = self._rerequest_clouddesk_token(server_binding.remote_user, server_binding.password_hash)
+            server_binding.fdtoken = fdtoken
+            if session is None:
+                session = self.get_session()
+            session.commit()
+        except Exception as e:
+            log.error('failed to get browser token for user %s from $: %s',
+                      server_binding.remote_user,
+                      server_binding.server_url,
+                      str(e))
+            pass
+
+        return fdtoken
+
+    def get_sync_status(self, local_folder = None, from_time = None, delay = 10):
+        """retrieve count of created/modified/deleted local files since 'from_time'.
+        If 'from_time is None, use current time minus delay.
+        If local_folder is None, return results for all bindings.
+        Return a list of tuples of the form [('<local_folder>', '<pair_state>', count),...]
+        """
+        after = from_time if from_time is not None else datetime.now() - delay
+
+        # query for result of last synchronize cycle
+        session = self.get_session()
+        q = session.query(RootBinding.local_folder, LastKnownState.pair_state, func.count(LastKnownState.pair_state)).\
+                    filter(RootBinding.local_root == LastKnownState.local_root).\
+                    filter(LastKnownState.folderish == 0).\
+                    filter(LastKnownState.last_local_updated >= after).\
+                    group_by(RootBinding.local_folder).\
+                    group_by(LastKnownState.pair_state)
+
+        if local_folder is None:
+            return q.all()
+        else:
+            return q.filter(RootBinding.local_folder == local_folder).all()
+
+
+    def bind_root(self, local_folder, remote_root, repository = 'default'):
         """Bind local root to a remote root (folderish document in Nuxeo).
 
         local_folder must be already bound to an existing Nuxeo server. A
@@ -431,8 +611,39 @@ class Controller(object):
     def _local_bind_root(self, server_binding, remote_info, nxclient, session):
         # Check that this workspace does not already exist locally
         # TODO: shall we handle deduplication for root names too?
+
+        folder_name = remote_info.name
         local_root = os.path.join(server_binding.local_folder,
-                                  safe_filename(remote_info.name))
+								safe_filename(remote_info.name))
+        try:
+            sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_id == remote_info.uid).one()
+            if sync_folder.remote_root == Constants.ROOT_CLOUDDESK and sync_folder.remote_id == Constants.OTHERS_DOCS_UID:
+                # this binding root is Others' Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.OTHERS_DOCS))
+
+            elif sync_folder.remote_root == Constants.ROOT_CLOUDDESK:
+                # this is My Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.MY_DOCS))
+
+            elif sync_folder.remote_root == Constants.ROOT_MYDOCS:
+                # child of My Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.MY_DOCS),
+                                  safe_filename(folder_name))
+
+            elif sync_folder.remote_root == Constants.ROOT_OTHERS_DOCS:
+                # child of Others Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.OTHERS_DOCS),
+                                  safe_filename(folder_name))
+
+        except NoResultFound:
+            log.error("binding root %s is not a synced folder", remote_info.name)
+        except MultipleResultsFound:
+            log.error("binding root %s is two or more  synced folders", remote_info.name)
+
         repository = nxclient.repository
         if not os.path.exists(local_root):
             os.makedirs(local_root)
@@ -456,7 +667,7 @@ class Controller(object):
             log.info("Binding local root '%s' to '%s' (id=%s) on server '%s'",
                  local_root, remote_info.name, remote_info.uid,
                      server_binding.server_url)
-            session.add(RootBinding(local_root, repository, remote_info.uid))
+            session.add(RootBinding(local_root, repository, remote_info.uid, server_binding.local_folder))
 
             # Initialize the metadata of the root and let the synchronizer
             # scan the folder recursively
@@ -475,7 +686,10 @@ class Controller(object):
             self.synchronizer.scan_local(local_root, session=session)
             self.synchronizer.scan_remote(local_root, session=session)
             session.commit()
-
+            
+            if self.frontend is not None:
+                self.frontend.notify_folders_changed()
+                
     def unbind_root(self, local_root, session=None):
         """Remove binding on a root folder"""
         local_root = normalized_path(local_root)
@@ -500,6 +714,10 @@ class Controller(object):
         log.info("Unbinding local root '%s'.", binding.local_root)
         session.delete(binding)
         session.commit()
+        
+        if self.frontend is not None:
+            self.frontend.notify_folders_changed()
+
 
     def update_server_roots(self, server_binding, session, local_roots,
             remote_roots, repository):
@@ -524,7 +742,40 @@ class Controller(object):
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
                                   rc, session)
 
-    def list_pending(self, limit=100, local_root=None, session=None):
+    def set_roots(self, session = None, frontend = None):
+        """Update binding roots based on client folders selection"""
+
+        if session is None:
+            session = self.get_session()
+
+        roots_to_register = session.query(SyncFolders, ServerBinding).\
+                            filter(SyncFolders.state == True).\
+                            filter(SyncFolders.checked == None).\
+                            filter(ServerBinding.local_folder == SyncFolders.local_folder).\
+                            all()
+
+        roots_to_unregister = session.query(SyncFolders, ServerBinding).\
+                            filter(SyncFolders.state == False).\
+                            filter(SyncFolders.checked != None).\
+                            filter(ServerBinding.local_folder == SyncFolders.local_folder).\
+                            all()
+
+        for tuple in roots_to_register:
+            remote_client = self.get_remote_client(tuple[1], base_folder = tuple[0].remote_id, repository = tuple[0].remote_repo)
+            remote_client.register_as_root(tuple[0].remote_id)
+
+        for tuple in roots_to_unregister:
+            remote_client = self.get_remote_client(tuple[1], base_folder = tuple[0].remote_id, repository = tuple[0].remote_repo)
+            remote_client.unregister_as_root(tuple[0].remote_id)
+
+
+
+    def refresh_remote_folders_from_log(self, root_binding):
+        """Query the remote server audit log looking for state updates."""
+        # TODO
+        raise NotImplementedError()
+
+    def list_pending(self, limit = 100, local_root = None, session = None):
         """List pending files to synchronize, ordered by path
 
         Ordering by path makes it possible to synchronize sub folders content
@@ -584,6 +835,216 @@ class Controller(object):
             if client.server_url == server_url:
                 del cache[key]
 
+    def synchronize(self, limit = None, local_root = None, fault_tolerant = False, sync_operation = None, frontend = None, status = None):
+        """Synchronize one file at a time from the pending list.
+
+        Fault tolerant mode is meant to be skip problematic documents while not
+        preventing the rest of the synchronization loop to work on documents
+        that work as expected.
+
+        This mode will probably hide real Nuxeo Drive bugs in the
+        logs. It should thus not be enabled when running tests for the
+        synchronization code but might be useful when running Nuxeo
+        Drive in daemon mode.
+        """
+        synchronized = 0
+        session = self.get_session()
+        doc_pair = self.next_pending(local_root = local_root, session = session)
+        while doc_pair is not None and (limit is None or synchronized < limit):
+            if self.should_stop_synchronization(delete_stop_file = False):
+                pid = os.getpid()
+                log.info("Stopping synchronization for document %s (pid=%d)", doc_pair.local_name, pid)
+                break
+            if self.should_pause_synchronization(sync_operation, frontend = frontend):
+                break
+
+            if fault_tolerant:
+                try:
+                    self.synchronize_one(doc_pair, session = session, frontend = frontend, status = status)
+                    synchronized += 1
+                except Exception as e:
+                    log.error("Failed to synchronize %r: %r",
+                              doc_pair, e, exc_info = True)
+                    # TODO: flag pending and all descendant as failed with a
+                    # time stamp and make next_pending ignore recently (e.g.
+                    # up to 30s) failed synchronized pairs
+                    raise NotImplementedError(
+                        'Fault tolerant synchronization not implemented yet.')
+            else:
+                self.synchronize_one(doc_pair, session = session, frontend = frontend, status = status)
+                synchronized += 1
+
+            doc_pair = self.next_pending(local_root = local_root,
+                                         session = session)
+
+        return synchronized
+
+    def _log_offline(self, exception, context):
+        if isinstance(exception, urllib2.HTTPError):
+            msg = ("Client offline in %s: HTTP error with code %d"
+                    % (context, exception.code))
+        else:
+            msg = "Client offline in %s: %s" % (context, exception)
+        log.trace(msg)
+
+    def loop(self, full_local_scan = True, full_remote_scan = True, delay = 10,
+             max_sync_step = 50, max_loops = None, fault_tolerant = True,
+             frontend = None, limit_pending = 100, sync_operation = None):
+        """Forever loop to scan / refresh states and perform synchronization
+
+        delay is a delay in seconds that ensures that two consecutive
+        scans won't happen too closely from one another.
+        """
+
+        self.fault_tolerant = fault_tolerant
+        if frontend is not None:
+            frontend.notify_sync_started()
+        pid = self.check_running(process_name = "sync")
+        if pid is not None:
+            log.warning(
+                    "Synchronization process with pid %d already running.",
+                    pid)
+            return
+
+        # Write the pid of this process
+        pid_filepath = self._get_sync_pid_filepath(process_name = "sync")
+        pid = os.getpid()
+        with open(pid_filepath, 'wb') as f:
+            f.write(str(pid))
+
+        log.info("Starting synchronization (pid=%d)", pid)
+        self.continue_synchronization = True
+        if not full_local_scan:
+            # TODO: ensure that the watchdog thread for incremental state
+            # update is started thread is started (and make sure it's able to
+            # detect new bindings while running)
+            raise NotImplementedError()
+
+#        previous_time = time()
+        previous_time = datetime.now()
+        first_pass = True
+        session = self.get_session()
+
+        self.loop_count = 0
+        try:
+            while True:
+
+                if self.should_stop_synchronization():
+                    log.info("Stopping synchronization (pid=%d)", pid)
+                    break
+                if (max_loops is not None and self.loop_count > max_loops):
+                    log.info("Stopping synchronization after %d loops",
+                             self.loop_count)
+                    break
+
+                self.get_folders(session, frontend = frontend)
+                self.update_roots(session, frontend = frontend)
+
+                bindings = session.query(RootBinding).all()
+                server_bindings = session.query(RootBinding.server_binding).all()
+                server_bindings2 = [sb for sb in server_bindings[1:] if sb != server_bindings[0]]
+                if len(server_bindings) == 0:
+                    # sync shouldn't have started!!
+                    if frontend is not None:
+                        error = Unauthorized(Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_ACCOUNT)
+                        frontend.notify_offline(Constants.DEFAULT_NXDRIVE_FOLDER, error)
+                    break;
+
+                status = {}
+                for rb in bindings:
+                    try:
+                        if self.should_stop_synchronization(delete_stop_file = False):
+                            pid = os.getpid()
+                            log.info("Stopping synchronization for root %s (pid=%d)", rb.local_root, pid)
+                            break
+                        if self.should_pause_synchronization(sync_operation, frontend = frontend):
+                            break;
+                        # the alternative to local full scan is the watchdog
+                        # thread
+                        if full_local_scan or first_pass:
+                            self.scan_local(rb.local_root, session)
+
+                        if rb.server_binding.has_invalid_credentials():
+                            # Skip roots for servers with missing credentials
+                            # if all roots belong to same bind, prompt for credentials and stop sync
+                            exception = Exception()
+                            exception.code = 401
+                            if frontend is not None:
+                                frontend.notify_offline(rb.server_binding.local_folder, exception)
+
+                            if len(server_bindings2) < 2:
+                                raise exception
+                            else:
+                                continue
+
+                        if full_remote_scan or first_pass:
+                            self.scan_remote(rb.local_root, session)
+                        else:
+                            self.refresh_remote_from_log(rb.remote_ref)
+                        if frontend is not None:
+                            n_pending = len(self.list_pending(limit = limit_pending))
+                            reached_limit = n_pending == limit_pending
+                            frontend.notify_pending(rb.local_folder, n_pending,
+                                    or_more = reached_limit)
+
+                        self.synchronize(limit = max_sync_step,
+                                         local_root = rb.local_root,
+                                         fault_tolerant = fault_tolerant,
+                                         sync_operation = sync_operation,
+                                         frontend = frontend,
+                                         status = status)
+                    except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                        # Ignore expected possible network related errors
+                        self._log_offline(e, "synchronization loop")
+                        log.trace("Traceback of ignored network error:",
+                                exc_info = True)
+                        if self.switch_offline(rb.server_binding, e, session = session, frontend = frontend):
+                            raise
+
+                # safety net to ensure that Nuxe Drivfe won't eat all the CPU,
+                # disk and network resources of the machine scanning over an
+                # over the bound folders too often.
+                current_time = datetime.now()
+                spent = (current_time - previous_time).total_seconds()
+
+                # show notifications
+                if frontend is not None:
+                    frontend.notify_sync_completed(status)
+                # update recent files
+
+                if spent < delay:
+                    sleep(delay - spent)
+                previous_time = current_time
+                first_pass = False
+                log.debug("loop count=%d", self.loop_count)
+                self.loop_count += 1
+
+        except KeyboardInterrupt:
+            self.get_session().rollback()
+            log.info("Interrupted synchronization on user's request.")
+            # log.trace("Synchronization interruption at:", exc_info=True)
+        except RecoverableError:
+            raise
+        except:
+            self.get_session().rollback()
+            raise
+
+        # Clean pid file
+        pid_filepath = self._get_sync_pid_filepath()
+        try:
+            os.unlink(pid_filepath)
+        except Exception, e:
+            log.warning("Failed to remove stalled pid file: %s"
+                    " for stopped process %d: %r",
+                    pid_filepath, pid, e)
+
+        finally:
+            # Notify UI frontend to take synchronization stop into account and
+            # potentially quit the app
+            if frontend is not None:
+                frontend.notify_sync_stopped()
+
+
     def get_state(self, server_url, remote_repo, remote_ref):
         """Find a pair state for the provided remote document identifiers."""
         server_url = self._normalize_url(server_url)
@@ -600,6 +1061,44 @@ class Controller(object):
                     return state
         except NoResultFound:
             return None
+
+    def notify_to_signin(self, server_binding=None):
+        if self.frontend is None:
+            return
+        
+        if server_binding is None:
+            error = Unauthorized(Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_ACCOUNT)
+            self.frontend.notify_offline(Constants.DEFAULT_NXDRIVE_FOLDER, error)
+        elif not server_binding.notified:
+            self.frontend.notify_signin(server_binding.server_url)
+            server_binding.notified = True
+                
+    def recover_from_invalid_credentials(self, server_binding, exception, session = None):
+        code = getattr(exception, 'code', None)
+        if code == 401 or code == 403:
+            log.debug('Detected invalid credentials for: %s', server_binding.local_folder)
+            self._invalidate_client_cache(server_binding.server_url)
+            folder = server_binding.local_folder
+            url = server_binding.server_url
+            user = server_binding.remote_user
+            pwd = server_binding.remote_password
+            server_binding.invalidate_credentials()
+            if session is None:
+                session = self.get_session()
+            session.commit()
+
+            try:
+                log.debug('trying to get a new token [calling bind_server]')
+                self.bind_server(folder, url, user, pwd)
+                return True
+            except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                # This may be the case when the password has changed
+                # getting the token still failed (unauthorized)
+                log.debug('failed to get a new token (error: %s)', str(e))
+                # return False to indicate to switch to off-line mode
+                return False
+        else:
+            return False
 
     def launch_file_editor(self, server_url, remote_repo, remote_ref):
         """Find the local file if any and start OS editor on it."""

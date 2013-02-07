@@ -1,0 +1,779 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:tm="http://microsoft.com/wsdl/mime/textMatching/" xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:mime="http://schemas.xmlsoap.org/wsdl/mime/" xmlns:tns="http://www.inventua.com/federatedloginservices/" xmlns:s1="http://microsoft.com/wsdl/types/" xmlns:s="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://schemas.xmlsoap.org/wsdl/soap12/" xmlns:http="http://schemas.xmlsoap.org/wsdl/http/" targetNamespace="http://www.inventua.com/federatedloginservices/" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/">
+  <wsdl:types>
+    <s:schema elementFormDefault="qualified" targetNamespace="http://www.inventua.com/federatedloginservices/">
+      <s:import namespace="http://microsoft.com/wsdl/types/" />
+      <s:element name="Version">
+        <s:complexType />
+      </s:element>
+      <s:element name="VersionResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="VersionResult" type="s:string" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="IsLoggedIn">
+        <s:complexType />
+      </s:element>
+      <s:element name="IsLoggedInResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="IsLoggedInResult" type="tns:Result" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:complexType name="Result">
+        <s:sequence>
+          <s:element minOccurs="1" maxOccurs="1" name="ID" type="s1:guid" />
+          <s:element minOccurs="1" maxOccurs="1" name="Status" type="tns:ResultStatus" />
+          <s:element minOccurs="0" maxOccurs="1" name="ErrorMessage" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="SourceServer" type="s:string" />
+        </s:sequence>
+      </s:complexType>
+      <s:simpleType name="ResultStatus">
+        <s:restriction base="s:string">
+          <s:enumeration value="Initialize" />
+          <s:enumeration value="ProtectedUser" />
+          <s:enumeration value="Fail" />
+          <s:enumeration value="NotLoggedIn" />
+          <s:enumeration value="Validated" />
+          <s:enumeration value="LoggedIn" />
+          <s:enumeration value="SourceServerUnavailable" />
+          <s:enumeration value="ErrorMessage" />
+          <s:enumeration value="CompleteFormPost" />
+          <s:enumeration value="InvalidUserName" />
+          <s:enumeration value="CompleteLogoutFormPost" />
+        </s:restriction>
+      </s:simpleType>
+      <s:element name="Login">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="1" maxOccurs="1" name="TokenGuid" type="s1:guid" />
+            <s:element minOccurs="1" maxOccurs="1" name="RememberLogin" type="s:boolean" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="LoginResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="LoginResult" type="tns:Result" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="Logout">
+        <s:complexType />
+      </s:element>
+      <s:element name="LogoutResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="LogoutResult" type="tns:Result" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="ValidateUser">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="UserName" type="s:string" />
+            <s:element minOccurs="0" maxOccurs="1" name="PasswordHash" type="s:string" />
+            <s:element minOccurs="1" maxOccurs="1" name="ActionFlag" type="tns:ValidateUserActionFlags" />
+            <s:element minOccurs="0" maxOccurs="1" name="Scope" type="s:string" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:simpleType name="ValidateUserActionFlags">
+        <s:restriction base="s:string">
+          <s:enumeration value="NoAction" />
+          <s:enumeration value="LoginPersistentCookie" />
+          <s:enumeration value="Login" />
+          <s:enumeration value="LoginFormPost" />
+        </s:restriction>
+      </s:simpleType>
+      <s:element name="ValidateUserResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="ValidateUserResult" type="tns:Result" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="GetUserData">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="1" maxOccurs="1" name="TokenGuid" type="s1:guid" />
+            <s:element minOccurs="1" maxOccurs="1" name="Flags" type="tns:UserDataFlags" />
+            <s:element minOccurs="0" maxOccurs="1" name="Scope" type="s:string" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:simpleType name="UserDataFlags">
+        <s:list>
+          <s:simpleType>
+            <s:restriction base="s:string">
+              <s:enumeration value="Roles" />
+              <s:enumeration value="Email" />
+              <s:enumeration value="UserInfo" />
+              <s:enumeration value="Password" />
+            </s:restriction>
+          </s:simpleType>
+        </s:list>
+      </s:simpleType>
+      <s:element name="GetUserDataResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="GetUserDataResult" type="tns:UserData" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:complexType name="UserData">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="UserRoles" type="tns:ArrayOfUserRoleInfo" />
+          <s:element minOccurs="0" maxOccurs="1" name="ExtendedUserData" type="tns:ArrayOfExtendedUserData" />
+          <s:element minOccurs="1" maxOccurs="1" name="UserID" type="s:int" />
+          <s:element minOccurs="0" maxOccurs="1" name="UserName" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="AccessCode" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Scope" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="FirstName" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="LastName" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="DisplayName" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Email" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Password" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Website" type="s:string" />
+          <s:element minOccurs="1" maxOccurs="1" name="PortalID" type="s:int" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="ArrayOfUserRoleInfo">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="UserRoleInfo" nillable="true" type="tns:UserRoleInfo" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="UserRoleInfo">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="RoleName" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="ExpiryDate" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="EffectiveDate" type="s:string" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="ArrayOfExtendedUserData">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="unbounded" name="ExtendedUserData" nillable="true" type="tns:ExtendedUserData" />
+        </s:sequence>
+      </s:complexType>
+      <s:complexType name="ExtendedUserData">
+        <s:sequence>
+          <s:element minOccurs="0" maxOccurs="1" name="Name" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Type" type="s:string" />
+          <s:element minOccurs="0" maxOccurs="1" name="Value" type="s:string" />
+        </s:sequence>
+      </s:complexType>
+      <s:element name="SendPassword">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="UserName" type="s:string" />
+            <s:element minOccurs="0" maxOccurs="1" name="EmailSubject" type="s:string" />
+            <s:element minOccurs="0" maxOccurs="1" name="EmailBody" type="s:string" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="SendPasswordResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="1" maxOccurs="1" name="SendPasswordResult" type="s:boolean" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="CreateGuestAccount">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="AccessCode" type="s:string" />
+            <s:element minOccurs="0" maxOccurs="1" name="Scope" type="s:string" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="CreateGuestAccountResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="CreateGuestAccountResult" type="tns:UserData" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="RevokeGuestAccount">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="AccessCode" type="s:string" />
+            <s:element minOccurs="0" maxOccurs="1" name="Scope" type="s:string" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="RevokeGuestAccountResponse">
+        <s:complexType>
+          <s:sequence>
+            <s:element minOccurs="0" maxOccurs="1" name="RevokeGuestAccountResult" type="tns:UserData" />
+          </s:sequence>
+        </s:complexType>
+      </s:element>
+      <s:element name="string" nillable="true" type="s:string" />
+      <s:element name="Result" nillable="true" type="tns:Result" />
+      <s:element name="boolean" type="s:boolean" />
+      <s:element name="UserData" nillable="true" type="tns:UserData" />
+    </s:schema>
+    <s:schema elementFormDefault="qualified" targetNamespace="http://microsoft.com/wsdl/types/">
+      <s:simpleType name="guid">
+        <s:restriction base="s:string">
+          <s:pattern value="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" />
+        </s:restriction>
+      </s:simpleType>
+    </s:schema>
+  </wsdl:types>
+  <wsdl:message name="VersionSoapIn">
+    <wsdl:part name="parameters" element="tns:Version" />
+  </wsdl:message>
+  <wsdl:message name="VersionSoapOut">
+    <wsdl:part name="parameters" element="tns:VersionResponse" />
+  </wsdl:message>
+  <wsdl:message name="IsLoggedInSoapIn">
+    <wsdl:part name="parameters" element="tns:IsLoggedIn" />
+  </wsdl:message>
+  <wsdl:message name="IsLoggedInSoapOut">
+    <wsdl:part name="parameters" element="tns:IsLoggedInResponse" />
+  </wsdl:message>
+  <wsdl:message name="LoginSoapIn">
+    <wsdl:part name="parameters" element="tns:Login" />
+  </wsdl:message>
+  <wsdl:message name="LoginSoapOut">
+    <wsdl:part name="parameters" element="tns:LoginResponse" />
+  </wsdl:message>
+  <wsdl:message name="LogoutSoapIn">
+    <wsdl:part name="parameters" element="tns:Logout" />
+  </wsdl:message>
+  <wsdl:message name="LogoutSoapOut">
+    <wsdl:part name="parameters" element="tns:LogoutResponse" />
+  </wsdl:message>
+  <wsdl:message name="ValidateUserSoapIn">
+    <wsdl:part name="parameters" element="tns:ValidateUser" />
+  </wsdl:message>
+  <wsdl:message name="ValidateUserSoapOut">
+    <wsdl:part name="parameters" element="tns:ValidateUserResponse" />
+  </wsdl:message>
+  <wsdl:message name="GetUserDataSoapIn">
+    <wsdl:part name="parameters" element="tns:GetUserData" />
+  </wsdl:message>
+  <wsdl:message name="GetUserDataSoapOut">
+    <wsdl:part name="parameters" element="tns:GetUserDataResponse" />
+  </wsdl:message>
+  <wsdl:message name="SendPasswordSoapIn">
+    <wsdl:part name="parameters" element="tns:SendPassword" />
+  </wsdl:message>
+  <wsdl:message name="SendPasswordSoapOut">
+    <wsdl:part name="parameters" element="tns:SendPasswordResponse" />
+  </wsdl:message>
+  <wsdl:message name="CreateGuestAccountSoapIn">
+    <wsdl:part name="parameters" element="tns:CreateGuestAccount" />
+  </wsdl:message>
+  <wsdl:message name="CreateGuestAccountSoapOut">
+    <wsdl:part name="parameters" element="tns:CreateGuestAccountResponse" />
+  </wsdl:message>
+  <wsdl:message name="RevokeGuestAccountSoapIn">
+    <wsdl:part name="parameters" element="tns:RevokeGuestAccount" />
+  </wsdl:message>
+  <wsdl:message name="RevokeGuestAccountSoapOut">
+    <wsdl:part name="parameters" element="tns:RevokeGuestAccountResponse" />
+  </wsdl:message>
+  <wsdl:message name="VersionHttpGetIn" />
+  <wsdl:message name="VersionHttpGetOut">
+    <wsdl:part name="Body" element="tns:string" />
+  </wsdl:message>
+  <wsdl:message name="IsLoggedInHttpGetIn" />
+  <wsdl:message name="IsLoggedInHttpGetOut">
+    <wsdl:part name="Body" element="tns:Result" />
+  </wsdl:message>
+  <wsdl:message name="LogoutHttpGetIn" />
+  <wsdl:message name="LogoutHttpGetOut">
+    <wsdl:part name="Body" element="tns:Result" />
+  </wsdl:message>
+  <wsdl:message name="ValidateUserHttpGetIn">
+    <wsdl:part name="UserName" type="s:string" />
+    <wsdl:part name="PasswordHash" type="s:string" />
+    <wsdl:part name="ActionFlag" type="s:string" />
+    <wsdl:part name="Scope" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="ValidateUserHttpGetOut">
+    <wsdl:part name="Body" element="tns:Result" />
+  </wsdl:message>
+  <wsdl:message name="SendPasswordHttpGetIn">
+    <wsdl:part name="UserName" type="s:string" />
+    <wsdl:part name="EmailSubject" type="s:string" />
+    <wsdl:part name="EmailBody" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="SendPasswordHttpGetOut">
+    <wsdl:part name="Body" element="tns:boolean" />
+  </wsdl:message>
+  <wsdl:message name="CreateGuestAccountHttpGetIn">
+    <wsdl:part name="AccessCode" type="s:string" />
+    <wsdl:part name="Scope" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="CreateGuestAccountHttpGetOut">
+    <wsdl:part name="Body" element="tns:UserData" />
+  </wsdl:message>
+  <wsdl:message name="RevokeGuestAccountHttpGetIn">
+    <wsdl:part name="AccessCode" type="s:string" />
+    <wsdl:part name="Scope" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="RevokeGuestAccountHttpGetOut">
+    <wsdl:part name="Body" element="tns:UserData" />
+  </wsdl:message>
+  <wsdl:message name="VersionHttpPostIn" />
+  <wsdl:message name="VersionHttpPostOut">
+    <wsdl:part name="Body" element="tns:string" />
+  </wsdl:message>
+  <wsdl:message name="IsLoggedInHttpPostIn" />
+  <wsdl:message name="IsLoggedInHttpPostOut">
+    <wsdl:part name="Body" element="tns:Result" />
+  </wsdl:message>
+  <wsdl:message name="LogoutHttpPostIn" />
+  <wsdl:message name="LogoutHttpPostOut">
+    <wsdl:part name="Body" element="tns:Result" />
+  </wsdl:message>
+  <wsdl:message name="ValidateUserHttpPostIn">
+    <wsdl:part name="UserName" type="s:string" />
+    <wsdl:part name="PasswordHash" type="s:string" />
+    <wsdl:part name="ActionFlag" type="s:string" />
+    <wsdl:part name="Scope" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="ValidateUserHttpPostOut">
+    <wsdl:part name="Body" element="tns:Result" />
+  </wsdl:message>
+  <wsdl:message name="SendPasswordHttpPostIn">
+    <wsdl:part name="UserName" type="s:string" />
+    <wsdl:part name="EmailSubject" type="s:string" />
+    <wsdl:part name="EmailBody" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="SendPasswordHttpPostOut">
+    <wsdl:part name="Body" element="tns:boolean" />
+  </wsdl:message>
+  <wsdl:message name="CreateGuestAccountHttpPostIn">
+    <wsdl:part name="AccessCode" type="s:string" />
+    <wsdl:part name="Scope" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="CreateGuestAccountHttpPostOut">
+    <wsdl:part name="Body" element="tns:UserData" />
+  </wsdl:message>
+  <wsdl:message name="RevokeGuestAccountHttpPostIn">
+    <wsdl:part name="AccessCode" type="s:string" />
+    <wsdl:part name="Scope" type="s:string" />
+  </wsdl:message>
+  <wsdl:message name="RevokeGuestAccountHttpPostOut">
+    <wsdl:part name="Body" element="tns:UserData" />
+  </wsdl:message>
+  <wsdl:portType name="FederatedLoginServicesSoap">
+    <wsdl:operation name="Version">
+      <wsdl:input message="tns:VersionSoapIn" />
+      <wsdl:output message="tns:VersionSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="IsLoggedIn">
+      <wsdl:input message="tns:IsLoggedInSoapIn" />
+      <wsdl:output message="tns:IsLoggedInSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="Login">
+      <wsdl:input message="tns:LoginSoapIn" />
+      <wsdl:output message="tns:LoginSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="Logout">
+      <wsdl:input message="tns:LogoutSoapIn" />
+      <wsdl:output message="tns:LogoutSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="ValidateUser">
+      <wsdl:input message="tns:ValidateUserSoapIn" />
+      <wsdl:output message="tns:ValidateUserSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="GetUserData">
+      <wsdl:input message="tns:GetUserDataSoapIn" />
+      <wsdl:output message="tns:GetUserDataSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="SendPassword">
+      <wsdl:input message="tns:SendPasswordSoapIn" />
+      <wsdl:output message="tns:SendPasswordSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="CreateGuestAccount">
+      <wsdl:input message="tns:CreateGuestAccountSoapIn" />
+      <wsdl:output message="tns:CreateGuestAccountSoapOut" />
+    </wsdl:operation>
+    <wsdl:operation name="RevokeGuestAccount">
+      <wsdl:input message="tns:RevokeGuestAccountSoapIn" />
+      <wsdl:output message="tns:RevokeGuestAccountSoapOut" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:portType name="FederatedLoginServicesHttpGet">
+    <wsdl:operation name="Version">
+      <wsdl:input message="tns:VersionHttpGetIn" />
+      <wsdl:output message="tns:VersionHttpGetOut" />
+    </wsdl:operation>
+    <wsdl:operation name="IsLoggedIn">
+      <wsdl:input message="tns:IsLoggedInHttpGetIn" />
+      <wsdl:output message="tns:IsLoggedInHttpGetOut" />
+    </wsdl:operation>
+    <wsdl:operation name="Logout">
+      <wsdl:input message="tns:LogoutHttpGetIn" />
+      <wsdl:output message="tns:LogoutHttpGetOut" />
+    </wsdl:operation>
+    <wsdl:operation name="ValidateUser">
+      <wsdl:input message="tns:ValidateUserHttpGetIn" />
+      <wsdl:output message="tns:ValidateUserHttpGetOut" />
+    </wsdl:operation>
+    <wsdl:operation name="SendPassword">
+      <wsdl:input message="tns:SendPasswordHttpGetIn" />
+      <wsdl:output message="tns:SendPasswordHttpGetOut" />
+    </wsdl:operation>
+    <wsdl:operation name="CreateGuestAccount">
+      <wsdl:input message="tns:CreateGuestAccountHttpGetIn" />
+      <wsdl:output message="tns:CreateGuestAccountHttpGetOut" />
+    </wsdl:operation>
+    <wsdl:operation name="RevokeGuestAccount">
+      <wsdl:input message="tns:RevokeGuestAccountHttpGetIn" />
+      <wsdl:output message="tns:RevokeGuestAccountHttpGetOut" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:portType name="FederatedLoginServicesHttpPost">
+    <wsdl:operation name="Version">
+      <wsdl:input message="tns:VersionHttpPostIn" />
+      <wsdl:output message="tns:VersionHttpPostOut" />
+    </wsdl:operation>
+    <wsdl:operation name="IsLoggedIn">
+      <wsdl:input message="tns:IsLoggedInHttpPostIn" />
+      <wsdl:output message="tns:IsLoggedInHttpPostOut" />
+    </wsdl:operation>
+    <wsdl:operation name="Logout">
+      <wsdl:input message="tns:LogoutHttpPostIn" />
+      <wsdl:output message="tns:LogoutHttpPostOut" />
+    </wsdl:operation>
+    <wsdl:operation name="ValidateUser">
+      <wsdl:input message="tns:ValidateUserHttpPostIn" />
+      <wsdl:output message="tns:ValidateUserHttpPostOut" />
+    </wsdl:operation>
+    <wsdl:operation name="SendPassword">
+      <wsdl:input message="tns:SendPasswordHttpPostIn" />
+      <wsdl:output message="tns:SendPasswordHttpPostOut" />
+    </wsdl:operation>
+    <wsdl:operation name="CreateGuestAccount">
+      <wsdl:input message="tns:CreateGuestAccountHttpPostIn" />
+      <wsdl:output message="tns:CreateGuestAccountHttpPostOut" />
+    </wsdl:operation>
+    <wsdl:operation name="RevokeGuestAccount">
+      <wsdl:input message="tns:RevokeGuestAccountHttpPostIn" />
+      <wsdl:output message="tns:RevokeGuestAccountHttpPostOut" />
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="FederatedLoginServicesSoap" type="tns:FederatedLoginServicesSoap">
+    <soap:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="Version">
+      <soap:operation soapAction="http://www.inventua.com/federatedloginservices/Version" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="IsLoggedIn">
+      <soap:operation soapAction="http://www.inventua.com/federatedloginservices/IsLoggedIn" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Login">
+      <soap:operation soapAction="http://www.inventua.com/federatedloginservices/Login" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Logout">
+      <soap:operation soapAction="http://www.inventua.com/federatedloginservices/Logout" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="ValidateUser">
+      <soap:operation soapAction="http://www.inventua.com/federatedloginservices/ValidateUser" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetUserData">
+      <soap:operation soapAction="http://www.inventua.com/federatedloginservices/GetUserData" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="SendPassword">
+      <soap:operation soapAction="http://www.inventua.com/federatedloginservices/SendPassword" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="CreateGuestAccount">
+      <soap:operation soapAction="http://www.inventua.com/federatedloginservices/CreateGuestAccount" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="RevokeGuestAccount">
+      <soap:operation soapAction="http://www.inventua.com/federatedloginservices/RevokeGuestAccount" style="document" />
+      <wsdl:input>
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:binding name="FederatedLoginServicesSoap12" type="tns:FederatedLoginServicesSoap">
+    <soap12:binding transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="Version">
+      <soap12:operation soapAction="http://www.inventua.com/federatedloginservices/Version" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="IsLoggedIn">
+      <soap12:operation soapAction="http://www.inventua.com/federatedloginservices/IsLoggedIn" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Login">
+      <soap12:operation soapAction="http://www.inventua.com/federatedloginservices/Login" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Logout">
+      <soap12:operation soapAction="http://www.inventua.com/federatedloginservices/Logout" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="ValidateUser">
+      <soap12:operation soapAction="http://www.inventua.com/federatedloginservices/ValidateUser" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetUserData">
+      <soap12:operation soapAction="http://www.inventua.com/federatedloginservices/GetUserData" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="SendPassword">
+      <soap12:operation soapAction="http://www.inventua.com/federatedloginservices/SendPassword" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="CreateGuestAccount">
+      <soap12:operation soapAction="http://www.inventua.com/federatedloginservices/CreateGuestAccount" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="RevokeGuestAccount">
+      <soap12:operation soapAction="http://www.inventua.com/federatedloginservices/RevokeGuestAccount" style="document" />
+      <wsdl:input>
+        <soap12:body use="literal" />
+      </wsdl:input>
+      <wsdl:output>
+        <soap12:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:binding name="FederatedLoginServicesHttpGet" type="tns:FederatedLoginServicesHttpGet">
+    <http:binding verb="GET" />
+    <wsdl:operation name="Version">
+      <http:operation location="/Version" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="IsLoggedIn">
+      <http:operation location="/IsLoggedIn" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Logout">
+      <http:operation location="/Logout" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="ValidateUser">
+      <http:operation location="/ValidateUser" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="SendPassword">
+      <http:operation location="/SendPassword" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="CreateGuestAccount">
+      <http:operation location="/CreateGuestAccount" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="RevokeGuestAccount">
+      <http:operation location="/RevokeGuestAccount" />
+      <wsdl:input>
+        <http:urlEncoded />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:binding name="FederatedLoginServicesHttpPost" type="tns:FederatedLoginServicesHttpPost">
+    <http:binding verb="POST" />
+    <wsdl:operation name="Version">
+      <http:operation location="/Version" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="IsLoggedIn">
+      <http:operation location="/IsLoggedIn" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Logout">
+      <http:operation location="/Logout" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="ValidateUser">
+      <http:operation location="/ValidateUser" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="SendPassword">
+      <http:operation location="/SendPassword" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="CreateGuestAccount">
+      <http:operation location="/CreateGuestAccount" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="RevokeGuestAccount">
+      <http:operation location="/RevokeGuestAccount" />
+      <wsdl:input>
+        <mime:content type="application/x-www-form-urlencoded" />
+      </wsdl:input>
+      <wsdl:output>
+        <mime:mimeXml part="Body" />
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="FederatedLoginServices">
+    <wsdl:port name="FederatedLoginServicesSoap" binding="tns:FederatedLoginServicesSoap">
+      <soap:address location="http://login.sharpb2bcloud.com/DesktopModules/Inventua%20-%20Custom%20Login%20Services/1.0/federatedloginservices.asmx" />
+    </wsdl:port>
+    <wsdl:port name="FederatedLoginServicesSoap12" binding="tns:FederatedLoginServicesSoap12">
+      <soap12:address location="http://login.sharpb2bcloud.com/DesktopModules/Inventua%20-%20Custom%20Login%20Services/1.0/federatedloginservices.asmx" />
+    </wsdl:port>
+    <wsdl:port name="FederatedLoginServicesHttpGet" binding="tns:FederatedLoginServicesHttpGet">
+      <http:address location="http://login.sharpb2bcloud.com/DesktopModules/Inventua%20-%20Custom%20Login%20Services/1.0/federatedloginservices.asmx" />
+    </wsdl:port>
+    <wsdl:port name="FederatedLoginServicesHttpPost" binding="tns:FederatedLoginServicesHttpPost">
+      <http:address location="http://login.sharpb2bcloud.com/DesktopModules/Inventua%20-%20Custom%20Login%20Services/1.0/federatedloginservices.asmx" />
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

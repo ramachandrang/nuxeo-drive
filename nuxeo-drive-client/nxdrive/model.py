@@ -1,23 +1,28 @@
 import os
 import uuid
 import logging
-import datetime
+from datetime import datetime
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import Sequence
 from sqlalchemy import String
+from sqlalchemy import Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import backref
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import scoped_session
+from sqlalchemy.orm import synonym
+from sqlalchemy.ext.declarative import declared_attr
 
 from nxdrive.client import NuxeoClient
 from nxdrive.client import LocalClient
-from nxdrive.utils import normalized_path
+from nxdrive.utils.helpers import normalized_path
+from nxdrive.utils.encryption import encrypt_password, decrypt_password
+from nxdrive import Constants
 
 WindowsError = None
 try:
@@ -83,51 +88,108 @@ class ServerBinding(Base):
     local_folder = Column(String, primary_key=True)
     server_url = Column(String)
     remote_user = Column(String)
+    notified = Column(Boolean)
     remote_password = Column(String)
+    __remote_password = Column('remote_password', String)
     remote_token = Column(String)
     last_sync_date = Column(Integer)
     last_root_definitions = Column(String)
+    __fdtoken = Column('fdtoken', String)
+    password_hash = Column(String)
+    password_key = Column(String)
+    fdtoken_creation_date = Column(DateTime)
+    # passive_updates=False *only* needed if the database
+    # does not implement ON UPDATE CASCADE
+    roots = relationship("RootBinding", passive_updates = False, passive_deletes = True, cascade = "all, delete, delete-orphan")
+    folders = relationship("SyncFolders", passive_updates = False, passive_deletes = True, cascade = "all, delete, delete-orphan")
 
     def __init__(self, local_folder, server_url, remote_user,
-                 remote_password=None, remote_token=None):
+                 remote_password = None, remote_token = None,
+                 fdtoken = None, password_hash = None, fdtoken_creation_date = None):
         self.local_folder = local_folder
         self.server_url = server_url
         self.remote_user = remote_user
-        # Password is only stored if the server does not support token based
-        # auth
+        self.notified = False
+        # Password is only stored if the server does not support token based authentication
+        # CHANGED: Password IS currently stored for (1) refresh the token when it expires, 
+        # and (2) open the site in the browser. 
+        # Password is also encrypted.
         self.remote_password = remote_password
         self.remote_token = remote_token
+        # Used for browser to access CloudDesk without log in prompting
+        self.fdtoken = fdtoken
+        if fdtoken_creation_date is not None:
+            self.fdtoken_creation_date = fdtoken_creation_date
+        # Used to re-generate the federated token (expires in 15min by default)
+        self.password_hash = password_hash
+
+    @declared_attr
+    def fdtoken(self):
+        return synonym('__fdtoken', descriptor = property(self.get_fdtoken, self.set_fdtoken))
+
+    def get_fdtoken(self):
+        return self.__fdtoken
+
+    def set_fdtoken(self, v):
+        self.__fdtoken = v
+        if v is not None:
+            self.fdtoken_creation_date = datetime.datetime.now()
+
+    @declared_attr
+    def remote_password(self):
+        return synonym('__remote_password', descriptor = property(self.get_remote_password, self.set_remote_password))
+
+    def get_remote_password(self):
+        return decrypt_password(self.__remote_password, self.password_key)
+
+    def set_remote_password(self, v):
+        if v is not None:
+            self.__remote_password, self.password_key = encrypt_password(v)
 
     def invalidate_credentials(self):
         """Ensure that all stored credentials are zeroed."""
         self.remote_password = None
         self.remote_token = None
+        self.password_hash = None
+        self.federated_token = None
 
     def has_invalid_credentials(self):
         """Check whether at least one credential is active"""
         return self.remote_password is None and self.remote_token is None
 
+    def __eq__(self, other):
+        return (isinstance(other, ServerBinding) and
+                self.local_folder == other.local_folder and
+                self.server_url == other.server_url and
+                self.remote_user == other.remote_user)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 class RootBinding(Base):
     __tablename__ = 'root_bindings'
 
     local_root = Column(String, primary_key=True)
     remote_repo = Column(String)
-    remote_root = Column(String)
-    local_folder = Column(String, ForeignKey('server_bindings.local_folder'))
+    remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
 
     server_binding = relationship(
         'ServerBinding',
         backref=backref("roots", cascade="all, delete-orphan"))
+#    server_binding = relationship('ServerBinding')
 
-    def __init__(self, local_root, remote_repo, remote_root):
+    def __init__(self, local_root, remote_repo, remote_root, local_folder = None):
         local_root = normalized_path(local_root)
         self.local_root = local_root
         self.remote_repo = remote_repo
         self.remote_root = remote_root
 
-        # expected local folder should be the direct parent of the
-        local_folder = normalized_path(os.path.join(local_root, '..'))
+        # expected local folder should be the direct parent of the local root
+        # MC That's not always the case, example:
+        # - roots under "Others' Docs" in CloudDesk are under "Others Docs" locally
+        if local_folder is None:
+            local_folder = normalized_path(os.path.join(local_root, '..'))
         self.local_folder = local_folder
 
     def __repr__(self):
@@ -135,6 +197,51 @@ class RootBinding(Base):
                 "remote_root=%r>" % (self.local_root, self.local_folder,
                                      self.remote_repo, self.remote_root))
 
+class SyncFolders(Base):
+    __tablename__ = 'sync_folders'
+
+    remote_id = Column(String, primary_key = True)
+    remote_repo = Column(String)
+    remote_name = Column(String)
+    remote_root = Column(Integer)
+    remote_parent = Column(String, ForeignKey('sync_folders.remote_id'))
+    state = Column(Boolean)
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
+    checked = relationship('RootBinding', uselist = False, backref = 'folder')
+
+#    server_binding = relationship(
+#                    'ServerBinding', backref=backref("folders", cascade="all, delete-orphan"))
+    server_binding = relationship('ServerBinding')
+    children = relationship("SyncFolders")
+
+    def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder, remote_root = Constants.ROOT_CLOUDDESK, checked = False):
+        self.remote_id = remote_id
+        self.remote_name = remote_name
+        self.remote_parent = remote_parent
+        self.remote_repo = remote_repo
+        self.remote_root = remote_root
+        self.local_folder = local_folder
+        self.checked2 = checked
+
+    def __str__(self):
+        return ("SyncFolders<remote_name=%r, remote_id=%r, remote_parent=%r, remote_repo=%r, "
+                "local_folder=%r, %checked>" % (self.remote_name, self.remote_id, self.remote_parent,
+                                      self.remote_repo, self.local_folder, '' if self.checked2 else 'not '))
+
+class RecentFiles(Base):
+    __tablename__ = 'recent_files'
+
+    id = Column(Integer, Sequence('file_id_seq'), primary_key = True)
+    local_name = Column(String)
+    local_root = Column(String)
+    local_update = Column(DateTime, index = True)
+    pair_state = Column(String)
+
+    def __init__(self, local_name, local_root, pair_state):
+        self.local_name = local_name
+        self.local_root = local_root
+        self.pair_state = pair_state
+        self.local_update = datetime.datetime.now()
 
 class LastKnownState(Base):
     """Aggregate state aggregated from last collected events."""
@@ -168,17 +275,17 @@ class LastKnownState(Base):
     remote_parent_ref = Column(String, index=True)
 
     # Names for fast alignment queries
-    local_name = Column(String, index=True)
-    remote_name = Column(String, index=True)
+    local_name = Column(String, index = True)
+    remote_name = Column(String, index = True)
 
     folderish = Column(Integer)
 
     # Last known state based on event log
     local_state = Column(String)
     remote_state = Column(String)
-    pair_state = Column(String, index=True)
+    pair_state = Column(String, index = True)
 
-    # Track move operations to avoid losing history
+    # Track move operations to avoid loosing history
     locally_moved_from = Column(String)
     locally_moved_to = Column(String)
     remotely_moved_from = Column(String)
@@ -198,7 +305,7 @@ class LastKnownState(Base):
 
         self.update_state(local_state=local_state, remote_state=remote_state)
 
-    def update_state(self, local_state=None, remote_state=None):
+    def update_state(self, local_state = None, remote_state = None, status = None):
         if local_state is not None:
             self.local_state = local_state
         if remote_state is not None:
@@ -214,7 +321,6 @@ class LastKnownState(Base):
         pair = (self.local_state, self.remote_state)
         self.pair_state = PAIR_STATES.get(pair, 'unknown')
 
-
     def __repr__(self):
         return ("LastKnownState<local_root=%r, path=%r, "
                 "remote_name=%r, local_state=%r, remote_state=%r>") % (
@@ -225,7 +331,7 @@ class LastKnownState(Base):
     def get_local_client(self):
         return LocalClient(self.local_root)
 
-    def get_remote_client(self, factory=None):
+    def get_remote_client(self, factory = None):
         if factory is None:
             factory = NuxeoClient
         rb = self.root_binding
@@ -234,7 +340,7 @@ class LastKnownState(Base):
             sb.server_url, sb.remote_user, sb.remote_password,
             base_folder=rb.remote_root, repository=rb.remote_repo)
 
-    def refresh_local(self, client=None):
+    def refresh_local(self, client = None):
         """Update the state from the local filesystem info."""
         client = client if client is not None else self.get_local_client()
         local_info = client.get_info(self.path, raise_if_missing=False)
@@ -247,7 +353,7 @@ class LastKnownState(Base):
             if self.local_state in ('unknown', 'created', 'modified',
                                     'synchronized'):
                 # the file use to exist, it has been deleted
-                self.update_state(local_state='deleted')
+                self.update_state(local_state = 'deleted')
                 self.local_digest = None
             return
 
@@ -319,7 +425,7 @@ class LastKnownState(Base):
         if remote_info is None:
             if self.remote_state in ('unknown', 'created', 'modified',
                                      'synchronized'):
-                self.update_state(remote_state='deleted')
+                self.update_state(remote_state = 'deleted')
                 self.remote_digest = None
             return
 

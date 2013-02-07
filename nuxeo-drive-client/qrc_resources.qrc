@@ -1,0 +1,28 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+     <file alias="indicator_icon_enabled.png">nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png</file>
+     <file alias="indicator_icon_disabled.png">nxdrive/data/icons/nuxeo_drive_icon_16_disabled.png</file> 
+     <file alias="indicator_icon_paused.png">nxdrive/data/icons/nuxeo_drive_icon_16_paused.png</file>
+     <file alias="indicator_icon_transferring_1.png">nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png</file>
+     <file alias="indicator_icon_transferring_2.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R90.png</file>
+     <file alias="indicator_icon_transferring_3.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R180.png</file>
+     <file alias="indicator_icon_transferring_4.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R270.png</file>
+     <file alias="about_icon.png">nxdrive/data/icons/nuxeo_drive_icon_48.png</file>
+     <file alias="wheel.gif">nxdrive/data/icons/animation.gif</file>
+     <file alias="general.png">nxdrive/data/icons/general-configuration.png</file>
+     <file alias="account.png">nxdrive/data/icons/user-account.png</file>
+     <file alias="network.png">nxdrive/data/icons/network-proxy.png</file>
+     <file alias="advanced.png">nxdrive/data/icons/advanced.png</file>
+     <file alias="rb_icon.png">nxdrive/data/icons/nuxeo_drive_icon_32.png</file>
+     <file alias="banner.png">nxdrive/data/images/banner-small.png</file>
+     <file alias="bkgrnd.png">nxdrive/data/images/webpage.png</file>
+     <file alias="finder_folders.png">nxdrive/data/images/finder_folders.png</file>
+     <file alias="explorer_folders.png">nxdrive/data/images/explorer_folders.png</file>
+     <file alias="access_files_darwin.png">nxdrive/data/images/access_files_darwin.png</file>
+     <file alias="access_files_win32.png">nxdrive/data/images/access_files_win32.png</file>
+     <file alias="appbar.png">nxdrive/data/images/appbar.png</file>
+     <file alias="systray.png">nxdrive/data/images/systray.png</file>
+     <file alias="final_page_darwin.png">nxdrive/data/images/final_page_darwin.png</file>
+     <file alias="final_page_win32.png">nxdrive/data/images/final_page_win32.png</file>
+</qresource>
+</RCC>
