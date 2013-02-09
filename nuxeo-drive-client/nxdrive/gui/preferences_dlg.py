@@ -16,9 +16,11 @@ from nxdrive import Constants
 from nxdrive.model import ServerBinding, RootBinding, RecentFiles, LastKnownState
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
-from nxdrive.utils.helpers import create_settings
-from nxdrive.utils.helpers import EventFilter
-from nxdrive.client import ProxyInfo, NuxeoClient
+from nxdrive.utils import create_settings
+from nxdrive.utils import EventFilter
+from nxdrive.utils import win32utils
+from nxdrive.client.base_automation_client import ProxyInfo
+from nxdrive.client.remote_document_client import RemoteDocumentClient
 from ui_preferences import Ui_preferencesDlg
 from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
@@ -185,8 +187,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.installEventFilter(process_filter)
             try:
                 # retrieve folders
-                self.controller.get_folders(frontend = self.frontend)
-                self.controller.update_roots(frontend = self.frontend)
+                self.controller.synchronizer.get_folders()
+                self.controller.synchronizer.update_roots()
 
             except Exception as e:
                 log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
@@ -203,7 +205,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         app.setOverrideCursor(Qt.WaitCursor)
         self.installEventFilter(process_filter)
         try:
-            self.controller.set_roots()
+            self.controller.synchronizer.set_roots()
 
         except Exception as e:
             log.error(self.tr('Unable to set roots for %s (%s)'), self.server_binding.server_url, str(e))
@@ -218,7 +220,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.useProxy = ProxyInfo.PROXY_SERVER
         # retrieve current proxy
         # NOTE: will not work for a different remote client
-        proxy = NuxeoClient.proxy
+        proxy = RemoteDocumentClient.proxy
         dlg = ProxyDlg(frontend = self.frontend)
         self.result = dlg.exec_()    
 
@@ -361,7 +363,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                         self.server_binding.remote_user,
                         self.server_binding.remote_password)
 
-                    self.controller.get_folders(frontend = self.frontend)
+                    self.controller.synchronizer.get_folders()
+                    self.controller.synchronizer.update_roots()
 
             except Exception as ex:
                 log.debug("failed to bind or unbind: %s", str(ex))
@@ -398,7 +401,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #                if mbox.exec_() == QMessageBox.No:
 #                    return QDialog.Rejected
 
-            self.result = self._stopServer(self.frontend, parent = self)
+            self.result = ProgressDialog.stopServer(self.frontend, parent = self)
             if self.result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected
             try:
@@ -440,7 +443,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if sys.platform == 'win32':
             if self.server_binding is not None:
                 shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
-                win32.create_or_replace_shortcut(shortcut, self.local_folder)
+                win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
 
             notifications = settings.value('preferences/notifications', 'true')
             if notifications.lower() == 'true':
@@ -472,9 +475,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 if self.result == ProgressDialog.CANCELLED:
                     return QDialog.Rejected
 #                self.controller.nuxeo_client_factory(...).proxy = None
-                #NOTE: this will not work for a remote client factory different from NuxeoClient
+                #NOTE: this will not work for a remote client factory different from RemoteDocumentClient
                 # but requires at least 4 params
-                NuxeoClient.proxy = None
+                RemoteDocumentClient.proxy = None
                 
             self.useProxy = useProxy
             if self.useProxy == ProxyInfo.PROXY_AUTODETECT or self.useProxy == ProxyInfo.PROXY_DIRECT:
@@ -484,11 +487,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 settings.setValue('preferences/proxyUser', '')
                 settings.setValue('preferences/proxyPwd', '')
                 settings.setValue('preferences/proxyAuthN', False)
-        elif useProxy and NuxeoClient.proxy != ProxyInfo.get_proxy():
+        elif useProxy and RemoteDocumentClient.proxy != ProxyInfo.get_proxy():
             self.result = ProgressDialog.stopServer(self.frontend, parent = self)
             if self.result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected
-            NuxeoClient.proxy = ProxyInfo.get_proxy()
+            RemoteDocumentClient.proxy = ProxyInfo.get_proxy()
 
         settings.setValue('preferences/useProxy', self.useProxy)
         settings.setValue('preferences/notifications', self.notifications)
@@ -505,7 +508,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 if target is None:
                     # FOR TESTING
                     target = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
-                win32.create_shortcut_if_not_exists(shortcut_path, target)
+                win32utils.create_shortcut_if_not_exists(shortcut_path, target)
             else:
                 os.unlink(shortcut_path)
 

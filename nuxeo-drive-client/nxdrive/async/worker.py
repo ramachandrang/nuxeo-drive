@@ -7,7 +7,6 @@ from threading import Thread
 
 class Worker(Thread):
     def __init__(self, operation, group=None, target=None, name=None, args=(), kvargs={}):
-        kvargs['sync_operation'] = operation
         Thread.__init__(self, group, target, name, args, kvargs)
         self.operation = operation
         

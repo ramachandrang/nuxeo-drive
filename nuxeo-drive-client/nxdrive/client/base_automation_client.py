@@ -14,9 +14,9 @@ from email.mime.multipart import MIMEMultipart
 from nxdrive.logging_config import get_logger
 from nxdrive.client.common import DEFAULT_IGNORED_PREFIXES
 from nxdrive.client.common import DEFAULT_IGNORED_SUFFIXES
-from nxdrive.utils.helpers import create_settings
-from nxdrive.utils.helpers import classproperty
-from nxdrive.utils.exceptions import ProxyConnectionError, ProxyConfigurationError
+from nxdrive.utils import create_settings
+from nxdrive.utils import classproperty
+from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive import Constants
 
 log = get_logger(__name__)
@@ -32,14 +32,15 @@ DEVICE_DESCRIPTIONS = {
 
 class Unauthorized(Exception):
 
-    def __init__(self, server_url, user_id, code=403):
-        self.server_url = server_url
+    def __init__(self, url, user_id, code=401, data=''):
+        self.url = url
         self.user_id = user_id
         self.code = code
+        self.data = data
 
     def __str__(self):
         return ("'%s' is not authorized to access '%s' with"
-                " the provided credentials" % (self.user_id, self.server_url))
+                " the provided credentials. http code=%d, data=%s" % (self.user_id, self.url, self.code, str(self.data)))
 
 class ProxyInfo(object):
     """Holder class for proxy information"""
@@ -282,7 +283,7 @@ class BaseAutomationClient(object):
         except urllib2.HTTPError as e:
             self._log_details(e)
             if e.code == 401 or e.code == 403:
-                raise Unauthorized(self.server_url, self.user_id, e.code)
+                raise Unauthorized(url, self.user_id, e.code, data)
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None
@@ -468,7 +469,7 @@ class BaseAutomationClient(object):
         except urllib2.HTTPError as e:
             self._log_details(e)
             if e.code == 401 or e.code == 403:
-                raise Unauthorized(self.server_url, self.user_id, e.code)
+                raise Unauthorized(url, self.user_id, e.code)
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None

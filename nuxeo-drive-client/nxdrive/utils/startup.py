@@ -12,7 +12,7 @@ def register_startup():
         register_startup_darwin()
 
 if sys.platform == 'win32':
-    from nxdrive.utils.win32utils import update_win32_reg_key
+    from nxdrive.utils import update_win32_reg_key
     
     def register_startup_win32():
         """Register ndrive as a startup application in the Registry"""

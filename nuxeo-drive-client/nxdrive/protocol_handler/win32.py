@@ -5,7 +5,7 @@ Created on Feb 6, 2013
 '''
 
 from nxdrive.logging_config import get_logger
-from nxdrive.utils.helpers import find_exe_path
+from nxdrive.utils import find_exe_path
 from nxdrive import Constants
 
 log = get_logger(__name__)

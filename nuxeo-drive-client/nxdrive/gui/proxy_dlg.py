@@ -9,8 +9,8 @@ from PySide.QtGui import QDialog, QDialogButtonBox, QMessageBox, QIcon
 
 from nxdrive.gui.ui_proxy import Ui_ProxyDialog
 from nxdrive.logging_config import get_logger
-from nxdrive.utils.helpers import create_settings
-from nxdrive.client import ProxyInfo
+from nxdrive.utils import create_settings
+from nxdrive.client.base_automation_client import ProxyInfo
 from nxdrive import Constants
 from nxdrive.gui.progress_dlg import ProgressDialog
 

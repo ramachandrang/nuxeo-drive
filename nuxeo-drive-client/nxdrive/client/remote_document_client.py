@@ -209,13 +209,14 @@ class RemoteDocumentClient(BaseAutomationClient):
                 digest = blob.get('digest')
 
         # XXX: we need another roundtrip just to fetch the parent uid...
+        
         if parent_uid is None and fetch_parent_uid:
             parent_uid = self.fetch(os.path.dirname(doc['path']))['uid']
         return NuxeoDocumentInfo(
             self._base_folder_ref, props['dc:title'], doc['uid'], parent_uid,
             doc['path'], folderish, last_update, digest, self.repository,
             doc['type'])
-
+    
     def _filtered_results(self, entries, fetch_parent_uid=True,
                           parent_uid=None):
         # Filter out filenames that would be ignored by the file system client
@@ -326,7 +327,7 @@ class RemoteDocumentClient(BaseAutomationClient):
         return True
 
     def get_mydocs(self):
-        return self._execute("UserWorkspace.Get")
+        return self.execute("UserWorkspace.Get")
 
     def get_othersdocs(self):
         query = """SELECT * FROM Document WHERE
@@ -343,7 +344,7 @@ class RemoteDocumentClient(BaseAutomationClient):
                    dc:creator != '"+username+"'
                    """
 
-        return self._execute('Document.Query', query = query)[u'entries']
+        return self.execute('Document.Query', query = query)[u'entries']
         # TODO return result - any filtering needed?
 
     def get_subfolders(self, parent, nodes):
@@ -355,7 +356,7 @@ class RemoteDocumentClient(BaseAutomationClient):
                 ecm:mixinType != 'HiddenInNavigation' AND
                 ecm:isCheckedInVersion = 0""" % docId
 
-        subfolders = self._execute('Document.Query', query = query)[u'entries']
+        subfolders = self.execute('Document.Query', query = query)[u'entries']
         for sf in subfolders:
             nodes[sf[u'title']]['value'] = FolderInfo(sf[u'uid'], sf[u'title'], docId)
             self.get_subfolders(sf, nodes[sf[u'title']])

@@ -9,7 +9,7 @@ from nxdrive.logging_config import get_logger
 from nxdrive.client.common import NotFound
 from nxdrive.client.common import DEFAULT_IGNORED_PREFIXES
 from nxdrive.client.common import DEFAULT_IGNORED_SUFFIXES
-from nxdrive.utils.helpers import normalized_path
+from nxdrive.utils import normalized_path
 from nxdrive.client.common import BUFFER_SIZE
 
 

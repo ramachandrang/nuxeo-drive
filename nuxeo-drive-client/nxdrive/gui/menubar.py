@@ -20,14 +20,14 @@ from PySide.QtCore import QTimer
 from nxdrive import Constants
 from nxdrive.async.operations import SyncOperations
 # from utils.helpers import Communicator, ProxyInfo, RecoverableError
-from nxdrive.utils.helpers import Communicator
-from nxdrive.utils.exceptions import RecoverableError
+from nxdrive.utils import Communicator
+from nxdrive.utils import RecoverableError
 # this import is flagged erroneously as unused import - do not remove
 import nxdrive.gui.qrc_resources
 from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
-from nxdrive.utils.helpers import create_settings
+from nxdrive.utils import create_settings
 from nxdrive.model import RecentFiles
 from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
@@ -49,10 +49,10 @@ log = get_logger(__name__)
 
 def sync_loop(controller, **kwargs):
     """Wrapper to log uncaught exception in the sync thread"""
+    frontend = controller.synchronizer._frontend
     try:
-        controller.loop(**kwargs)
+        controller.synchronizer.loop(**kwargs)
     except RecoverableError as e:
-        frontend = kwargs['frontend']
         if frontend is not None:
             frontend.communicator.error.emit(e.text, e.info, e.buttons)
 
@@ -61,7 +61,7 @@ def sync_loop(controller, **kwargs):
 
         # Clean pid file
         pid = os.getpid()
-        pid_filepath = controller._get_sync_pid_filepath()
+        pid_filepath = controller.synchronizer._get_sync_pid_filepath()
         try:
             os.unlink(pid_filepath)
         except Exception, e:
@@ -69,7 +69,6 @@ def sync_loop(controller, **kwargs):
                     " for stopped process %d: %r",
                     pid_filepath, pid, e)
         # change app state to stopped
-        frontend = kwargs['frontend']
         if frontend is not None:
             frontend.notify_sync_stopped()
 
@@ -462,6 +461,15 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def notify_signin(self, url):
         pass
     
+    def notify_online(self, local_folder):
+        info = self.get_info(local_folder)
+        if not info.online:
+            # Mark binding as offline and update UI
+            log.debug('Switching to online mode for: %s', local_folder)
+            info.online = True
+            self.update_running_icon()
+            self.communicator.menu.emit()
+            
     def notify_offline(self, local_folder, exception):
         info = self.get_info(local_folder)
         code = getattr(exception, 'code', None)
@@ -684,9 +692,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.opInProgress = SyncOperations()
 
         if self.worker is None or not self.worker.isAlive():
-            fault_tolerant = not getattr(self.options, 'stop_on_error', True)
             delay = getattr(self.options, 'delay', 5.0)
             self.controller.synchronizer.register_frontend(self)
+            self.controller.synchronizer.register_pause_resume(self.opInProgress)
             self.controller.synchronizer.delay = delay
             # Controller and its database session pool should be thread safe,
             # hence reuse it directly
@@ -857,7 +865,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         return imageWithOverlay
 
 
-from nxdrive.utils.helpers import QApplicationSingleton
+from nxdrive.utils import QApplicationSingleton
 
 def startApp(controller, options):
     app = QApplicationSingleton()

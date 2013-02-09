@@ -15,8 +15,9 @@ from PySide.QtGui import QPushButton, QRadioButton, QCheckBox, QGroupBox, QFileD
 from PySide.QtWebKit import QWebView
 
 from folders_dlg import SyncFoldersDlg
-from nxdrive.utils.helpers import QApplicationSingleton, EventFilter
-from nxdrive.utils.helpers import Communicator
+from nxdrive.utils import QApplicationSingleton, EventFilter
+from nxdrive.utils import Communicator
+from nxdrive.utils import win32utils
 from nxdrive.gui.menubar import DEFAULT_EX_NX_DRIVE_FOLDER
 from nxdrive import Constants
 import nxdrive.gui.qrc_resources
@@ -48,6 +49,7 @@ class CpoWizard(QWizard):
         super(CpoWizard, self).__init__(parent)
         
         self.controller = controller
+        self.controller.synchronizer.register_frontend(self)
         self.session = self.controller.get_session()
         self.communicator = Communicator()
         self.options = options
@@ -148,7 +150,7 @@ class CpoWizard(QWizard):
 
     def accept(self):
         from nxdrive.client import ProxyInfo
-        from nxdrive.utils.helpers import create_settings
+        from nxdrive.utils import create_settings
         
         if self.local_folder is not None and not os.path.exists(self.local_folder):
             os.makedirs(self.local_folder)
@@ -158,7 +160,7 @@ class CpoWizard(QWizard):
         if sys.platform == 'win32':
             # create the Favorites shortcut
             shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
-            win32.create_or_replace_shortcut(shortcut, self.local_folder)
+            win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
                     
         settings = create_settings()
         settings.setValue('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
@@ -649,8 +651,8 @@ class AdvancedPage(QWizardPage):
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
             # retrieve folders
-            self.wizard().controller.get_folders(frontend=self.wizard())
-            self.wizard().controller.update_roots(frontend=self.wizard())
+            self.wizard().controller.synchronizer.get_folders()
+            self.wizard().controller.synchronizer.update_roots()
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
             

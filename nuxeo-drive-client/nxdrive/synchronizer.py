@@ -18,11 +18,13 @@ from nxdrive.client.remote_document_client import DEFAULT_TYPES
 from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
 from nxdrive.client import Unauthorized
-from nxdrive.client.remote_document_client import FolderInfo
+from nxdrive.client import LocalClient
+from nxdrive.client import FolderInfo
 from nxdrive.model import ServerBinding
 from nxdrive.model import LastKnownState
 from nxdrive.model import RecentFiles
 from nxdrive.model import SyncFolders
+from nxdrive.model import RootBinding
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
 from nxdrive.utils import exceptions
@@ -103,7 +105,7 @@ def dicts(t):
     else:
         return str(t)
     
-    
+
 class Synchronizer(object):
     """Handle synchronization operations between the client FS and Nuxeo"""
 
@@ -122,18 +124,30 @@ class Synchronizer(object):
     # frontend)
     limit_pending = 100
 
-    def __init__(self, controller, sync_operation=None):
+
+    def __init__(self, controller):
         self._controller = controller
         self._frontend = None
-        self._sync_operation = sync_operation
+        self._sync_operation = None
         self.loop_count = 0
 
     def register_frontend(self, frontend):
         self._frontend = frontend
 
+    def register_pause_resume(self, sync_operation):
+        self._sync_operation = sync_operation
+        
     def get_session(self):
         return self._controller.get_session()
+    
 
+    def _get_fetch_parent_uid(self, ref, session=None):
+        if session is None:
+            session = self.get_session()
+        blocked_refid_for_parent_fetch = session.query(SyncFolders.remote_id).\
+                     filter(or_(SyncFolders.remote_parent == Constants.OTHERS_DOCS_UID, SyncFolders.remote_name == Constants.MY_DOCS)).all()
+        return (ref,) not in blocked_refid_for_parent_fetch
+    
     def scan_local(self, local_root, session=None):
         """Recursively scan the bound local folder looking for updates"""
         session = self.get_session() if session is None else session
@@ -267,8 +281,8 @@ class Synchronizer(object):
 
         try:
             client = self.get_remote_client_from_docpair(root_state)
-            root_info = client.get_info(root_state.remote_ref,
-                                        fetch_parent_uid=False)
+            fetch_parent_uid = self._get_fetch_parent_uid(root_state.remote_ref, session=session)
+            root_info = client.get_info(root_state.remote_ref, fetch_parent_uid=fetch_parent_uid)
         except NotFound:
             # remote folder has been deleted, remote the binding
             log.debug("Unbinding %r because of remote deletion.",
@@ -415,15 +429,10 @@ class Synchronizer(object):
                     remote_roots = nxclient.get_roots()
                     local_roots = [r for r in sb.roots
                                     if r.remote_repo == repo]
-                    self._controller.update_server_roots(
+                    self.update_server_roots(
                         sb, session, local_roots, remote_roots, repo)
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
-                # Ignore expected possible network related errors
-                self._log_offline(e, "update roots")
-                log.trace("Traceback of ignored network error:",
-                        exc_info = True)
-                if self._controller.switch_offline(sb, e, session = session):
-                    raise
+                self._handle_network_error(sb, e)
 
         if self._frontend is not None:
             local_folders = [sb.local_folder
@@ -453,7 +462,8 @@ class Synchronizer(object):
         if doc_pair.path is not None:
             doc_pair.refresh_local(local_client)
         if doc_pair.remote_ref is not None:
-            remote_info = doc_pair.refresh_remote(remote_client)
+            fetch_parent_uid = self._get_fetch_parent_uid(doc_pair.remote_ref)
+            remote_info = doc_pair.refresh_remote(remote_client, fetch_parent_uid=fetch_parent_uid)
 
         # Detect creation
         if (doc_pair.local_state != 'deleted'
@@ -482,7 +492,9 @@ class Synchronizer(object):
                     local_client.get_content(doc_pair.path),
                     name=doc_pair.remote_name,
                 )
-                doc_pair.refresh_remote(remote_client)
+                
+                fetch_parent_uid = self._get_fetch_parent_uid(doc_pair.remote_ref)
+                doc_pair.refresh_remote(remote_client, fetch_parent_uid=fetch_parent_uid)
             doc_pair.update_state('synchronized', 'synchronized')
 
         elif doc_pair.pair_state == 'remotely_modified':
@@ -532,7 +544,8 @@ class Synchronizer(object):
                     content=local_client.get_content(doc_pair.path))
                 log.debug("Creating remote document '%s' in folder '%s'",
                           name, parent_pair.remote_name)
-            doc_pair.update_remote(remote_client.get_info(remote_ref))
+            fetch_parent_uid = self._get_fetch_parent_uid(remote_ref, session=session)
+            doc_pair.update_remote(remote_client.get_info(remote_ref, fetch_parent_uid=fetch_parent_uid))
             doc_pair.update_state('synchronized', 'synchronized')
 
         elif doc_pair.pair_state == 'remotely_created':
@@ -727,7 +740,7 @@ class Synchronizer(object):
 
     def should_stop_synchronization(self, delete_stop_file = True):
         """Check whether another process has told the synchronizer to stop"""
-        stop_file = os.path.join(self.config_folder, "stop_%d" % os.getpid())
+        stop_file = os.path.join(self._controller.config_folder, "stop_%d" % os.getpid())
         if os.path.exists(stop_file):
             if delete_stop_file:
                 os.unlink(stop_file)
@@ -793,6 +806,9 @@ class Synchronizer(object):
         previous_time = time()
         session = self.get_session()
         self.loop_count = 0
+        
+        self.get_folders()
+
         try:
             while True:
                 n_synchronized = 0
@@ -822,8 +838,8 @@ class Synchronizer(object):
                     n_synchronized += self.update_synchronize_server(
                         sb, session=session, status=status)
 
-                if self.frontend is not None:
-                    self.frontend.notify_sync_completed(status)
+                if self._frontend is not None:
+                    self._frontend.notify_sync_completed(status)
                     
                 # safety net to ensure that Nuxeo Drive won't eat all the CPU,
                 # disk and network resources of the machine scanning over an
@@ -844,19 +860,18 @@ class Synchronizer(object):
         except:
             self.get_session().rollback()
             raise
-
-        # Clean pid file
-        pid_filepath = self._get_sync_pid_filepath()
-        try:
-            os.unlink(pid_filepath)
-        except Exception, e:
-            log.warning("Failed to remove stalled pid file: %s"
-                        " for stopped process %d: %r", pid_filepath, pid, e)
-
-        # Notify UI frontend to take synchronization stop into account and
-        # potentially quit the app
-        if self._frontend is not None:
-            self._frontend.notify_sync_stopped()
+        finally:
+            # Clean pid file
+            pid_filepath = self._get_sync_pid_filepath()
+            try:
+                os.unlink(pid_filepath)
+            except Exception, e:
+                log.warning("Failed to remove stalled pid file: %s"
+                            " for stopped process %d: %r", pid_filepath, pid, e)
+            # Notify UI frontend to take synchronization stop into account and
+            # potentially quit the app
+            if self._frontend is not None:
+                self._frontend.notify_sync_stopped()
 
     def _get_remote_changes(self, server_binding, session=None):
         """Fetch incremental change summary from the server"""
@@ -896,7 +911,7 @@ class Synchronizer(object):
             log.debug("%d remote changes detected on %s",
                     n_changes, server_binding.server_url)
 
-        root_client = self.get_remote_client(server_binding, base_folder='/')
+        root_client = self._get_mydocs_root_client(server_binding)
 
         # Scan events and update the inter
         refreshed = set()
@@ -913,7 +928,8 @@ class Synchronizer(object):
                 if doc_pair.root_binding.server_binding.server_url == s_url:
                     old_remote_parent_ref = doc_pair.remote_parent_ref
                     cl = self.get_remote_client_from_docpair(doc_pair)
-                    new_info = cl.get_info(remote_ref, raise_if_missing=False)
+                    fetch_parent_uid = self._get_fetch_parent_uid(remote_ref, session=session)
+                    new_info = cl.get_info(remote_ref, fetch_parent_uid=fetch_parent_uid, raise_if_missing=False)
                     if new_info is None:
                         log.debug("Mark doc_pair '%s' as deleted",
                                   doc_pair.remote_name)
@@ -946,8 +962,9 @@ class Synchronizer(object):
                 # will have soon to be refactored to use the new FileSystemItem
                 # API that deals with multi repo stuff directly on the server
                 # side
+                fetch_parent_uid = self._get_fetch_parent_uid(remote_ref, session=session)
                 child_info = root_client.get_info(
-                    remote_ref, raise_if_missing=False)
+                    remote_ref, fetch_parent_uid=fetch_parent_uid, raise_if_missing=False)
                 if child_info is None:
                     # Document must have been deleted since: nothing to do
                     continue
@@ -973,7 +990,8 @@ class Synchronizer(object):
                     # Because of the current root binding context, we need
                     # XXX: this extra server call will be dropped when we
                     # switch to the new API
-                    contextual_child_info = cl.get_info(remote_ref,
+                    fetch_parent_uid = self._get_fetch_parent_uid(remote_ref, session=session)
+                    contextual_child_info = cl.get_info(remote_ref, fetch_parent_uid=fetch_parent_uid,
                                                         raise_if_missing=False)
 
                     child_pair, new_pair = self._find_remote_child_match_or_create(
@@ -1026,7 +1044,6 @@ class Synchronizer(object):
                 self.update_roots(server_binding=server_binding,
                                   session=session)
             
-            self.get_folders(server_binding=server_binding, session=session)
             if full_scan or summary['hasTooManyChanges'] or first_pass:
                 # Force remote full scan
                 log.debug("Remote full scan of %s. Reasons: "
@@ -1102,13 +1119,16 @@ class Synchronizer(object):
         self._controller._log_offline(e, "synchronization loop")
         log.trace("Traceback of ignored network error:",
                   exc_info=True)
-        if not self._controller.recover_from_inavalid_credentials(server_binding, e):
+        if not self._controller.recover_from_invalid_credentials(server_binding, e):
             if self._frontend is not None:
                 self._frontend.notify_offline(
                     server_binding.local_folder, e)
 
             self._controller.invalidate_client_cache(
                 server_binding.server_url)
+            return False
+        else:
+            return True
 
     def get_remote_client(self, server_binding, base_folder=None,
                           repository='default'):
@@ -1180,7 +1200,7 @@ class Synchronizer(object):
                 # Skip servers with missing credentials
                 continue
             try:
-                nxclient = self.get_remote_client(sb)
+                nxclient = self._get_mydocs_root_client(sb)
                 if not nxclient.is_addon_installed():
                     continue
                 if repository is not None:
@@ -1215,15 +1235,12 @@ class Synchronizer(object):
 
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # Ignore expected possible network related errors
-                self._log_offline(e, "get folders")
-                log.trace("Traceback of ignored network error:",
-                        exc_info = True)
-                self.switch_offline(sb, e, session = session)
+                self._handle_network_error(sb, e)
 
-        if self.frontend is not None:
+        if self._frontend is not None:
             try:
                 if dirty['add'] > 0 or dirty['del'] > 0:
-                    self.frontend.notify_folders_changed()
+                    self._frontend.notify_folders_changed()
             except KeyError:
                 pass
         
@@ -1303,3 +1320,182 @@ class Synchronizer(object):
                     dirty['del'] += 1
             else:
                 self._remove_folders(t[folder.remote_name], folder.remote_id, session, dirty)
+
+    def set_roots(self, session = None):
+        """Update binding roots based on client folders selection"""
+        
+        if session is None:
+            session = self.get_session()
+
+        roots_to_register = session.query(SyncFolders, ServerBinding).\
+                            filter(SyncFolders.state == True).\
+                            filter(SyncFolders.checked == None).\
+                            filter(ServerBinding.local_folder == SyncFolders.local_folder).\
+                            all()
+
+        roots_to_unregister = session.query(SyncFolders, ServerBinding).\
+                            filter(SyncFolders.state == False).\
+                            filter(SyncFolders.checked != None).\
+                            filter(ServerBinding.local_folder == SyncFolders.local_folder).\
+                            all()
+        
+        server_binding_failed = []
+        for tuple in roots_to_register:
+            try:
+                sync_folder, server_binding = tuple
+                remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id, repository = sync_folder.remote_repo)
+                remote_client.register_as_root(sync_folder.remote_id)
+            except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                server_binding = tuple[1]
+                if server_binding not in server_binding_failed:
+                    if not self._handle_network_error(server_binding, e): 
+                        server_binding_failed.append(server_binding)
+                
+        for tuple in roots_to_unregister:
+            try:
+                sync_folder, server_binding = tuple
+                remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id, repository = sync_folder.remote_repo)
+                remote_client.unregister_as_root(sync_folder.remote_id)            
+            except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                server_binding = tuple[1]
+                if server_binding not in server_binding_failed:
+                    if not self._handle_network_error(server_binding, e): 
+                        server_binding_failed.append(server_binding)
+                        
+    def update_server_roots(self, server_binding, session, local_roots,
+            remote_roots, repository):
+        """Align the roots for a given server and repository"""
+        local_roots_by_id = dict((r.remote_root, r) for r in local_roots)
+        local_root_ids = set(local_roots_by_id.keys())
+
+        remote_roots_by_id = dict((r.uid, r) for r in remote_roots)
+        remote_root_ids = set(remote_roots_by_id.keys())
+
+        to_remove = local_root_ids - remote_root_ids
+        to_add = remote_root_ids - local_root_ids
+
+        for ref in to_remove:
+            self._local_unbind_root(local_roots_by_id[ref], session)
+
+        for ref in to_add:
+            # get a client with the right base folder
+            rc = self.get_remote_client(server_binding,
+                                        repository=repository,
+                                        base_folder=ref)
+            self._local_bind_root(server_binding, remote_roots_by_id[ref],
+                                  rc, session)
+            
+    def _local_bind_root(self, server_binding, remote_info, nxclient, session):
+        # Check that this workspace does not already exist locally
+        # TODO: shall we handle deduplication for root names too?
+
+        folder_name = remote_info.name
+        local_root = os.path.join(server_binding.local_folder,
+                                safe_filename(remote_info.name))
+        try:
+            sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_id == remote_info.uid).one()
+            if sync_folder.remote_root == Constants.ROOT_CLOUDDESK and sync_folder.remote_id == Constants.OTHERS_DOCS_UID:
+                # this binding root is Others' Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.OTHERS_DOCS))
+
+            elif sync_folder.remote_root == Constants.ROOT_CLOUDDESK:
+                # this is My Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.MY_DOCS))
+
+            elif sync_folder.remote_root == Constants.ROOT_MYDOCS:
+                # child of My Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.MY_DOCS),
+                                  safe_filename(folder_name))
+
+            elif sync_folder.remote_root == Constants.ROOT_OTHERS_DOCS:
+                # child of Others Docs
+                local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(Constants.OTHERS_DOCS),
+                                  safe_filename(folder_name))
+
+        except NoResultFound:
+            log.error("binding root %s is not a synced folder", remote_info.name)
+        except MultipleResultsFound:
+            log.error("binding root %s is two or more  synced folders", remote_info.name)
+
+        repository = nxclient.repository
+        if not os.path.exists(local_root):
+            os.makedirs(local_root)
+        lcclient = LocalClient(local_root)
+        local_info = lcclient.get_info('/')
+
+        try:
+            existing_binding = session.query(RootBinding).filter_by(
+                local_root=local_root,
+            ).one()
+            if (existing_binding.remote_repo != repository
+                or existing_binding.remote_root != remote_info.uid):
+                raise RuntimeError(
+                    "%r is already bound to %r on repo %r of %r" % (
+                        local_root,
+                        existing_binding.remote_root,
+                        existing_binding.remote_repo,
+                        existing_binding.server_binding.server_url))
+        except NoResultFound:
+            # Register the new binding itself
+            log.info("Binding local root '%s' to '%s' (id=%s) on server '%s'",
+                 local_root, remote_info.name, remote_info.uid,
+                     server_binding.server_url)
+            session.add(RootBinding(local_root, repository, remote_info.uid, server_binding.local_folder))
+
+            # Initialize the metadata of the root and let the synchronizer
+            # scan the folder recursively
+            state = LastKnownState(lcclient.base_folder,
+                    local_info=local_info, remote_info=remote_info)
+            if remote_info.folderish:
+                # Mark as synchronized as there is nothing to download later
+                state.update_state(local_state='synchronized',
+                        remote_state='synchronized')
+            else:
+                # Mark remote as updated to trigger a download of the binary
+                # attachment during the next synchro
+                state.update_state(local_state='synchronized',
+                                remote_state='modified')
+            session.add(state)
+            self.scan_local(local_root, session=session)
+            self.scan_remote(local_root, session=session)
+            session.commit()
+            
+            if  self._frontend is not None:
+                self._frontend.notify_folders_changed()
+                
+    def _local_unbind_root(self, binding, session):
+        log.info("Unbinding local root '%s'.", binding.local_root)
+        session.delete(binding)
+        session.commit()
+        
+        if self._frontend is not None:
+            self._frontend.notify_folders_changed()
+
+    def notify_to_signin(self, server_binding=None):
+        if self._frontend is None:
+            return
+        
+        if server_binding is None:
+            error = Unauthorized(Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_ACCOUNT)
+            self._frontend.notify_offline(Constants.DEFAULT_NXDRIVE_FOLDER, error)
+        elif not server_binding.notified:
+            self._frontend.notify_signin(server_binding.server_url)
+            server_binding.notified = True
+    
+    def _get_mydocs_root_client(self, server_binding, session=None):
+        if session is None:
+            session = self._controller.get_session()
+        # use path for MyDocs as the root client
+        try:
+            my_docs = session.query(SyncFolders).\
+                filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
+            base_folder = my_docs.remote_id
+        except NoResultFound:
+            base_folder = None
+        return self.get_remote_client(server_binding, base_folder=base_folder)
+        
+        

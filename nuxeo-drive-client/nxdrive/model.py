@@ -20,8 +20,8 @@ from sqlalchemy.ext.declarative import declared_attr
 
 from nxdrive.client import NuxeoClient
 from nxdrive.client import LocalClient
-from nxdrive.utils.helpers import normalized_path
-from nxdrive.utils.encryption import encrypt_password, decrypt_password
+from nxdrive.utils import normalized_path
+from nxdrive.utils import encrypt_password, decrypt_password
 from nxdrive import Constants
 
 WindowsError = None
@@ -133,7 +133,7 @@ class ServerBinding(Base):
     def set_fdtoken(self, v):
         self.__fdtoken = v
         if v is not None:
-            self.fdtoken_creation_date = datetime.datetime.now()
+            self.fdtoken_creation_date = datetime.now()
 
     @declared_attr
     def remote_password(self):
@@ -173,11 +173,7 @@ class RootBinding(Base):
     remote_repo = Column(String)
     remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
     local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
-
-    server_binding = relationship(
-        'ServerBinding',
-        backref=backref("roots", cascade="all, delete-orphan"))
-#    server_binding = relationship('ServerBinding')
+    server_binding = relationship('ServerBinding')
 
     def __init__(self, local_root, remote_repo, remote_root, local_folder = None):
         local_root = normalized_path(local_root)
@@ -241,7 +237,7 @@ class RecentFiles(Base):
         self.local_name = local_name
         self.local_root = local_root
         self.pair_state = pair_state
-        self.local_update = datetime.datetime.now()
+        self.local_update = datetime.now()
 
 class LastKnownState(Base):
     """Aggregate state aggregated from last collected events."""
@@ -407,16 +403,14 @@ class LastKnownState(Base):
         # detect such kind of conflicts instead?
         self.update_state(local_state=local_state)
 
-    def refresh_remote(self, client=None):
+    def refresh_remote(self, client=None, fetch_parent_uid=True):
         """Update the state from the remote server info.
 
         Can reuse an existing client to spare some redundant client init HTTP
         request.
         """
         client = client if client is not None else self.get_remote_client()
-        fetch_parent_uid = self.path != '/'
-        remote_info = client.get_info(self.remote_ref, raise_if_missing=False,
-                                      fetch_parent_uid=fetch_parent_uid)
+        remote_info = client.get_info(self.remote_ref, fetch_parent_uid=fetch_parent_uid, raise_if_missing=False)
         self.update_remote(remote_info)
         return remote_info
 

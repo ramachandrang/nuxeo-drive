@@ -22,7 +22,7 @@ from nxdrive.logging_config import configure
 from nxdrive.logging_config import get_logger
 from nxdrive.protocol_handler import parse_protocol_url
 from nxdrive.protocol_handler import register_protocol_handlers
-from nxdrive.startup import register_startup
+from nxdrive.utils import register_startup
 from nxdrive import Constants
 
 
@@ -321,9 +321,8 @@ class CliHandler(object):
 
     def looper(self, options = None):
         def wrapper(operation):
-            fault_tolerant = not getattr(options, 'stop_on_error', True)
             delay = getattr(options, 'delay', DEFAULT_DELAY)
-            return self.controller.loop(fault_tolerant = fault_tolerant, delay = delay, sync_operation = operation)
+            return self.controller.loop(delay = delay, sync_operation = operation)
         return wrapper
 
     def handle(self, argv):
@@ -366,7 +365,7 @@ class CliHandler(object):
     def launch(self, options=None):
         """Launch the QT app in the main thread and sync in another thread."""
         # TODO: use the start method as default once implemented
-		self.gui(options)
+        self.gui(options)
 
     def gui(self, options = None):
         from nxdrive.gui.menubar import startApp
@@ -391,9 +390,8 @@ class CliHandler(object):
         return 0
 
     def console(self, options):
-		fault_tolerant = not getattr(options, 'stop_on_error', True)
-        self.controller.synchronizer.loop(fault_tolerant = fault_tolerant,
-            delay=getattr(options, 'delay', DEFAULT_DELAY))
+        fault_tolerant = not getattr(options, 'stop_on_error', True)
+        self.controller.synchronizer.loop(delay=getattr(options, 'delay', DEFAULT_DELAY))
         return 0
 
     def stop(self, options=None):

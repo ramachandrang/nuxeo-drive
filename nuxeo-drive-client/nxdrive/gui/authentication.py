@@ -153,8 +153,8 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
             dialog.show_message("Invalid credentials.")
             return False
         except Exception as e:
-            msg = "Unable to connect to %s" % url)
-            log.debug("Unable to connect to %s (%s)" % (url, str(e), exc_info = True)
+            msg = "Unable to connect to %s" % url
+            log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
             # TODO: catch a new ServerUnreachable catching network isssues
             dialog.show_message(msg)
             return False
