@@ -3,6 +3,7 @@ Created on Oct 27, 2012
 
 @author: mconstantin
 '''
+from __future__ import division
 
 import sys
 import os
@@ -10,7 +11,7 @@ import platform
 import itertools
 import webbrowser
 import urllib
-
+        
 import PySide
 from PySide import QtGui
 from PySide import QtCore
@@ -31,6 +32,7 @@ from nxdrive.utils import create_settings
 from nxdrive.model import RecentFiles
 from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
+from nxdrive.client import Unauthorized
 
 if sys.platform == 'win32':
     from nxdrive.protocol_handler import win32
@@ -116,8 +118,7 @@ class BindingInfo(object):
 class CloudDeskTray(QtGui.QSystemTrayIcon):
     def __init__(self, controller, options):
         super(CloudDeskTray, self).__init__()
-        # this should be retrieved from persistence storage,
-        # i.e. last used connection's local folder
+
         self.local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
         self.controller = controller
         self.options = options
@@ -159,8 +160,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionAbout = QtGui.QAction(self.tr("About"), self)
         self.actionAbout.setObjectName("actionAbout")
         # TO BE REMOVED - BEGIN
-#        self.actionDebug = QtGui.QAction(self.tr("Debug"),self)
-#        self.actionDebug.setObjectName("actionDebug")
+        self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"),self)
+        self.actionDebug.setObjectName("actionDebug")
+        self.actionDebug.setCheckable(True)
         # TO BE REMOVED - END
         self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
@@ -179,8 +181,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addAction(self.actionAbout)
 
         # TO BE REMOVED - BEGIN
-#        self.menuCloudDesk.addSeparator()
-#        self.menuCloudDesk.addAction(self.actionDebug)
+        self.menuCloudDesk.addSeparator()
+        self.menuCloudDesk.addAction(self.actionDebug)
         # TO BE REMOVED - END
 
         self.menuCloudDesk.addSeparator()
@@ -200,7 +202,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.messageClicked.connect(self.handle_message_clicked)
 
         # TO BE REMOVED - BEGIN
-#        self.actionDebug.triggered.connect(self.debug_stuff)
+        self.actionDebug.setChecked(False)
+        self.actionDebug.toggled.connect(self.enable_trace)
 
         # copy to local binding
         for sb in self.controller.list_server_bindings():
@@ -241,18 +244,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.notifications = settings.value('preferences/notifications', True)
 
 
-    def debug_stuff(self):
+    def enable_trace(self, state):
+        self.controller.enable_trace(state)
         # this is not working on OS X
 #        self.communicator.message.emit(self.tr("CloudDesk Authentication"),
 #                               self.tr('Update credentials'),
 #                               QtGui.QSystemTrayIcon.Critical)
-        # For TEST ONLY
-#        self.controller.get_folders()
-
-        from folders_dlg import SyncFoldersDlg
-        dlg = SyncFoldersDlg(frontend = self)
-        if dlg.exec_() == QDialog.Rejected:
-            return
 
     def about(self):
         msgbox = QMessageBox()
@@ -459,8 +456,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.communicator.stop.emit()
 
     def notify_signin(self, url):
+        # TODO add ui for signing in
         pass
     
+    def notify_quota_exceeded(self):
+        self.communicator.message.emit(Constants.APP_NAME,
+                                       self.tr('Storage Quota exceeded'),
+                                       QtGui.QSystemTrayIcon.Warning)
+        
     def notify_online(self, local_folder):
         info = self.get_info(local_folder)
         if not info.online:
@@ -643,10 +646,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def rebuild_menu(self):
         """update when menu is activated"""
-        self.actionUsername.setText(self._getUserName())
-        # TO DO retrieve storage used
-        self.actionUsedStorage.setText("123Mb (0.03%) of 4Gb")
 
+        used, total = self.controller.get_storage(self.local_folder)
+        storage_text = '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used/1000000000, used/total, total/1000000000)
+        self.actionUsedStorage.setText(storage_text)
+
+        self.actionUsername.setText(self._getUserName())
         self.actionShowCloudDeskInfo.setEnabled(len(self.binding_info.values()) > 0)
         self.actionStatus.setText(self._syncStatus())
         self.actionCommand.setText(self._syncCommand())
@@ -688,7 +693,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.get_binding_info(sb.local_folder).online = True
 
 
-    def setupProcessing(self):
+    def setupProcessing(self):            
         self.opInProgress = SyncOperations()
 
         if self.worker is None or not self.worker.isAlive():

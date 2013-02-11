@@ -4,6 +4,7 @@ Created on Jan 16, 2013
 @author: mconstantin
 '''
 
+from __future__ import division
 import sys
 import os.path
 import subprocess
@@ -261,7 +262,10 @@ class IntroPage(QWizardPage):
             
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
-            self.lblMessage.setText(self.tr("You used 123Mb (0.03%) of 4Gb"))
+
+            used, total = self.controller.get_storage(self.local_folder)
+            storage_text = 'You used {:.2f}GB ({:.2%}) of {:.2f}GB'.format(used/1000000000, used/total, total/1000000000)
+            self.lblMessage.setText(self.tr(storage_text))
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: green }")
             self.auth_ok = True
             self.completeChanged.emit()

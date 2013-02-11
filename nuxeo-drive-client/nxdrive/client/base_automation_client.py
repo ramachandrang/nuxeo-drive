@@ -1,12 +1,14 @@
 """Common Nuxeo Automation client utilities."""
 
 import sys
+import platform
 import base64
 import json
 import urllib2
 import mimetypes
 import random
 import time
+from datetime import datetime
 from urllib import urlencode
 from cookielib import CookieJar
 from email.mime.base import MIMEBase
@@ -42,6 +44,17 @@ class Unauthorized(Exception):
         return ("'%s' is not authorized to access '%s' with"
                 " the provided credentials. http code=%d, data=%s" % (self.user_id, self.url, self.code, str(self.data)))
 
+class QuotaExceeded(Exception):
+    def __init__(self, url, user_id, ref, size):
+        self.url = url
+        self.user_id = user_id
+        self.ref = ref
+        self.size = size
+        
+    def __str__(self):
+        return ("'%s' exceeded quota for '%s' when"
+                " storing document %s" % (self.user_id, self.url, self.ref))
+    
 class ProxyInfo(object):
     """Holder class for proxy information"""
 
@@ -126,11 +139,11 @@ class BaseAutomationClient(object):
     _error = None
 
     application_name = Constants.APP_NAME
-
+    _enable_trace = False
     _proxy = None
     _proxy_error_count = 0
     MAX_PROXY_ERROR_COUNT = 2
-
+        
     @classproperty
     @classmethod
     def proxy(cls):
@@ -197,9 +210,30 @@ class BaseAutomationClient(object):
             proxy_support = urllib2.ProxyHandler({})
             self.opener = urllib2.build_opener(cookie_processor, proxy_support)
             
+        BaseAutomationClient._enable_trace = False
         self.automation_url = server_url + 'site/automation/'
         self.fetch_api()
 
+    def log_request(self, req):
+        if BaseAutomationClient._enable_trace:
+            log.debug('------request-------')
+            log.debug('request url: %s', req.get_full_url())
+            log.debug('request host: %s', req.get_host())
+            log.debug('original request host: %s', req.get_origin_req_host())
+            log.debug('request type: %s', req.get_type())
+            if req.has_data():
+                log.debug('request data: %s...', str(req.get_data())[0:200])
+              
+    def log_response(self, rsp):
+        if BaseAutomationClient._enable_trace:
+            log.debug('------response------')
+            log.debug('response code: %d', rsp.code)
+            log.debug('--response headers--')
+            for key, value in rsp.info().items():
+                log.debug('%s: %s', key, value)
+            log.debug('----response data---')
+            log.debug('data: %s...', str(rsp)[0:200])
+        
     def make_raise(self, error):
         """Make next calls to server raise the provided exception"""
         self._error = error
@@ -394,6 +428,17 @@ class BaseAutomationClient(object):
         # ---- END DEBUG -----
         try:
             resp = self.opener.open(req)
+            # --- BEGIN DEBUG ----
+#            from StringIO import StringIO
+#            msg = '{ "entity-type": "exception",\
+#                    "type":"com.sharplabs.clouddesk.operations.StorageExceededException",\
+#                    "status": "500",\
+#                    "message": "Failed to execute operation: StorageUsed.Get",\
+#                    "stack": ""\
+#                }'
+#            fp = StringIO(msg)
+#            raise urllib2.HTTPError(url, 500, "internal server error", None, fp)
+            # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             self._log_details(e)
             if e.code == 401 or e.code == 403:
@@ -401,6 +446,12 @@ class BaseAutomationClient(object):
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None
+            elif e.code == 500:
+                if self.check_quota_exceeded_error(e):
+                    ref = params['document']
+                    raise QuotaExceeded(self.server_url, self.user_id, ref, len(blob_content))
+                else:
+                    raise
             else:
                 e.msg = base_error_message + ": HTTP error %d" % e.code
                 raise e
@@ -439,6 +490,7 @@ class BaseAutomationClient(object):
         parameters = {
             'deviceId': self.device_id,
             'applicationName': self.application_name,
+            'computerName': platform.node(),
             'permission': self.permission,
             'revoke': 'true' if revoke else 'false',
         }
@@ -446,12 +498,13 @@ class BaseAutomationClient(object):
         if device_description:
             parameters['deviceDescription'] = device_description
 
-        url = self.server_url + 'authentication/token?'
+        # new CloudDesk service to register token with computer name
+        url = self.server_url + 'authentication/cloudtoken?'
         url += urlencode(parameters)
 
         headers = self._get_common_headers()
         base_error_message = (
-            "Failed not connect to %s Content Automation on server %r"
+            "Failed to connect to %s Content Automation on server %r"
             " with user %r"
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
@@ -499,7 +552,19 @@ class BaseAutomationClient(object):
 
     def wait(self):
         self.execute("NuxeoDrive.WaitForAsyncCompletion")
-
+        
+    def update_last_access(self, token):
+        if token is not None:
+            # server is using token, not password for authentication
+            properties = {
+                          'lastAccess': datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                          'token': token,
+                          }
+            try:
+                self.execute('Drive.LastAccess', properties=properties)
+            except ValueError:
+                log.debug("operation 'Drive.LastAccess' is not implemented.")
+        
     def _update_auth(self, password=None, token=None):
         """Select the most appropriate authentication heads based on credentials"""
         if token is not None:
@@ -563,23 +628,19 @@ class BaseAutomationClient(object):
                 # Error message should always be a JSON message,
                 # but sometimes it's not
                 log.debug(detail)
-
-    def log_request(self, req):
-        log.debug('------request-------')
-        log.debug('request url: %s', req.get_full_url())
-        log.debug('request host: %s', req.get_host())
-        log.debug('original request host: %s', req.get_origin_req_host())
-        log.debug('request type: %s', req.get_type())
-        if req.has_data():
-            log.debug('request data: %s...', str(req.get_data())[0:200])
+            # reset the file at the beginning if it needs to be read again
+            if hasattr(e.fp, "seek"):
+                e.fp.seek(0, 0)
+    
+    def check_quota_exceeded_error(self, e):
+        if hasattr(e, "fp"):
+                detail = e.fp.read()
+                try:
+                    exc = json.loads(detail)
+                    if exc['type'].endswith('StorageExceededException'):
+                        return True
+                except:
+                    pass
+        return False
                 
-    def log_response(self, rsp):
-        log.debug('------response------')
-        log.debug('response code: %d', rsp.code)
-        log.debug('--response headers--')
-        for key, value in rsp.info().items():
-            log.debug('%s: %s', key, value)
-        log.debug('----response data---')
-        log.debug('data: %s...', str(rsp)[0:200])
-            
             

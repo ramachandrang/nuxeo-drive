@@ -18,6 +18,7 @@ from nxdrive.client.remote_document_client import DEFAULT_TYPES
 from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
 from nxdrive.client import Unauthorized
+from nxdrive.client import QuotaExceeded
 from nxdrive.client import LocalClient
 from nxdrive.client import FolderInfo
 from nxdrive.model import ServerBinding
@@ -46,6 +47,7 @@ POSSIBLE_NETWORK_ERROR_TYPES = (
     exceptions.ProxyConfigurationError,
 )
 
+DEFAULT_STORAGE = (0, 1000000000)
 
 log = get_logger(__name__)
 
@@ -130,6 +132,7 @@ class Synchronizer(object):
         self._frontend = None
         self._sync_operation = None
         self.loop_count = 0
+        self.quota_exceeded = False
 
     def register_frontend(self, frontend):
         self._frontend = frontend
@@ -402,7 +405,7 @@ class Synchronizer(object):
         session.add(child_pair)
         return child_pair, True
 
-    def update_roots(self, server_binding, session=None, repository=None):
+    def update_roots(self, server_binding=None, session=None, repository=None):
         """Ensure that the list of bound roots match server-side info
 
         If a server is not responding it is skipped.
@@ -784,9 +787,27 @@ class Synchronizer(object):
         """Forever loop to scan / refresh states and perform sync"""
 
         delay = delay if delay is not None else self.delay
-
+        # Turn the icon indicator on
+        if self._frontend is None:
+            local_folder = None
+        else:
+            local_folder = self._frontend.local_folder
+        server_binding = self._controller.get_server_binding(local_folder)
+        if server_binding is not None:
+            try:
+                self._controller.validate_credentials(server_binding.server_url, 
+                                                     server_binding.remote_user, 
+                                                     server_binding.remote_password)
+                if self._frontend is not None:
+                    self._frontend.get_info(server_binding.local_folder).online = True
+            except Unauthorized:
+                log.debug("Invalid credentials.")
+            except Exception as e:
+                log.debug("Unable to connect to %s (%s)", server_binding.server_url, str(e), exc_info = True)
+                
         if self._frontend is not None:
             self._frontend.notify_sync_started()
+            
         pid = self.check_running(process_name="sync")
         if pid is not None:
             log.warning(
@@ -801,14 +822,13 @@ class Synchronizer(object):
             f.write(str(pid))
 
         log.info("Starting synchronization (pid=%d)", pid)
-        self.continue_synchronization = True
 
         previous_time = time()
         session = self.get_session()
         self.loop_count = 0
         
         self.get_folders()
-
+                
         try:
             while True:
                 n_synchronized = 0
@@ -1088,12 +1108,21 @@ class Synchronizer(object):
                 self._frontend.notify_pending(
                     server_binding.local_folder, n_pending,
                     or_more=reached_limit)
+                
+                if n_pending > 0:
+                    self._frontend.notify_start_transfer()
 
             for rb in server_binding.roots:
                 n_synchronized += self.synchronize(
                     limit=self.max_sync_step, local_root=rb.local_root, status=status)
             synchronization_duration = time() - tick
 
+            if n_pending > 0:
+                self.update_storage_used(session=session)
+                    
+                if self._frontend is not None:
+                    self._frontend.notify_stop_transfer()     
+                
             log.debug("[%s] - [%s]: synchronized: %d, pending: %d, "
                       "local: %0.3fs, remote: %0.3fs sync: %0.3fs",
                       server_binding.local_folder,
@@ -1112,6 +1141,17 @@ class Synchronizer(object):
                 # extension can still be right)
                 for rb in server_binding.roots:
                     self.scan_local(rb.local_root, session)
+        except QuotaExceeded as e:
+            log.info("quota exceeded on %s for user %s (doc: %s)", e.url, e.user_id, e.ref)
+            if self.quota_exceeded:
+                used, total = self.update_server_storage_used(e.url, e.user_id, session=session)
+                if total - used > e.size:
+                    self.quota_exceeded = False
+            else:
+                self.quota_exceeded = True
+                # notify client
+                if self._frontend is not None:
+                    self._frontend.notify_quota_exceeded()
 
         return n_synchronized
 
@@ -1498,4 +1538,34 @@ class Synchronizer(object):
             base_folder = None
         return self.get_remote_client(server_binding, base_folder=base_folder)
         
+    def update_storage_used(self, session=None):
+        if session is None:
+            session = self.get_session()
+        for sb in session.query(ServerBinding).all():                        
+            remote_client = self._controller.get_remote_client(sb)
+            if remote_client is not None:
+                try:
+                    self.storage[sb.local_folder] = remote_client.get_storage_used()
+                except ValueError:
+                    # operation not implemented
+                    pass
+                    
+                    
+    def update_server_storage_used(self, url, user, session=None):
+        if session is None:
+            session = self.get_session()
+        for sb in session.query(ServerBinding).all(): 
+            if url.startswith(sb.server_url) and user == sb.remote_user:
+                remote_client = self._controller.get_remote_client(sb)
+                if remote_client is not None:
+                    try:
+                        self.storage[sb.local_folder] = remote_client.get_storage_used()
+                        return self.storage[sb.local_folder]
+                    except ValueError:
+                        # operation not implemented
+                        pass
+                break
+
+        return (0,0)
+            
         

@@ -4,6 +4,7 @@ Created on Dec 13, 2012
 @author: mconstantin
 '''
 
+from __future__ import division
 import os
 import sys
 import platform
@@ -148,8 +149,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
     def showEvent(self, evt):
         if evt.spontaneous:
+            used, total = self.controller.get_storage(self.local_folder)
+            storage_text = '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used/1000000000, used/total, total/1000000000)
+            self.lblStorage.setText(storage_text)
+            
             self.lblComputer.setText(platform.node())
-            self.lblStorage.setText("123Mb (0.03%) of 4Gb")
             self.rbProxy.setChecked(self.proxy != None)
             self.cbAutostart.setChecked(self.autostart)
             self.cbIconOverlays.setChecked(self.iconOverlays)
@@ -160,12 +164,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 self.txtUrl.setText(Constants.DEFAULT_CLOUDDESK_URL)
                 self.txtAccount.setText(Constants.DEFAULT_ACCOUNT)
                 self.txtCloudfolder.setText(os.path.dirname(self.local_folder))
-                self.lblCloudFolder.setText(self.txtCloudfolder.text())
-                # Launch the GUI to create a binding
-#                ok = self._connect()
-#                if not ok:
-#                    self.destroy()
-#                    return
 
             self._updateBinding()
             super(PreferencesDlg, self).showEvent(evt)
@@ -176,26 +174,24 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #            self.tabWidget.setTabIcon(index, QIcon(Constants.APP_ICON_ABOUT))
 
     def selectFolders(self):
+        # TODO folders are retrieved here by user or, when the synchronizer starts
+        # In between they are not updated if there are server changes
         app = QApplication.instance()
         process_filter = EventFilter(self)
 
-        if self.controller.get_loop_count() < 1:
-            # retrieve folders and binding roots if controller hasn't done it yet
-            # NOTE/TODO: controller methods may not be thread-safe. Check..
+        app.setOverrideCursor(Qt.WaitCursor)
+        self.installEventFilter(process_filter)
+        try:
+            # retrieve folders
+            self.controller.synchronizer.get_folders()
+            self.controller.synchronizer.update_roots()
 
-            app.setOverrideCursor(Qt.WaitCursor)
-            self.installEventFilter(process_filter)
-            try:
-                # retrieve folders
-                self.controller.synchronizer.get_folders()
-                self.controller.synchronizer.update_roots()
+        except Exception as e:
+            log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
 
-            except Exception as e:
-                log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
-
-            finally:
-                app.restoreOverrideCursor()
-                self.removeEventFilter(process_filter)
+        finally:
+            app.restoreOverrideCursor()
+            self.removeEventFilter(process_filter)
 
         dlg = SyncFoldersDlg(frontend = self.frontend)
         if dlg.exec_() == QDialog.Rejected:
@@ -284,7 +280,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtUrl.setCursorPosition(0)
             self.txtUrl.setToolTip(self.server_binding.server_url)
             self.txtCloudfolder.setText(os.path.dirname(self.server_binding.local_folder))
-            self.lblCloudFolder.setText(self.txtCloudfolder.text())
             self.txtCloudfolder.setCursorPosition(0)
             self.txtCloudfolder.setToolTip(self.server_binding.local_folder)
             self.txtAccount.setReadOnly(True)

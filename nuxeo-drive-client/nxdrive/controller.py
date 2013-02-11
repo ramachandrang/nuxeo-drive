@@ -15,6 +15,7 @@ import subprocess
 import logging
 
 import nxdrive
+from nxdrive.client import BaseAutomationClient
 from nxdrive.client import NuxeoClient
 from nxdrive.client import NotFound
 from nxdrive.client import Unauthorized
@@ -51,6 +52,7 @@ schema_url = r'federatedloginservices.xml'
 service_url = r'http://login.sharpb2bcloud.com'
 ns = r'http://www.inventua.com/federatedloginservices/'
 CLOUDDESK_SCOPE = r'clouddesk'
+DEFAULT_STORAGE = (0, 1000000000)
 
 log = get_logger(__name__)
 
@@ -191,6 +193,7 @@ class Controller(object):
         self.device_id = self.get_device_config().device_id
         self.fault_tolerant = True
         self.loop_count = 0
+        self._init_storage()
         Controller.__instance = self
         self.synchronizer = Synchronizer(self)
 
@@ -742,7 +745,13 @@ class Controller(object):
                 return False
         else:
             return False
-        
+    
+    def get_storage(self, local_folder):
+        try:
+            return self.storage[local_folder]
+        except KeyError:
+            return DEFAULT_STORAGE
+    
     def launch_file_editor(self, server_url, remote_repo, remote_ref):
         """Find the local file if any and start OS editor on it."""
         state = self.get_state(server_url, remote_repo, remote_ref)
@@ -789,3 +798,12 @@ class Controller(object):
         if not url.endswith('/'):
             return url + '/'
         return url
+
+    def _init_storage(self):
+        self.storage = {}
+        session = self.get_session()
+        for sb in session.query(ServerBinding).all():
+            self.storage[sb.local_folder] = DEFAULT_STORAGE
+            
+    def enable_trace(self, state):
+        BaseAutomationClient._enable_trace = state

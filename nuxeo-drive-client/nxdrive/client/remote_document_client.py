@@ -9,7 +9,6 @@ from nxdrive.logging_config import get_logger
 from nxdrive.client.common import NotFound
 from nxdrive.client.base_automation_client import BaseAutomationClient
 
-
 log = get_logger(__name__)
 
 
@@ -366,3 +365,12 @@ class RemoteDocumentClient(BaseAutomationClient):
             'NuxeoDrive.GetChangeSummary',
             lastSyncDate=last_sync_date,
             lastSyncActiveRootDefinitions=last_root_definitions)
+
+    def get_storage_used(self):
+        try:
+            storage_info = self.execute('StorageUsed.Get')
+            return storage_info['used'], storage_info['total']
+        except ValueError:
+            log.debug("operation 'StorageUsed.Get' is not implemented.")
+            raise
+    
