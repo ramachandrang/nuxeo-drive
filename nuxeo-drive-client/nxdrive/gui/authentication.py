@@ -161,7 +161,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
 
     if app is None:
         log.debug("Launching QT prompt for server binding.")
-        from nxdrive.utils.helpers import QApplicationSingleton
+        from nxdrive.utils import QApplicationSingleton
         QApplicationSingleton()
 #        QtGui.QApplication([])
 

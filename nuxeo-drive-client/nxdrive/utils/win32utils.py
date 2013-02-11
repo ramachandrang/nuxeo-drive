@@ -7,7 +7,7 @@ Created on Feb 6, 2013
 import sys
 
 from nxdrive.logging_config import get_logger
-from nxdrive.utils import find_exe_path
+from nxdrive.utils.helpers import find_exe_path
 from nxdrive import Constants
 
 if sys.platform == 'win32':
@@ -21,7 +21,7 @@ log = get_logger(__name__)
 FILE_NOT_FOUND = 0x80070002
 
 
-def update_win32_reg_key(reg, path, attributes=()):
+def update_win32_reg_key(reg, path, attributes = ()):
     """Helper function to create / set a key with attribute values"""
     import _winreg
     key = _winreg.CreateKey(reg, path)
@@ -31,7 +31,7 @@ def update_win32_reg_key(reg, path, attributes=()):
         _winreg.SetValueEx(key, attribute, 0, type_, value)
     _winreg.CloseKey(key)
 
-def create_shortcut(path, target, wDir='', icon=''):
+def create_shortcut(path, target, wDir = '', icon = ''):
     shell = Dispatch('WScript.Shell')
     shortcut = shell.CreateShortCut(path)
     shortcut.Targetpath = target
@@ -41,12 +41,12 @@ def create_shortcut(path, target, wDir='', icon=''):
     else:
         shortcut.iconLocation = icon
     shortcut.save()
-    
+
 def create_or_replace_shortcut(shortcut, target):
     win_version = sys.getwindowsversion()
     if win_version.major == 6 and win_version.minor == 1:
         # check if the link already exists
-        shlink = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None, 
+        shlink = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None,
                                               pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
         try:
             shlink.QueryInterface(pythoncom.IID_IPersistFile).Load(shortcut)
@@ -58,16 +58,16 @@ def create_or_replace_shortcut(shortcut, target):
             if exe_path is None:
                 # FOR TESTING
                 exe_path = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
-                create_shortcut(shortcut, target, icon=exe_path)
+                create_shortcut(shortcut, target, icon = exe_path)
     else:
         # TODO find the Favorites location for other Windows versions
         pass
-    
+
 def create_shortcut_if_not_exists(shortcut, target):
     win_version = sys.getwindowsversion()
     if win_version.major == 6 and win_version.minor == 1:
         # check if the link already exists
-        shlink = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None, 
+        shlink = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None,
                                               pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
         try:
             shlink.QueryInterface(pythoncom.IID_IPersistFile).Load(shortcut)
@@ -76,9 +76,8 @@ def create_shortcut_if_not_exists(shortcut, target):
             if exe_path is None:
                 # FOR TESTING
                 exe_path = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
-                create_shortcut(shortcut, target, icon=exe_path)
+                create_shortcut(shortcut, target, icon = exe_path)
     else:
         # TODO find the Favorites location for other Windows versions
-        pass    
-    
-    
+        pass
+
