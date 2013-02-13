@@ -8,10 +8,11 @@ from __future__ import division
 import sys
 import os
 import platform
+from datetime import datetime
 import itertools
 import webbrowser
 import urllib
-        
+
 import PySide
 from PySide import QtGui
 from PySide import QtCore
@@ -160,7 +161,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionAbout = QtGui.QAction(self.tr("About"), self)
         self.actionAbout.setObjectName("actionAbout")
         # TO BE REMOVED - BEGIN
-        self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"),self)
+        self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
         self.actionDebug.setObjectName("actionDebug")
         self.actionDebug.setCheckable(True)
         # TO BE REMOVED - END
@@ -458,12 +459,18 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def notify_signin(self, url):
         # TODO add ui for signing in
         pass
-    
+
+    def notify_maintenance_schedule(self, msg):
+        # TODO update menu, icon
+
+        self.communicator.message.emit(Constants.APP_NAME, msg,
+                                       QtGui.QSystemTrayIcon.Information)
+
     def notify_quota_exceeded(self):
         self.communicator.message.emit(Constants.APP_NAME,
                                        self.tr('Storage Quota exceeded'),
                                        QtGui.QSystemTrayIcon.Warning)
-        
+
     def notify_online(self, local_folder):
         info = self.get_info(local_folder)
         if not info.online:
@@ -472,7 +479,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             info.online = True
             self.update_running_icon()
             self.communicator.menu.emit()
-            
+
     def notify_offline(self, local_folder, exception):
         info = self.get_info(local_folder)
         code = getattr(exception, 'code', None)
@@ -648,7 +655,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         """update when menu is activated"""
 
         used, total = self.controller.get_storage(self.local_folder)
-        storage_text = '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used/1000000000, used/total, total/1000000000)
+        storage_text = '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
         self.actionUsedStorage.setText(storage_text)
 
         self.actionUsername.setText(self._getUserName())
@@ -693,7 +700,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.get_binding_info(sb.local_folder).online = True
 
 
-    def setupProcessing(self):            
+    def setupProcessing(self):
         self.opInProgress = SyncOperations()
 
         if self.worker is None or not self.worker.isAlive():

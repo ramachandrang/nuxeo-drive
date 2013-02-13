@@ -230,7 +230,7 @@ class Controller(object):
         the stop message between the two.
 
         """
-        pid = self.synchronizer.check_running(process_name="sync")
+        pid = self.synchronizer.check_running(process_name = "sync")
         if pid is not None:
             # Create a stop file marker for the running synchronization
             # process
@@ -285,7 +285,7 @@ class Controller(object):
         folder_path = normalized_path(folder_path)
 
         # Check exact root binding match
-        binding = self.get_root_binding(folder_path, session=session)
+        binding = self.get_root_binding(folder_path, session = session)
         if binding is not None:
             return binding, '/'
 
@@ -306,8 +306,8 @@ class Controller(object):
         path = path.replace(os.path.sep, '/')
         return binding, path
 
-    def get_server_binding(self, local_folder=None, raise_if_missing=False,
-                           session=None):
+    def get_server_binding(self, local_folder = None, raise_if_missing = False,
+                           session = None):
         """Find the ServerBinding instance for a given local_folder"""
         if session is None:
             session = self.get_session()
@@ -325,7 +325,7 @@ class Controller(object):
                     % (local_folder, Constants.PRODUCT_NAME))
             return None
 
-    def list_server_bindings(self, session=None):
+    def list_server_bindings(self, session = None):
         if session is None:
             session = self.get_session()
         return session.query(ServerBinding).all()
@@ -363,13 +363,14 @@ class Controller(object):
                         username, server_url)
                 # Update the token info if required
                 server_binding.remote_token = token
+            server_binding.nag_signin = False
 
         except NoResultFound:
             log.info("Binding '%s' to '%s' with account '%s'",
                      local_folder, server_url, username)
             session.add(ServerBinding(local_folder, server_url, username,
-                                      remote_password=password,
-                                      remote_token=token))
+                                      remote_password = password,
+                                      remote_token = token))
 
         # Create the local folder to host the synchronized files: this
         # is useless as long as bind_root is not called
@@ -384,8 +385,8 @@ class Controller(object):
         Local files are not deleted"""
         session = self.get_session()
         local_folder = normalized_path(local_folder)
-        binding = self.get_server_binding(local_folder, raise_if_missing=True,
-                                          session=session)
+        binding = self.get_server_binding(local_folder, raise_if_missing = True,
+                                          session = session)
 
         # Revoke token if necessary
         if binding.remote_token is not None:
@@ -394,7 +395,7 @@ class Controller(object):
                         binding.server_url,
                         binding.remote_user,
                         self.device_id,
-                        token=binding.remote_token)
+                        token = binding.remote_token)
                 log.info("Revoking token for '%s' with account '%s'",
                          binding.server_url, binding.remote_user)
                 nxclient.revoke_token()
@@ -431,8 +432,8 @@ class Controller(object):
         for sb in session.query(ServerBinding).all():
             self.unbind_server(sb.local_folder)
 
-    def get_root_binding(self, local_root, raise_if_missing=False,
-                         session=None):
+    def get_root_binding(self, local_root, raise_if_missing = False,
+                         session = None):
         """Find the RootBinding instance for a given local_root
 
         It is the responsability of the caller to commit any change in
@@ -576,16 +577,16 @@ class Controller(object):
         session = self.get_session()
         local_folder = normalized_path(local_folder)
         server_binding = self.get_server_binding(local_folder,
-                                                 raise_if_missing=True,
-                                                 session=session)
+                                                 raise_if_missing = True,
+                                                 session = session)
 
         # Check the remote root exists and is an editable folder by current
         # user.
         try:
             nxclient = self.get_remote_client(server_binding,
-                                              repository=repository,
-                                              base_folder=remote_root)
-            remote_info = nxclient.get_info('/', fetch_parent_uid=False)
+                                              repository = repository,
+                                              base_folder = remote_root)
+            remote_info = nxclient.get_info('/', fetch_parent_uid = False)
         except NotFound:
             remote_info = None
         if remote_info is None or not remote_info.folderish:
@@ -602,29 +603,29 @@ class Controller(object):
 
         # register the root on the server
         if nxclient.register_as_root(remote_info.uid):
-            self.synchronizer.update_roots(server_binding, session=session,
-                    repository=repository)
+            self.synchronizer.update_roots(server_binding, session = session,
+                    repository = repository)
         else:
             # For the tests only
             self._local_bind_root(server_binding, remote_info, nxclient,
-                    session=session)
+                    session = session)
 
-    def unbind_root(self, local_root, session=None):
+    def unbind_root(self, local_root, session = None):
         """Remove binding on a root folder"""
         local_root = normalized_path(local_root)
         if session is None:
             session = self.get_session()
-        binding = self.get_root_binding(local_root, raise_if_missing=True,
-                                        session=session)
+        binding = self.get_root_binding(local_root, raise_if_missing = True,
+                                        session = session)
 
         nxclient = self.get_remote_client(binding.server_binding,
-                                          repository=binding.remote_repo,
-                                          base_folder=binding.remote_root)
+                                          repository = binding.remote_repo,
+                                          base_folder = binding.remote_root)
         if nxclient.is_addon_installed():
             # unregister the root on the server
             nxclient.unregister_as_root(binding.remote_root)
             self.synchronizer.update_roots(binding.server_binding,
-                    session=session, repository=binding.remote_repo)
+                    session = session, repository = binding.remote_repo)
         else:
             # manual bounding: the server is not aware
             self._local_unbind_root(binding, session)
@@ -658,10 +659,10 @@ class Controller(object):
                 asc(LastKnownState.remote_path),
             ).limit(limit).all()
 
-    def next_pending(self, local_root=None, session=None):
+    def next_pending(self, local_root = None, session = None):
         """Return the next pending file to synchronize or None"""
-        pending = self.list_pending(limit=1, local_root=local_root,
-                                    session=session)
+        pending = self.list_pending(limit = 1, local_root = local_root,
+                                    session = session)
         return pending[0] if len(pending) > 0 else None
 
     def _get_client_cache(self):
@@ -669,8 +670,8 @@ class Controller(object):
             self._local.remote_clients = dict()
         return self._local.remote_clients
 
-    def get_remote_client(self, server_binding, base_folder=None,
-                          repository='default'):
+    def get_remote_client(self, server_binding, base_folder = None,
+                          repository = 'default'):
         cache = self._get_client_cache()
         sb = server_binding
         cache_key = (sb.server_url, sb.remote_user, self.device_id, base_folder,
@@ -680,8 +681,8 @@ class Controller(object):
         if remote_client is None:
             remote_client = self.nuxeo_client_factory(
                 sb.server_url, sb.remote_user, self.device_id,
-                token=sb.remote_token, password=sb.remote_password,
-                base_folder=base_folder, repository=repository)
+                token = sb.remote_token, password = sb.remote_password,
+                base_folder = base_folder, repository = repository)
             cache[cache_key] = remote_client
         # Make it possible to have the remote client simulate any kind of
         # failure
@@ -708,7 +709,7 @@ class Controller(object):
         session = self.get_session()
         try:
             states = session.query(LastKnownState).filter_by(
-                remote_ref=remote_ref,
+                remote_ref = remote_ref,
             ).all()
             for state in states:
                 rb = state.root_binding
@@ -718,7 +719,7 @@ class Controller(object):
                     return state
         except NoResultFound:
             return None
-                
+
     def recover_from_invalid_credentials(self, server_binding, exception, session = None):
         code = getattr(exception, 'code', None)
         if code == 401 or code == 403:
@@ -745,13 +746,13 @@ class Controller(object):
                 return False
         else:
             return False
-    
+
     def get_storage(self, local_folder):
         try:
             return self.storage[local_folder]
         except KeyError:
             return DEFAULT_STORAGE
-    
+
     def launch_file_editor(self, server_url, remote_repo, remote_ref):
         """Find the local file if any and start OS editor on it."""
         state = self.get_state(server_url, remote_repo, remote_ref)
@@ -804,6 +805,6 @@ class Controller(object):
         session = self.get_session()
         for sb in session.query(ServerBinding).all():
             self.storage[sb.local_folder] = DEFAULT_STORAGE
-            
+
     def enable_trace(self, state):
         BaseAutomationClient._enable_trace = state

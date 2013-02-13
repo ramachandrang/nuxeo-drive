@@ -22,8 +22,10 @@ APP_STATE_QUITTING = 'quitting'
 
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 # TODO replace with CloudDesk url and admin(?) account
-DEFAULT_CLOUDDESK_URL = r'https://devdm.sharpb2bcloud.com/app1'
-DEFAULT_ACCOUNT = "user1@st.com"
+DEFAULT_CLOUDDESK_URL = r'https://qadm.sharpb2bcloud.com/app1'
+DEFAULT_ACCOUNT = "user1@qt1.com"
+SERVICE_NAME = 'Cloud Portal Office'
+MAINTENANCE_SERVICE_URL = r'http://HBDISDLW7/Maintenance/MaintenanceSchedule.svc/json/mcd.sharpb2bcloud.com'
 
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
 MY_DOCS = 'My Docs'
@@ -37,6 +39,7 @@ RECENT_FILES_COUNT = 5
 ICON_ANIMATION_DELAY = 200
 ICON_ANIMATION_START_DELAY = 100
 NOTIFICATION_MESSAGE_DELAY = 3  # in seconds
+SERVICE_NOTIFICATION_INTERVAL = 6 * 3600  # six hours
 FDTOKEN_DURATION = 15 * 60
 SYNC_STATUS_STOP = 1
 SYNC_STATUS_START = 2

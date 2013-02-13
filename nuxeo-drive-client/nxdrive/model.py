@@ -76,19 +76,19 @@ class DeviceConfig(Base):
     """
     __tablename__ = 'device_config'
 
-    device_id = Column(String, primary_key=True)
+    device_id = Column(String, primary_key = True)
 
-    def __init__(self, device_id=None):
+    def __init__(self, device_id = None):
         self.device_id = uuid.uuid1().hex if device_id is None else device_id
 
 
 class ServerBinding(Base):
     __tablename__ = 'server_bindings'
 
-    local_folder = Column(String, primary_key=True)
+    local_folder = Column(String, primary_key = True)
     server_url = Column(String)
     remote_user = Column(String)
-    notified = Column(Boolean)
+    nag_signin = Column(Boolean)
     remote_password = Column(String)
     __remote_password = Column('remote_password', String)
     remote_token = Column(String)
@@ -109,10 +109,10 @@ class ServerBinding(Base):
         self.local_folder = local_folder
         self.server_url = server_url
         self.remote_user = remote_user
-        self.notified = False
+        self.nag_signin = False
         # Password is only stored if the server does not support token based authentication
-        # CHANGED: Password IS currently stored for (1) refresh the token when it expires, 
-        # and (2) open the site in the browser. 
+        # CHANGED: Password IS currently stored for (1) refresh the token when it expires,
+        # and (2) open the site in the browser.
         # Password is also encrypted.
         self.remote_password = remote_password
         self.remote_token = remote_token
@@ -166,10 +166,27 @@ class ServerBinding(Base):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def update_server_quota_status(self, used, total, size):
+        if self.quota_exceeded:
+            if total - used > size:
+                self.quota_exceeded = False
+        else:
+            self.quota_exceeded = True
+
+    def update_server_maintenance_status(self, retry_after):
+        # TODO if not in maintenance mode, set the nag flag
+        pass
+
+    def nag_maintenance_schedule(self):
+        return False
+
+    def nag_quota_exceeded(self):
+        return False
+
 class RootBinding(Base):
     __tablename__ = 'root_bindings'
 
-    local_root = Column(String, primary_key=True)
+    local_root = Column(String, primary_key = True)
     remote_repo = Column(String)
     remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
     local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
@@ -243,32 +260,32 @@ class LastKnownState(Base):
     """Aggregate state aggregated from last collected events."""
     __tablename__ = 'last_known_states'
 
-    id = Column(Integer, Sequence('state_id_seq'), primary_key=True)
+    id = Column(Integer, Sequence('state_id_seq'), primary_key = True)
     local_root = Column(String, ForeignKey('root_bindings.local_root'),
-                        index=True)
+                        index = True)
     root_binding = relationship(
         'RootBinding',
-        backref=backref("states", cascade="all, delete-orphan"))
+        backref = backref("states", cascade = "all, delete-orphan"))
 
     # Timestamps to detect modifications
     last_local_updated = Column(DateTime)
     last_remote_updated = Column(DateTime)
 
     # Save the digest too for better updates / moves detection
-    local_digest = Column(String, index=True)
-    remote_digest = Column(String, index=True)
+    local_digest = Column(String, index = True)
+    remote_digest = Column(String, index = True)
 
     # Path from root using unix separator, '/' for the root it-self.
-    path = Column(String, index=True)
+    path = Column(String, index = True)
     remote_path = Column(String)  # for ordering only
 
     # Remote reference (instead of path based lookup)
-    remote_ref = Column(String, index=True)
+    remote_ref = Column(String, index = True)
 
     # Parent path from root / ref for fast children queries,
     # can be None for the root it-self.
-    parent_path = Column(String, index=True)
-    remote_parent_ref = Column(String, index=True)
+    parent_path = Column(String, index = True)
+    remote_parent_ref = Column(String, index = True)
 
     # Names for fast alignment queries
     local_name = Column(String, index = True)
@@ -287,8 +304,8 @@ class LastKnownState(Base):
     remotely_moved_from = Column(String)
     remotely_moved_to = Column(String)
 
-    def __init__(self, local_root, local_info=None, remote_info=None,
-                 local_state='unknown', remote_state='unknown'):
+    def __init__(self, local_root, local_info = None, remote_info = None,
+                 local_state = 'unknown', remote_state = 'unknown'):
         self.local_root = local_root
         if local_info is None and remote_info is None:
             raise ValueError(
@@ -299,7 +316,7 @@ class LastKnownState(Base):
         if remote_info is not None:
             self.update_remote(remote_info)
 
-        self.update_state(local_state=local_state, remote_state=remote_state)
+        self.update_state(local_state = local_state, remote_state = remote_state)
 
     def update_state(self, local_state = None, remote_state = None, status = None):
         if local_state is not None:
@@ -334,12 +351,12 @@ class LastKnownState(Base):
         sb = rb.server_binding
         return factory(
             sb.server_url, sb.remote_user, sb.remote_password,
-            base_folder=rb.remote_root, repository=rb.remote_repo)
+            base_folder = rb.remote_root, repository = rb.remote_repo)
 
     def refresh_local(self, client = None):
         """Update the state from the local filesystem info."""
         client = client if client is not None else self.get_local_client()
-        local_info = client.get_info(self.path, raise_if_missing=False)
+        local_info = client.get_info(self.path, raise_if_missing = False)
         self.update_local(local_info)
         return local_info
 
@@ -401,16 +418,16 @@ class LastKnownState(Base):
 
         # XXX: shall we store local_folderish and remote_folderish to
         # detect such kind of conflicts instead?
-        self.update_state(local_state=local_state)
+        self.update_state(local_state = local_state)
 
-    def refresh_remote(self, client=None, fetch_parent_uid=True):
+    def refresh_remote(self, client = None, fetch_parent_uid = True):
         """Update the state from the remote server info.
 
         Can reuse an existing client to spare some redundant client init HTTP
         request.
         """
         client = client if client is not None else self.get_remote_client()
-        remote_info = client.get_info(self.remote_ref, fetch_parent_uid=fetch_parent_uid, raise_if_missing=False)
+        remote_info = client.get_info(self.remote_ref, fetch_parent_uid = fetch_parent_uid, raise_if_missing = False)
         self.update_remote(remote_info)
         return remote_info
 
@@ -447,7 +464,7 @@ class LastKnownState(Base):
         self.folderish = remote_info.folderish
         self.remote_name = remote_info.name
         self.remote_path = remote_info.path
-        self.update_state(remote_state=remote_state)
+        self.update_state(remote_state = remote_state)
 
     def get_local_abspath(self):
         relative_path = self.path[1:].replace('/', os.path.sep)
@@ -457,20 +474,20 @@ class LastKnownState(Base):
 class FileEvent(Base):
     __tablename__ = 'fileevents'
 
-    id = Column(Integer, Sequence('fileevent_id_seq'), primary_key=True)
+    id = Column(Integer, Sequence('fileevent_id_seq'), primary_key = True)
     local_root = Column(String, ForeignKey('root_bindings.local_root'))
     utc_time = Column(DateTime)
     path = Column(String)
 
     root_binding = relationship("RootBinding")
 
-    def __init__(self, local_root, path, utc_time=None):
+    def __init__(self, local_root, path, utc_time = None):
         self.local_root = local_root
         if utc_time is None:
             utc_time = datetime.utcnow()
 
 
-def init_db(nxdrive_home, echo=False, scoped_sessions=True, poolclass=None):
+def init_db(nxdrive_home, echo = False, scoped_sessions = True, poolclass = None):
     """Return an engine and session maker configured for using nxdrive_home
 
     The database is created in nxdrive_home if missing and the tables
@@ -483,12 +500,12 @@ def init_db(nxdrive_home, echo=False, scoped_sessions=True, poolclass=None):
     """
     # We store the DB as SQLite files in the nxdrive_home folder
     dbfile = os.path.join(normalized_path(nxdrive_home), 'nxdrive.db')
-    engine = create_engine('sqlite:///' + dbfile, echo=echo,
-                           poolclass=poolclass)
+    engine = create_engine('sqlite:///' + dbfile, echo = echo,
+                           poolclass = poolclass)
 
     # Ensure that the tables are properly initialized
     Base.metadata.create_all(engine)
-    maker = sessionmaker(bind=engine)
+    maker = sessionmaker(bind = engine)
     if scoped_sessions:
         maker = scoped_session(maker)
     return engine, maker

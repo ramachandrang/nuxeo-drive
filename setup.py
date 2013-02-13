@@ -3,8 +3,8 @@
 # Copyright (C) 2012 Nuxeo
 #
 
-import os
 import sys
+import os
 from datetime import datetime
 import re
 
@@ -77,7 +77,6 @@ scripts = [script, scriptwzd]
 
 freeze_options = {}
 
-name = SHORT_APP_NAME
 packages = [
     'nxdrive',
     'nxdrive.client',
@@ -90,7 +89,7 @@ packages = [
     'nxdrive.utils',
 ]
 package_data = {
-    'nxdrive.data.icons': ['*.png', '*.gif', '*.svg', '*.ico', '*.icns'],
+    'nxdrive.data.icons': ['*.png', '*.svg', '*.ico', '*.icns'],
     'nxdrive.data': ['*.txt', '*.xml'],
 }
 
@@ -105,7 +104,7 @@ osx_icon = os.path.join(icons_home, 'nuxeo_drive_app_icon_128.icns')
 if sys.platform == 'win32':
     icon = win_icon
 elif sys.platform == 'darwin':
-    icon = osx_icon
+    icon = png_icon
 else:
     icon = png_icon
 
@@ -158,6 +157,7 @@ includes = [
     "sqlalchemy.dialects.sqlite",
 ]
 
+
 if '--freeze' in sys.argv:
     print "Building standalone executable..."
     sys.argv.remove('--freeze')
@@ -166,6 +166,7 @@ if '--freeze' in sys.argv:
     # build_exe does not seem to take the package_dir info into account
     sys.path.append('nuxeo-drive-client')
 
+#    executables = [Executable(script, base=None)]
     executables = []
 
     if sys.platform == "win32":
@@ -242,7 +243,7 @@ elif sys.platform == 'darwin':
                     ('nxdrive/data', others_files)],
         options = dict(
             py2app = dict(
-                iconfile = osx_icon,
+                iconfile = png_icon,
                 argv_emulation = False,  # We use QT for URL scheme handling
                 plist = dict(
                     CFBundleDisplayName = APP_NAME,
@@ -268,12 +269,12 @@ setup(
     description = "Desktop synchronization client for %s." % PRODUCT_NAME,
     author = "SHARP",
     author_email = "contact@sharplabs.com",
-    url = 'https://github.com/SharpCD/clouddesk_applications.git',
+    url = 'https://github.com/SharpCD/clouddesk_drive.git',
     packages = packages,
     package_dir = {'nxdrive': 'nuxeo-drive-client/nxdrive'},
     package_data = package_data,
     scripts = scripts,
-    long_description = open('README.rtf').read(),
+    long_description = open('README.rst').read(),
     **freeze_options
 )
 
