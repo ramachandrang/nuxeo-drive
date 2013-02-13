@@ -5,9 +5,11 @@ import platform
 import base64
 import json
 import urllib2
+import urlparse
 import mimetypes
 import random
 import time
+import string
 from datetime import datetime
 from urllib import urlencode
 from cookielib import CookieJar
@@ -688,17 +690,25 @@ class BaseAutomationClient(object):
 
         return retry_after, schedules
 
-    def get_maintenance_schedule(self, e):
-        headers = {}
-        headers.update(self._get_common_headers())
-        req = urllib2.Request(r'http://HBDISDLW7/CloudPortalDown/Default.aspx', headers = headers)
+    def get_maintenance_schedule(self, server_binding):
+        loc = urlparse.urlsplit(server_binding.server_url)
+        req = urllib2.Request(urlparse.urljoin(Constants.MAINTENANCE_SERVICE_URL, loc))
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
-        retry_after = 0
-        schedules = None
+
         try:
             resp = self.opener.open(req)
             # --- BEGIN DEBUG ----
             self.log_response(resp)
             # ---- END DEBUG -----
+            # extract the json payload as it is wrapped insode a <string><.string>!
+            data = resp.read()
+            data = string.replace(data, '<string>', '')
+            data = string.replace(data, '</string>', '')
+            schedules = json.loads(data)
+        except Exception:
+            schedules = None
+            
+        return schedules
+    

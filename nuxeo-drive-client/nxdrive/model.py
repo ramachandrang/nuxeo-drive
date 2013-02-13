@@ -1,7 +1,7 @@
 import os
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
@@ -89,6 +89,11 @@ class ServerBinding(Base):
     server_url = Column(String)
     remote_user = Column(String)
     nag_signin = Column(Boolean)
+    quota_exceeded = Column(Boolean)
+    maintenance = Column(Boolean)
+    next_nag_quota = Column(DateTime)
+    next_nag_maintenance = Column(DateTime)
+    next_maintenance_check = Column(DateTime)
     remote_password = Column(String)
     __remote_password = Column('remote_password', String)
     remote_token = Column(String)
@@ -174,14 +179,36 @@ class ServerBinding(Base):
             self.quota_exceeded = True
 
     def update_server_maintenance_status(self, retry_after):
-        # TODO if not in maintenance mode, set the nag flag
-        pass
+        # TODO if not in maintenance mode, set the maintenance status
+        if retry_after > 0:
+            self.maintenance = True
+        else:
+            self.maintenance = False
+        self.next_maintenance_check = datetime.now() + timedelta(seconds=retry_after)
+        
+    def update_server_maintenance_schedule(self):
+        self.next_nag_maintenance = datetime.now() + timedelta(seconds=Constants.SERVICE_NOTIFICATION_INTERVAL)
 
     def nag_maintenance_schedule(self):
-        return False
-
+        if self.maintenance:
+            return False
+        elif not self.maintenance and datetime.now() > self.next_nag_maintenance:
+            return True
+            
+    def maintenance_check(self):
+        if self.maintenance and datetime.now() > self.next_maintenance_check:
+            self.maintenance = False
+            self.next_maintenance_check = datetime.now()
+            return True
+        else:
+            return False
+            
     def nag_quota_exceeded(self):
-        return False
+        if self.quota_exceeded and datetime.now() > self.nag_quota_exceeded():
+            self.nag_quota_exceeded = datetime.now() + timedelta(seconds=Constants.SERVICE_NOTIFICATION_INTERVAL)
+            return True
+        else:
+            return False
 
 class RootBinding(Base):
     __tablename__ = 'root_bindings'

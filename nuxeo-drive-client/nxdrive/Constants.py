@@ -25,7 +25,7 @@ DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 DEFAULT_CLOUDDESK_URL = r'https://qadm.sharpb2bcloud.com/app1'
 DEFAULT_ACCOUNT = "user1@qt1.com"
 SERVICE_NAME = 'Cloud Portal Office'
-MAINTENANCE_SERVICE_URL = r'http://HBDISDLW7/Maintenance/MaintenanceSchedule.svc/json/mcd.sharpb2bcloud.com'
+MAINTENANCE_SERVICE_URL = r'http://HBDISDLW7/Maintenance/MaintenanceSchedule.svc/json/'
 
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
 MY_DOCS = 'My Docs'

@@ -461,10 +461,15 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         pass
 
     def notify_maintenance_schedule(self, msg):
-        # TODO update menu, icon
-
         self.communicator.message.emit(Constants.APP_NAME, msg,
                                        QtGui.QSystemTrayIcon.Information)
+        
+    def notify_maintenance_mode(self):
+        # TODO update menu, icon
+        
+        self.communicator.message.emit(Constants.APP_NAME,
+                                       self.tr('%s is unavailable for maintenance') % Constants.PRODUCT_NAME,
+                                       QtGui.QSystemTrayIcon.Warning)        
 
     def notify_quota_exceeded(self):
         self.communicator.message.emit(Constants.APP_NAME,

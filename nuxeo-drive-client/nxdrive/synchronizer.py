@@ -8,6 +8,7 @@ import socket
 import httplib
 import psutil
 from collections import defaultdict, Iterable
+from threading import Timer
 
 from sqlalchemy import not_
 from sqlalchemy import or_
@@ -829,8 +830,11 @@ class Synchronizer(object):
         previous_time = time()
         self.service_notification_time = previous_time
         session = self.get_session()
+        # start a timer for nagging notifications
+        self.timer = Timer(5 * 60, self.fire_notifications, args=[self, session,])
+        self.timer.start(
+                         )
         self.loop_count = 0
-
         self.get_folders()
 
         try:
@@ -901,6 +905,8 @@ class Synchronizer(object):
             # potentially quit the app
             if self._frontend is not None:
                 self._frontend.notify_sync_stopped()
+            self.timer.cancel()    
+            
 
     def _get_remote_changes(self, server_binding, session = None):
         """Fetch incremental change summary from the server"""
@@ -1590,4 +1596,23 @@ class Synchronizer(object):
 
         return (0, 0)
 
-
+    def fire_notifications(self, synchronizer, session):
+        server_bindings = session.query(ServerBinding).all()
+        for sb in server_bindings:
+            if sb.nag_maintenance_schedule():
+                remote_client = synchronizer._controller.get_remote_client(sb)
+                schedules = remote_client.get_maintenance_schedule(sb)
+                if schedules is not None:
+                    sb.update_server_maintenance_schedule()
+                    if synchronizer._frontend is not None:
+                        synchronizer._frontend.notify_maintenance_schedule(get_maintenance_message(schedules))
+                        
+            if sb.nag_quota_exceeded():
+                if synchronizer._frontend is not None:
+                    synchronizer._frontend.notify_quota_exceeded()
+                    
+            if sb.maintenance_check():
+                if synchronizer._frontend is not None:
+                    synchronizer._frontend.notify_quota_exceeded()           
+                    
+        self.timer.start()     
