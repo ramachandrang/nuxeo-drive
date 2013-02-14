@@ -35,9 +35,10 @@ import org.nuxeo.runtime.api.Framework;
 /**
  * Gets the children of the top level {@link FolderItem} for the currently
  * authenticated user.
- *
+ * @deprecated use NuxeoDriveGetTopLevelFolder and the NuxeoDriveGetChildren operations instead
  * @author Antoine Taillefer
  */
+@Deprecated
 @Operation(id = NuxeoDriveGetTopLevelChildren.ID, category = Constants.CAT_SERVICES, label = "Nuxeo Drive: Get top level children")
 public class NuxeoDriveGetTopLevelChildren {
 

@@ -58,10 +58,12 @@ class RemoteDocumentClient(BaseAutomationClient):
     # which is specific to RemoteDocumentClient
     def __init__(self, server_url, user_id, device_id,
                  password=None, token=None, repository="default",
-                 ignored_prefixes=None, ignored_suffixes=None, base_folder=None):
-        super(RemoteDocumentClient, self).__init__(server_url, user_id, device_id,
-                                                   password, token, repository,
-                                                   ignored_prefixes, ignored_suffixes)
+                 ignored_prefixes=None, ignored_suffixes=None,
+                base_folder=None, timeout=5):
+        super(RemoteDocumentClient, self).__init__(
+            server_url, user_id, device_id, password, token, repository,
+            ignored_prefixes, ignored_suffixes, timeout=timeout)
+
         # fetch the root folder ref
         self.base_folder = base_folder
         if base_folder is not None:
@@ -313,9 +315,3 @@ class RemoteDocumentClient(BaseAutomationClient):
         self.execute("NuxeoDrive.SetSynchronization", input="doc:" + ref,
                      enable=False)
         return True
-
-    def get_changes(self, last_sync_date=None, last_root_definitions=None):
-        return self.execute(
-            'NuxeoDrive.GetChangeSummary',
-            lastSyncDate=last_sync_date,
-            lastSyncActiveRootDefinitions=last_root_definitions)

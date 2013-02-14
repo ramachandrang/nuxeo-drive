@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2012 Nuxeo SA (http://nuxeo.com/) and contributors.
+ * (C) Copyright 2013 Nuxeo SA (http://nuxeo.com/) and contributors.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the GNU Lesser General Public License
@@ -16,58 +16,38 @@
  */
 package org.nuxeo.drive.operations;
 
-import java.io.StringWriter;
-
 import org.codehaus.jackson.map.ObjectMapper;
-import org.nuxeo.drive.adapter.FileSystemItem;
+import org.nuxeo.drive.adapter.FolderItem;
 import org.nuxeo.drive.service.FileSystemItemManager;
 import org.nuxeo.ecm.automation.OperationContext;
 import org.nuxeo.ecm.automation.core.Constants;
 import org.nuxeo.ecm.automation.core.annotations.Context;
 import org.nuxeo.ecm.automation.core.annotations.Operation;
 import org.nuxeo.ecm.automation.core.annotations.OperationMethod;
-import org.nuxeo.ecm.automation.core.annotations.Param;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.impl.blob.StreamingBlob;
 import org.nuxeo.runtime.api.Framework;
 
 /**
- * Moves the {@link FileSystemItem} with the given source id to the
- * {@link FileSystemItem} with the given destination id for the currently
- * authenticated user.
- *
- * @author Antoine Taillefer
+ * Gets of the top level {@link FolderItem} for the currently authenticated user.
+ * @author Olivier Grisel
  */
-@Operation(id = NuxeoDriveMove.ID, category = Constants.CAT_SERVICES, label = "Nuxeo Drive: Move")
-public class NuxeoDriveMove {
+@Operation(id = NuxeoDriveGetTopLevelFolder.ID, category = Constants.CAT_SERVICES, label = "Nuxeo Drive: Get the top level folder")
+public class NuxeoDriveGetTopLevelFolder {
 
-    public static final String ID = "NuxeoDrive.Move";
+    public static final String ID = "NuxeoDrive.GetTopLevelFolder";
 
     @Context
     protected OperationContext ctx;
-
-    @Param(name = "srcId")
-    protected String srcId;
-
-    @Param(name = "destId")
-    protected String destId;
 
     @OperationMethod
     public Blob run() throws Exception {
 
         FileSystemItemManager fileSystemItemManager = Framework.getLocalService(FileSystemItemManager.class);
-        FileSystemItem fsItem = fileSystemItemManager.move(srcId, destId,
-                ctx.getPrincipal());
-
-        // Commit transaction explicitly to ensure client-side consistency
-        // TODO: remove when https://jira.nuxeo.com/browse/NXP-10964 is fixed
-        NuxeoDriveOperationHelper.commitTransaction();
-
+        FolderItem topLevelFolder = fileSystemItemManager.getTopLevelFolder(ctx.getPrincipal());
         ObjectMapper mapper = new ObjectMapper();
-        StringWriter writer = new StringWriter();
-        mapper.writeValue(writer, fsItem);
-        return StreamingBlob.createFromString(writer.toString(),
-                "application/json");
+        return StreamingBlob.createFromString(
+                mapper.writeValueAsString(topLevelFolder), "application/json");
     }
 
 }

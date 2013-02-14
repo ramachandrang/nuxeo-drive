@@ -20,6 +20,7 @@ import java.security.Principal;
 
 import org.nuxeo.drive.adapter.FileSystemItem;
 import org.nuxeo.drive.adapter.FolderItem;
+import org.nuxeo.drive.adapter.impl.AbstractFileSystemItem;
 import org.nuxeo.drive.adapter.impl.DefaultTopLevelFolderItem;
 import org.nuxeo.drive.service.TopLevelFolderItemFactory;
 import org.nuxeo.ecm.core.api.ClientException;
@@ -68,6 +69,12 @@ public class DefaultTopLevelFolderItemFactory implements
     @Override
     public FileSystemItem getFileSystemItem(DocumentModel doc)
             throws ClientException {
+        return getFileSystemItem(doc, false);
+    }
+
+    @Override
+    public FileSystemItem getFileSystemItem(DocumentModel doc,
+            boolean includeDeleted) throws ClientException {
         throw new UnsupportedOperationException(
                 "Cannot get the file system item for a given document from a TopLevelFolderItemFactory.");
     }
@@ -75,13 +82,19 @@ public class DefaultTopLevelFolderItemFactory implements
     @Override
     public FileSystemItem getFileSystemItem(DocumentModel doc, String parentId)
             throws ClientException {
+        return getFileSystemItem(doc, parentId, false);
+    }
+
+    @Override
+    public FileSystemItem getFileSystemItem(DocumentModel doc, String parentId,
+            boolean includeDeleted) throws ClientException {
         throw new UnsupportedOperationException(
                 "Cannot get the file system item for a given document from a TopLevelFolderItemFactory.");
     }
 
     @Override
     public boolean canHandleFileSystemItemId(String id) {
-        return (getName() + "/").equals(id);
+        return (getName() + AbstractFileSystemItem.FILE_SYSTEM_ITEM_ID_SEPARATOR).equals(id);
     }
 
     @Override
