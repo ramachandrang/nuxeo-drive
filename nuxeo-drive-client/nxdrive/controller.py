@@ -12,11 +12,16 @@ import base64
 import socket
 import httplib
 import subprocess
+from datetime import datetime
+from datetime import timedelta
 import logging
 
 import nxdrive
-from nxdrive.client import BaseAutomationClient
+from nxdrive.client import Unauthorized
 from nxdrive.client import NuxeoClient
+from nxdrive.client import LocalClient
+from nxdrive.client import safe_filename
+from nxdrive.client import BaseAutomationClient
 from nxdrive.client import NotFound
 from nxdrive.client import Unauthorized
 from nxdrive.model import init_db
@@ -26,6 +31,7 @@ from nxdrive.model import LastKnownState
 from nxdrive.model import SyncFolders
 from nxdrive.model import RootBinding
 from nxdrive.synchronizer import Synchronizer
+from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
 from nxdrive import Constants
@@ -407,9 +413,12 @@ class Controller(object):
                 log.info("Revoking token for '%s' with account '%s'",
                          binding.server_url, binding.remote_user)
                 nxclient.revoke_token()
-            except Unauthorized:
+            except POSSIBLE_NETWORK_ERROR_TYPES:
                 log.warning("Could not connect to server '%s' to revoke token",
                             binding.server_url)
+            except Unauthorized:
+                # Token is already revoked
+                pass
 
         # Invalidate client cache
         self.invalidate_client_cache(binding.server_url)
@@ -618,7 +627,58 @@ class Controller(object):
             self._local_bind_root(server_binding, remote_info, nxclient,
                     session = session)
 
-    def unbind_root(self, local_root, session = None):
+    def _local_bind_root(self, server_binding, remote_info, nxclient, session):
+        # Check that this workspace does not already exist locally
+        # TODO: shall we handle deduplication for root names too?
+        local_root = os.path.join(server_binding.local_folder,
+                                  safe_filename(remote_info.name))
+        repository = nxclient.repository
+        if not os.path.exists(local_root):
+            os.makedirs(local_root)
+        lcclient = LocalClient(local_root)
+        local_info = lcclient.get_info('/')
+
+        try:
+            existing_binding = session.query(RootBinding).filter_by(
+                local_root=local_root,
+            ).one()
+            if (existing_binding.remote_repo != repository
+                or existing_binding.remote_root != remote_info.uid):
+                raise RuntimeError(
+                    "%r is already bound to %r on repo %r of %r" % (
+                        local_root,
+                        existing_binding.remote_root,
+                        existing_binding.remote_repo,
+                        existing_binding.server_binding.server_url))
+        except NoResultFound:
+            # Register the new binding itself
+            log.info("Binding local root '%s' to '%s' (id=%s) on server '%s'",
+                 local_root, remote_info.name, remote_info.uid,
+                     server_binding.server_url)
+            session.add(RootBinding(local_root, repository, remote_info.uid))
+
+            # Initialize the metadata of the root and let the synchronizer
+            # scan the folder recursively
+            state = LastKnownState(server_binding.local_folder,
+                    lcclient.base_folder, local_info=local_info,
+                    remote_info=remote_info)
+            if remote_info.folderish:
+                # Mark as synchronized as there is nothing to download later
+                state.update_state(local_state='synchronized',
+                        remote_state='synchronized')
+            else:
+                # Mark remote as updated to trigger a download of the binary
+                # attachment during the next synchro
+                state.update_state(local_state='synchronized',
+                                remote_state='modified')
+            session.add(state)
+            self.synchronizer.scan_local(server_binding, from_state=state,
+                session=session)
+            self.synchronizer.scan_remote(server_binding, from_state=state,
+                session=session)
+            session.commit()
+
+    def unbind_root(self, local_root, session=None):
         """Remove binding on a root folder"""
         local_root = normalized_path(local_root)
         if session is None:
@@ -643,34 +703,63 @@ class Controller(object):
         # TODO
         raise NotImplementedError()
 
-    def list_pending(self, limit = 100, local_root = None, session = None):
+    def update_server_roots(self, server_binding, session, local_roots,
+            remote_roots, repository):
+        """Align the roots for a given server and repository"""
+        local_roots_by_id = dict((r.remote_root, r) for r in local_roots)
+        local_root_ids = set(local_roots_by_id.keys())
+
+        remote_roots_by_id = dict((r.uid, r) for r in remote_roots)
+        remote_root_ids = set(remote_roots_by_id.keys())
+
+        to_remove = local_root_ids - remote_root_ids
+        to_add = remote_root_ids - local_root_ids
+
+        for ref in to_remove:
+            self._local_unbind_root(local_roots_by_id[ref], session)
+
+        for ref in to_add:
+            # get a client with the right base folder
+            rc = self.get_remote_client(server_binding,
+                                        repository=repository,
+                                        base_folder=ref)
+            self._local_bind_root(server_binding, remote_roots_by_id[ref],
+                                  rc, session)
+
+    def list_pending(self, limit=100, local_folder=None, ignore_in_error=None,
+                     session=None):
         """List pending files to synchronize, ordered by path
 
         Ordering by path makes it possible to synchronize sub folders content
         only once the parent folders have already been synchronized.
+
+        If ingore_in_error is not None and is a duration in second, skip pair
+        states states that have recently triggered a synchronization error.
         """
         if session is None:
             session = self.get_session()
-        if local_root is not None:
-            return session.query(LastKnownState).filter(
-                LastKnownState.pair_state != 'synchronized',
-                LastKnownState.local_root == local_root
-            ).order_by(
-                asc(LastKnownState.path),
-                asc(LastKnownState.remote_path),
-            ).limit(limit).all()
-        else:
-            return session.query(LastKnownState).filter(
-                LastKnownState.pair_state != 'synchronized'
-            ).order_by(
-                asc(LastKnownState.path),
-                asc(LastKnownState.remote_path),
-            ).limit(limit).all()
 
-    def next_pending(self, local_root = None, session = None):
+        predicates = [LastKnownState.pair_state != 'synchronized']
+        if local_folder is not None:
+            predicates.append(LastKnownState.local_folder == local_folder)
+
+        if ignore_in_error is not None and ignore_in_error > 0:
+            max_date = datetime.utcnow() - timedelta(seconds=ignore_in_error)
+            predicates.append(or_(
+                LastKnownState.last_sync_error_date == None,
+                LastKnownState.last_sync_error_date < max_date))
+
+        return session.query(LastKnownState).filter(
+            *predicates
+        ).order_by(
+            asc(LastKnownState.path),
+            asc(LastKnownState.remote_path),
+        ).limit(limit).all()
+
+    def next_pending(self, local_folder=None, session=None):
         """Return the next pending file to synchronize or None"""
-        pending = self.list_pending(limit = 1, local_root = local_root,
-                                    session = session)
+        pending = self.list_pending(limit=1, local_folder=local_folder,
+                                    session=session)
         return pending[0] if len(pending) > 0 else None
 
     def _get_client_cache(self):
@@ -745,6 +834,13 @@ class Controller(object):
         except NoResultFound:
             return None
 
+    def get_state_for_local_path(self, local_path):
+        """Find a DB state from a local filesystem path"""
+        session = self.get_session()
+        rb, path = self._binding_path(local_path, session=session)
+        return session.query(LastKnownState).filter_by(
+            local_root=rb.local_root, path=path).one()
+
     def recover_from_invalid_credentials(self, server_binding, exception, session = None):
         code = getattr(exception, 'code', None)
         if code == 401 or code == 403:
@@ -776,7 +872,10 @@ class Controller(object):
         try:
             storage_key = (url, user_id)
             used, total = self.storage[storage_key]
-            return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
+            if total == 0:
+                return None
+            else:
+                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
         except KeyError:
             return None
 

@@ -184,8 +184,10 @@ class BaseAutomationClient(object):
     cookiejar = CookieJar()
 
     def __init__(self, server_url, user_id, device_id,
-                 password = None, token = None, repository = "default",
-                 ignored_prefixes = None, ignored_suffixes = None):
+                 password=None, token=None, repository="default",
+                 ignored_prefixes=None, ignored_suffixes=None,
+                 timeout=5):
+        self.timeout = timeout
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -258,6 +260,9 @@ class BaseAutomationClient(object):
             " with user %r"
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
+            req = urllib2.Request(self.automation_url, headers=headers)
+            response = json.loads(self.opener.open(
+                req, timeout=self.timeout).read())
             req = urllib2.Request(self.automation_url, headers = headers)
             # --- BEGIN DEBUG ----
             self.log_request(req)
@@ -326,7 +331,7 @@ class BaseAutomationClient(object):
         self.log_request(req)
         # ---- END DEBUG -----
         try:
-            resp = self.opener.open(req)
+            resp = self.opener.open(req, timeout=self.timeout)
         except urllib2.HTTPError as e:
             # NOTE cannot rewind the error stream from maintenance server!
 #            self._log_details(e)
@@ -448,7 +453,7 @@ class BaseAutomationClient(object):
         self.log_request(req)
         # ---- END DEBUG -----
         try:
-            resp = self.opener.open(req)
+            resp = self.opener.open(req, timeout=self.timeout)
             # --- BEGIN DEBUG ----
 #            from StringIO import StringIO
 #            msg = '{ "entity-type": "exception",\
@@ -537,16 +542,8 @@ class BaseAutomationClient(object):
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
-            req = urllib2.Request(url, headers = headers)
-            BaseAutomationClient.cookiejar.add_cookie_header(req)
-            # --- BEGIN DEBUG ----
-            self.log_request(req)
-            # ---- END DEBUG -----
-            resp = self.opener.open(req)
-            # --- BEGIN DEBUG ----
-            self.log_response(resp)
-            # ---- END DEBUG -----
-            token = resp.read()
+            req = urllib2.Request(url, headers=headers)
+            token = self.opener.open(req, timeout=self.timeout).read()
         except urllib2.HTTPError as e:
             self._log_details(e)
             if e.code == 401 or e.code == 403:
@@ -704,8 +701,11 @@ class BaseAutomationClient(object):
             # ---- END DEBUG -----
             # extract the json payload as it is wrapped insode a <string><.string>!
             data = resp.read()
-            data = string.replace(data, '<string>', '')
-            data = string.replace(data, '</string>', '')
+            # NOTE Workaround this response which is supposed to be JSON but it looks like this
+            # <?xml version="1.0" encoding="utf-8"?><string>...json data...</string>
+            # and the Content-Type is 'application/xml'
+            data = data.partition('<string>')[2]
+            data = data.rpartition('</string')[0]
             schedules = json.loads(data)
         except Exception, e:
             log.debug('error retrieving schedule: %s', str(e))

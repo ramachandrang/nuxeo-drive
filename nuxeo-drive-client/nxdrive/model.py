@@ -134,7 +134,7 @@ class ServerBinding(Base):
             self.fdtoken_creation_date = fdtoken_creation_date
         # Used to re-generate the federated token (expires in 15min by default)
         self.password_hash = password_hash
-        self.total_storage = 1000000000
+        self.total_storage = 0
         self.used_storage = 0
 
     @declared_attr
@@ -307,7 +307,16 @@ class LastKnownState(Base):
     """Aggregate state aggregated from last collected events."""
     __tablename__ = 'last_known_states'
 
-    id = Column(Integer, Sequence('state_id_seq'), primary_key = True)
+    id = Column(Integer, Sequence('state_id_seq'), primary_key=True)
+
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder'),
+                          index=True)
+    server_binding = relationship(
+        'ServerBinding',
+        backref=backref("states", cascade="all, delete-orphan"))
+
+    # To be deprecated / merged with local server when we swicth to the
+    # filesystem item API
     local_root = Column(String, ForeignKey('root_bindings.local_root'),
                         index = True)
     root_binding = relationship(
@@ -351,8 +360,14 @@ class LastKnownState(Base):
     remotely_moved_from = Column(String)
     remotely_moved_to = Column(String)
 
-    def __init__(self, local_root, local_info = None, remote_info = None,
-                 local_state = 'unknown', remote_state = 'unknown'):
+    # Log date of sync errors to be able to skip documents in error for some
+    # time
+    last_sync_error_date = Column(DateTime)
+
+    def __init__(self, local_folder, local_root, local_info=None,
+                 remote_info=None, local_state='unknown',
+                 remote_state='unknown'):
+        self.local_folder = local_folder
         self.local_root = local_root
         if local_info is None and remote_info is None:
             raise ValueError(
@@ -365,10 +380,10 @@ class LastKnownState(Base):
 
         self.update_state(local_state = local_state, remote_state = remote_state)
 
-    def update_state(self, local_state = None, remote_state = None, status = None):
-        if local_state is not None:
+    def update_state(self, local_state=None, remote_state=None):
+        if local_state is not None and self.local_state != local_state:
             self.local_state = local_state
-        if remote_state is not None:
+        if remote_state is not None and self.remote_state != remote_state:
             self.remote_state = remote_state
 
         # Detect heuristically aligned situations
@@ -379,7 +394,9 @@ class LastKnownState(Base):
                 self.remote_state = 'synchronized'
 
         pair = (self.local_state, self.remote_state)
-        self.pair_state = PAIR_STATES.get(pair, 'unknown')
+        pair_state = PAIR_STATES.get(pair, 'unknown')
+        if self.pair_state != pair_state:
+            self.pair_state = pair_state
 
     def __repr__(self):
         return ("LastKnownState<local_root=%r, path=%r, "
@@ -534,6 +551,22 @@ class FileEvent(Base):
             utc_time = datetime.utcnow()
 
 
+class ServerEvent(Base):
+    __tablename__ = 'serverevents'
+
+    id = Column(Integer, Sequence('serverevent_id_seq'), primary_key = True)
+    local_folder = Column(String, ForeignKey('server_bindings.local_folder'))
+    utc_time = Column(DateTime)
+    message = Column(String)
+
+    server_binding = relationship("ServerBinding")
+
+    def __init__(self, local_folder, message, utc_time = None):
+        self.local_folder = local_folder
+        if utc_time is None:
+            utc_time = datetime.utcnow()
+            
+            
 def init_db(nxdrive_home, echo = False, scoped_sessions = True, poolclass = None):
     """Return an engine and session maker configured for using nxdrive_home
 

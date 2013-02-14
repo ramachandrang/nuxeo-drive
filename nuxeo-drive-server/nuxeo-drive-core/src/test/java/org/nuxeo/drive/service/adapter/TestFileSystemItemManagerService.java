@@ -50,6 +50,8 @@ import org.nuxeo.ecm.core.api.security.ACE;
 import org.nuxeo.ecm.core.api.security.ACL;
 import org.nuxeo.ecm.core.api.security.ACP;
 import org.nuxeo.ecm.core.api.security.SecurityConstants;
+import org.nuxeo.ecm.core.storage.sql.DatabaseHelper;
+import org.nuxeo.ecm.core.storage.sql.DatabaseMySQL;
 import org.nuxeo.ecm.core.test.TransactionalFeature;
 import org.nuxeo.ecm.platform.test.PlatformFeature;
 import org.nuxeo.ecm.platform.usermanager.NuxeoPrincipalImpl;
@@ -217,6 +219,10 @@ public class TestFileSystemItemManagerService {
         assertFalse(fileSystemItemManagerService.exists(
                 DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + notAFileSystemItem.getId(),
                 principal));
+        // Deleted
+        custom.followTransition("delete");
+        assertFalse(fileSystemItemManagerService.exists(
+                DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + custom.getId(), principal));
 
         // ------------------------------------------------------
         // Check #getFileSystemItemById
@@ -236,7 +242,7 @@ public class TestFileSystemItemManagerService {
         assertTrue(((FolderItem) fsItem).getCanCreateChild());
         List<FileSystemItem> children = ((FolderItem) fsItem).getChildren();
         assertNotNull(children);
-        assertEquals(5, children.size());
+        assertEquals(4, children.size());
 
         // File
         fsItem = fileSystemItemManagerService.getFileSystemItemById(
@@ -287,6 +293,10 @@ public class TestFileSystemItemManagerService {
                 principal);
         assertNull(fsItem);
 
+        // Deleted
+        assertNull(fileSystemItemManagerService.getFileSystemItemById(
+                DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + custom.getId(), principal));
+
         // Sub folder
         fsItem = fileSystemItemManagerService.getFileSystemItemById(
                 DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + subFolder.getId(),
@@ -307,46 +317,21 @@ public class TestFileSystemItemManagerService {
         // ------------------------------------------------------
         // Check #getChildren
         // ------------------------------------------------------
+        // Need to flush VCS cache for the session obtained by
+        // FileSystemItemManager#getSession(String repositoryName, Principal
+        // principal) in DocumentBackedFolderItem#getChildren() to be aware of
+        // changes in the current session
+        session.save();
         children = fileSystemItemManagerService.getChildren(
                 DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folder.getId(), principal);
         assertNotNull(children);
-        assertEquals(5, children.size());
-        FileSystemItem child = children.get(0);
-        assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + file.getId(),
-                child.getId());
-        assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folder.getId(),
-                child.getParentId());
-        assertEquals("Joe.odt", child.getName());
-        assertFalse(child.isFolder());
-        child = children.get(1);
-        assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + note.getId(),
-                child.getId());
-        assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folder.getId(),
-                child.getParentId());
-        assertEquals("aNote.txt", child.getName());
-        assertFalse(child.isFolder());
-        child = children.get(2);
-        assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + custom.getId(),
-                child.getId());
-        assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folder.getId(),
-                child.getParentId());
-        assertEquals("Bonnie's file.odt", child.getName());
-        assertFalse(child.isFolder());
-        child = children.get(3);
-        assertEquals(
-                DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folderishFile.getId(),
-                child.getId());
-        assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folder.getId(),
-                child.getParentId());
-        assertEquals("Sarah's folderish file", child.getName());
-        assertTrue(child.isFolder());
-        child = children.get(4);
-        assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + subFolder.getId(),
-                child.getId());
-        assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folder.getId(),
-                child.getParentId());
-        assertEquals("Tony's sub folder", child.getName());
-        assertTrue(child.isFolder());
+
+        assertEquals(4, children.size());
+        // Don't check children order against MySQL database because of the
+        // milliseconds limitation
+        boolean ordered = !(DatabaseHelper.DATABASE instanceof DatabaseMySQL);
+        checkChildren(children, folder.getId(), file.getId(), note.getId(),
+                folderishFile.getId(), subFolder.getId(), ordered);
 
         children = fileSystemItemManagerService.getChildren(
                 DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + subFolder.getId(),
@@ -421,7 +406,7 @@ public class TestFileSystemItemManagerService {
                 newFolderItem.getParentId());
         assertEquals("A new folder", newFolderItem.getName());
         DocumentModelList folderChildren = session.query(String.format(
-                "select * from Document where ecm:parentId = '%s' order by dc:created desc",
+                "select * from Document where ecm:parentId = '%s' and ecm:primaryType = 'Folder' order by dc:title asc",
                 folder.getId()));
         DocumentModel newFolder = folderChildren.get(0);
         assertTrue(newFolder.isFolder());
@@ -628,6 +613,73 @@ public class TestFileSystemItemManagerService {
         }
         session.setACP(doc.getRef(), acp, true);
         session.save();
+    }
+
+    protected void checkChildren(List<FileSystemItem> folderChildren,
+            String folderId, String fileId, String noteId,
+            String folderishFileId, String subFolderId, boolean ordered)
+            throws Exception {
+
+        boolean isFileFound = false;
+        boolean isNoteFound = false;
+        boolean isFolderishFileFound = false;
+        boolean isSubFolderFound = false;
+        int childrenCount = 0;
+
+        for (FileSystemItem fsItem : folderChildren) {
+            // Check File
+            if (!isFileFound
+                    && (DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + fileId).equals(fsItem.getId())) {
+                if (!ordered || ordered && childrenCount == 0) {
+                    assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folderId,
+                            fsItem.getParentId());
+                    assertEquals("Joe.odt", fsItem.getName());
+                    assertFalse(fsItem.isFolder());
+                    isFileFound = true;
+                    childrenCount++;
+                }
+            }
+            // Check Note
+            else if (!isNoteFound
+                    && (DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + noteId).equals(fsItem.getId())) {
+                if (!ordered || ordered && childrenCount == 1) {
+                    assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folderId,
+                            fsItem.getParentId());
+                    assertEquals("aNote.txt", fsItem.getName());
+                    assertFalse(fsItem.isFolder());
+                    isNoteFound = true;
+                    childrenCount++;
+                }
+            }
+            // Check folderish File
+            else if (!isFolderishFileFound
+                    && (DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folderishFileId).equals(fsItem.getId())) {
+                if (!ordered || ordered && childrenCount == 3) {
+                    assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folderId,
+                            fsItem.getParentId());
+                    assertEquals("Sarah's folderish file", fsItem.getName());
+                    assertTrue(fsItem.isFolder());
+                    isFolderishFileFound = true;
+                    childrenCount++;
+                }
+            }
+            // Check sub-Folder
+            else if (!isSubFolderFound
+                    && (DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + subFolderId).equals(fsItem.getId())) {
+                if (!ordered || ordered && childrenCount == 4) {
+                    assertEquals(DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + folderId,
+                            fsItem.getParentId());
+                    assertEquals("Tony's sub folder", fsItem.getName());
+                    assertTrue(fsItem.isFolder());
+                    isSubFolderFound = true;
+                    childrenCount++;
+                }
+            } else {
+                fail(String.format(
+                        "FileSystemItem %s doesn't match any expected.",
+                        fsItem.getId()));
+            }
+        }
     }
 
 }

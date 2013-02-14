@@ -45,28 +45,39 @@ def find_exe_path():
     # Fall-back to the regular method that should work both the ndrive script
     return sys.argv[0]
 
-def get_maintenance_message(schedules):
+def get_maintenance_message(status, schedule=None):
     from dateutil import tz
     from datetime import datetime
 
-    msg = '%s is scheduled to be offline for maintenance' % Constants.SERVICE_NAME
-    for schedule in schedules['ScheduleItems']:
-        # NOTE only notify about the Cloud Office Portal service
-        if schedule['Service'] == Constants.SERVICE_NAME:
-            # get UTC times
-            start_utc = datetime.strptime(schedule['FromDate'], '%Y-%m-%dT%H:%M:%SZ')
-            end_utc = datetime.strptime(schedule['ToDate'], '%Y-%m-%dT%H:%M:%SZ')
-            # convert to local times
-            from_tz = tz.tzutc()
-            to_tz = tz.tzlocal()
-            start_utc = start_utc.replace(tzinfo = from_tz)
-            end_utc = end_utc.replace(tzinfo = from_tz)
-            start_local = start_utc.astimezone(to_tz)
-            end_local = end_utc.astimezone(to_tz)
-
-            msg = "%s is scheduled to be offline for %s from %s to %s." % \
-                                        (schedule['Service'], schedules['Status'],
-                                         start_local.strftime("%x %X"), end_local.strftime("%x %X"))
+    # NOTE only notify about the Cloud Office Portal service.
+    # Ignore the 'Service' in the schedule because the service url is 
+    # passed in the request anyway.
+    if schedule is None and status == 'maintenance':
+        msg = '%s is not in service for maintenance' % Constants.SERVICE_NAME
+    elif schedule is not None:
+        service = schedule['Service']
+        # get UTC times
+        start_utc = datetime.strptime(schedule['FromDate'], '%Y-%m-%dT%H:%M:%SZ')
+        end_utc = datetime.strptime(schedule['ToDate'], '%Y-%m-%dT%H:%M:%SZ')
+        # convert to local times
+        from_tz = tz.tzutc()
+        to_tz = tz.tzlocal()
+        start_utc = start_utc.replace(tzinfo = from_tz)
+        end_utc = end_utc.replace(tzinfo = from_tz)
+        start_local = start_utc.astimezone(to_tz)
+        end_local = end_utc.astimezone(to_tz)
+        if status == 'maintenance':
+            msg = "%s is not in service for maintenance from %s to %s." % \
+                            (service,
+                             start_local.strftime("%x %X"), end_local.strftime("%x %X"))
+        elif status == 'available':
+            msg = "%s is scheduled to be offline for maintenance from %s to %s." % \
+                            (service,
+                             start_local.strftime("%x %X"), end_local.strftime("%x %X")) 
+        else:
+            msg = None       
+    else:
+        msg = None
     return msg
 
 def create_settings():
