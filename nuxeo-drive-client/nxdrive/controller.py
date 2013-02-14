@@ -52,7 +52,6 @@ schema_url = r'federatedloginservices.xml'
 service_url = r'http://login.sharpb2bcloud.com'
 ns = r'http://www.inventua.com/federatedloginservices/'
 CLOUDDESK_SCOPE = r'clouddesk'
-DEFAULT_STORAGE = (0, 1000000000)
 
 log = get_logger(__name__)
 
@@ -194,6 +193,7 @@ class Controller(object):
         self.fault_tolerant = True
         self.loop_count = 0
         self._init_storage()
+        self.mydocs_folder = None
         Controller.__instance = self
         self.synchronizer = Synchronizer(self)
 
@@ -313,11 +313,17 @@ class Controller(object):
             session = self.get_session()
         try:
             if local_folder is None:
-                return session.query(ServerBinding).first()
+                server_binding = session.query(ServerBinding).first()
             else:
                 local_folder = normalized_path(local_folder)
-                return session.query(ServerBinding).filter(
+                server_binding = session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
+                
+            if server_binding is not None:
+                self.storage[(server_binding.server_url, server_binding.remote_user)] = \
+                    (server_binding.used_storage, server_binding.total_storage)
+            return server_binding
+        
         except NoResultFound:
             if raise_if_missing:
                 raise RuntimeError(
@@ -371,6 +377,8 @@ class Controller(object):
             session.add(ServerBinding(local_folder, server_url, username,
                                       remote_password = password,
                                       remote_token = token))
+            
+            self.update_server_storage_used(server_url, username, session = session)
 
         # Create the local folder to host the synchronized files: this
         # is useless as long as bind_root is not called
@@ -674,6 +682,9 @@ class Controller(object):
                           repository = 'default'):
         cache = self._get_client_cache()
         sb = server_binding
+        if base_folder is None:
+            base_folder = self._get_mydocs_folder(sb)
+            
         cache_key = (sb.server_url, sb.remote_user, self.device_id, base_folder,
                      repository)
         remote_client = cache.get(cache_key)
@@ -695,6 +706,20 @@ class Controller(object):
             if client.server_url == server_url:
                 del cache[key]
 
+    def _get_mydocs_folder(self, server_binding, session = None):
+        if self.mydocs_folder is None:
+            if session is None:
+                session = self.get_session()
+    
+            try:
+                mydocs = session.query(SyncFolders).\
+                    filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
+                self.mydocs_folder = mydocs.remote_id
+            except NoResultFound:
+                self.mydocs_folder = None
+                
+        return self.mydocs_folder
+    
     def _log_offline(self, exception, context):
         if isinstance(exception, urllib2.HTTPError):
             msg = ("Client offline in %s: HTTP error with code %d"
@@ -747,11 +772,13 @@ class Controller(object):
         else:
             return False
 
-    def get_storage(self, local_folder):
+    def get_storage(self, url, user_id):
         try:
-            return self.storage[local_folder]
+            storage_key = (url, user_id)
+            used, total = self.storage[storage_key]
+            return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
         except KeyError:
-            return DEFAULT_STORAGE
+            return None
 
     def launch_file_editor(self, server_url, remote_repo, remote_ref):
         """Find the local file if any and start OS editor on it."""
@@ -804,7 +831,50 @@ class Controller(object):
         self.storage = {}
         session = self.get_session()
         for sb in session.query(ServerBinding).all():
-            self.storage[sb.local_folder] = DEFAULT_STORAGE
+            storage_key = (sb.server_url, sb.remote_user)
+            self.storage[storage_key] = None
 
+    def update_storage_used(self, session = None):
+        if session is None:
+            session = self.get_session()
+        for sb in session.query(ServerBinding).all():
+            remote_client = self.get_remote_client(sb)
+            if remote_client is not None:
+                try:
+                    storage_key = (sb.server_url, sb.remote_user)
+                    self.storage[storage_key] = remote_client.get_storage_used()
+                except ValueError:
+                    # operation not implemented
+                    pass
+
+    def update_server_storage_used(self, url, user, session = None):
+        if session is None:
+            session = self.get_session()
+        for sb in session.query(ServerBinding).all():
+            if url.startswith(sb.server_url) and user == sb.remote_user:
+                remote_client = self.get_remote_client(sb)
+                if remote_client is not None:
+                    try:
+                        storage_key = (sb.server_url, sb.remote_user)
+                        self.storage[storage_key] = remote_client.get_storage_used()
+                        return self.storage[storage_key]
+                    except ValueError:
+                        # operation not implemented
+                        pass
+                break
+
+        return (0, 0)
+    
+    def save_storage(self, session=None):
+        if session is None:
+            session = self.get_session()
+            
+        for sb in session.query(ServerBinding).all():
+            used, total = self.storage[(sb.server_url, sb.remote_user)]
+            sb.used_storage = used
+            sb.total_storage = total
+        
+        session.commit()
+        
     def enable_trace(self, state):
         BaseAutomationClient._enable_trace = state

@@ -103,6 +103,8 @@ class ServerBinding(Base):
     password_hash = Column(String)
     password_key = Column(String)
     fdtoken_creation_date = Column(DateTime)
+    total_storage = Column(Integer)
+    used_storage = Column(Integer)
     # passive_updates=False *only* needed if the database
     # does not implement ON UPDATE CASCADE
     roots = relationship("RootBinding", passive_updates = False, passive_deletes = True, cascade = "all, delete, delete-orphan")
@@ -115,6 +117,11 @@ class ServerBinding(Base):
         self.server_url = server_url
         self.remote_user = remote_user
         self.nag_signin = False
+        self.quota_exceeded = False
+        self.maintenance = False
+        self.next_nag_quota = None
+        self.next_nag_maintenance = datetime.now()
+        self.next_maintenance_check = None
         # Password is only stored if the server does not support token based authentication
         # CHANGED: Password IS currently stored for (1) refresh the token when it expires,
         # and (2) open the site in the browser.
@@ -127,6 +134,8 @@ class ServerBinding(Base):
             self.fdtoken_creation_date = fdtoken_creation_date
         # Used to re-generate the federated token (expires in 15min by default)
         self.password_hash = password_hash
+        self.total_storage = 1000000000
+        self.used_storage = 0
 
     @declared_attr
     def fdtoken(self):
@@ -177,6 +186,7 @@ class ServerBinding(Base):
                 self.quota_exceeded = False
         else:
             self.quota_exceeded = True
+            self.next_nag_quota = datetime.now()
 
     def update_server_maintenance_status(self, retry_after):
         # TODO if not in maintenance mode, set the maintenance status
@@ -192,8 +202,12 @@ class ServerBinding(Base):
     def nag_maintenance_schedule(self):
         if self.maintenance:
             return False
+        elif self.next_nag_maintenance is None:
+            return False
         elif not self.maintenance and datetime.now() > self.next_nag_maintenance:
             return True
+        else:
+            return False
             
     def maintenance_check(self):
         if self.maintenance and datetime.now() > self.next_maintenance_check:
@@ -204,11 +218,17 @@ class ServerBinding(Base):
             return False
             
     def nag_quota_exceeded(self):
-        if self.quota_exceeded and datetime.now() > self.nag_quota_exceeded():
+        if self.next_nag_quota is None:
+            return False
+        elif self.quota_exceeded and datetime.now() > self.next_nag_quota:
             self.nag_quota_exceeded = datetime.now() + timedelta(seconds=Constants.SERVICE_NOTIFICATION_INTERVAL)
             return True
         else:
             return False
+        
+    def update_storage(self, used, total):
+        self.total_storage = total
+        self.used_storage = used
 
 class RootBinding(Base):
     __tablename__ = 'root_bindings'

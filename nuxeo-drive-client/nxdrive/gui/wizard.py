@@ -262,12 +262,12 @@ class IntroPage(QWizardPage):
 
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
-            # TODO fix storage retrieval
-#            self.wizard().controller.synchronizer.update_storage_used()
-#            used, total = self.wizard().controller.get_storage(self.local_folder)
-            used = 0; total = 1000000000
-            storage_text = 'You used {:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
-            self.lblMessage.setText(self.tr(storage_text))
+
+            self.wizard().controller.update_storage_used()
+            storage_text = self.wizard().controller.get_storage(Constants.DEFAULT_CLOUDDESK_URL, self.txtUsername.text())
+            if storage_text is None:
+                storage_text = self.tr("Connected")
+            self.lblMessage.setText(storage_text)
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: green }")
             self.auth_ok = True
             self.completeChanged.emit()

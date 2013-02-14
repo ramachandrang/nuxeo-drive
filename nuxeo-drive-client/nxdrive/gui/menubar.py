@@ -658,10 +658,15 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def rebuild_menu(self):
         """update when menu is activated"""
-
-        used, total = self.controller.get_storage(self.local_folder)
-        storage_text = '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
-        self.actionUsedStorage.setText(storage_text)
+        if self.server_binding is None:
+            storage_text = None
+        else:
+            storage_text = self.controller.get_storage(self.server_binding.server_url, self.server_binding.remote_user)
+        if storage_text is None:
+            self.actionUsedStorage.setVisible(False)
+        else:
+            self.actionUsedStorage.setVisible(True)
+            self.actionUsedStorage.setText(storage_text)
 
         self.actionUsername.setText(self._getUserName())
         self.actionShowCloudDeskInfo.setEnabled(len(self.binding_info.values()) > 0)
@@ -695,6 +700,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.preferencesDlg = None
             return
 
+        self.local_folder = self.preferencesDlg.local_folder
+        self.server_binding = self.controller.get_server_binding(self.local_folder)
         self.notifications = self.preferencesDlg.notifications
         self.preferencesDlg = None
 
@@ -780,6 +787,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             ok = result[0]
             if not ok: return
 
+        self.server_binding = self.controller.get_server_binding(DEFAULT_NX_DRIVE_FOLDER)
         self.setupProcessing()
 
     def started(self):
@@ -827,6 +835,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                        username = server_binding.remote_user)
 
                 if success:
+                    self.server_binding = self.controller.get_server_binding(self.local_folder)
                     self.doWork()
 
     @QtCore.Slot()
@@ -855,6 +864,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                    username = server_binding.remote_user)
 
             if success[0]:
+                self.server_binding = self.controller.get_server_binding(self.local_folder)
                 self.doWork()
 
     def _getUserName(self):

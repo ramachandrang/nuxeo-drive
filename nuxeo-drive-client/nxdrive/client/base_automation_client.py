@@ -691,8 +691,8 @@ class BaseAutomationClient(object):
         return retry_after, schedules
 
     def get_maintenance_schedule(self, server_binding):
-        loc = urlparse.urlsplit(server_binding.server_url)
-        req = urllib2.Request(urlparse.urljoin(Constants.MAINTENANCE_SERVICE_URL, loc))
+        netloc = urlparse.urlsplit(server_binding.server_url).netloc
+        req = urllib2.Request(urlparse.urljoin(Constants.MAINTENANCE_SERVICE_URL, netloc))
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
@@ -707,7 +707,8 @@ class BaseAutomationClient(object):
             data = string.replace(data, '<string>', '')
             data = string.replace(data, '</string>', '')
             schedules = json.loads(data)
-        except Exception:
+        except Exception, e:
+            log.debug('error retrieving schedule: %s', str(e))
             schedules = None
             
         return schedules

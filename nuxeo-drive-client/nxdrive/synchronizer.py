@@ -8,7 +8,6 @@ import socket
 import httplib
 import psutil
 from collections import defaultdict, Iterable
-from threading import Timer
 
 from sqlalchemy import not_
 from sqlalchemy import or_
@@ -50,8 +49,6 @@ POSSIBLE_NETWORK_ERROR_TYPES = (
     exceptions.ProxyConnectionError,
     exceptions.ProxyConfigurationError,
 )
-
-DEFAULT_STORAGE = (0, 1000000000)
 
 log = get_logger(__name__)
 
@@ -830,11 +827,8 @@ class Synchronizer(object):
         previous_time = time()
         self.service_notification_time = previous_time
         session = self.get_session()
-        # start a timer for nagging notifications
-        self.timer = Timer(5 * 60, self.fire_notifications, args=[self, session,])
-        self.timer.start(
-                         )
         self.loop_count = 0
+        
         self.get_folders()
 
         try:
@@ -863,9 +857,18 @@ class Synchronizer(object):
                             continue
 
                     status = {}
-                    n_synchronized += self.update_synchronize_server(
-                        sb, session = session, status = status)
+                    # BEGIN TEST ONLY
+                    self._controller.update_storage_used(session = session)
+#                    synchronized = self.update_synchronize_server(
+#                        sb, session = session, status = status)
+#                    n_synchronized += synchronized
 
+                    synchronized = 1
+                    if synchronized > 0:
+                        self.update_last_access(sb)
+                            
+                    # END TEST ONLY
+                    
                 if self._frontend is not None:
                     self._frontend.notify_sync_completed(status)
 
@@ -881,11 +884,7 @@ class Synchronizer(object):
                 previous_time = time()
                 log.debug("iteration %d, synchronized %d", self.loop_count, n_synchronized)
                 self.loop_count += 1
-
-                if (current_time - self.service_notification_time).seconds > Constants.SERVICE_NOTIFICATION_INTERVAL:
-                    if self.maintenance_node(sb):
-                        continue
-
+                self.fire_notifications(session=session)
 
         except KeyboardInterrupt:
             self.get_session().rollback()
@@ -901,11 +900,11 @@ class Synchronizer(object):
             except Exception, e:
                 log.warning("Failed to remove stalled pid file: %s"
                             " for stopped process %d: %r", pid_filepath, pid, e)
+            self._controller.save_storage(session=session)
             # Notify UI frontend to take synchronization stop into account and
             # potentially quit the app
             if self._frontend is not None:
                 self._frontend.notify_sync_stopped()
-            self.timer.cancel()    
             
 
     def _get_remote_changes(self, server_binding, session = None):
@@ -946,7 +945,7 @@ class Synchronizer(object):
             log.debug("%d remote changes detected on %s",
                     n_changes, server_binding.server_url)
 
-        root_client = self._get_mydocs_root_client(server_binding)
+        root_client = self._controller.get_remote_client(server_binding)
 
         # Scan events and update the inter
         refreshed = set()
@@ -1134,7 +1133,6 @@ class Synchronizer(object):
 
             if n_pending > 0:
                 self.update_storage_used(session = session)
-
                 if self._frontend is not None:
                     self._frontend.notify_stop_transfer()
 
@@ -1178,7 +1176,7 @@ class Synchronizer(object):
             assert server_binding.remote_user == e.user_id, \
                     'binding user=%s is different from exception user=%s' % (server_binding.remote_user, e.user_id)
 
-            used, total = self.update_server_storage_used(e.url, e.user_id, session = session)
+            used, total = self._controller.update_server_storage_used(e.url, e.user_id, session = session)
             server_binding.update_server_quota_status(used, total, e.size)
             if self._frontend is not None and server_binding.nag_quota_exceeded():
                 self._frontend.notify_quota_exceeded()
@@ -1268,7 +1266,7 @@ class Synchronizer(object):
                 # Skip servers with missing credentials
                 continue
             try:
-                nxclient = self._get_mydocs_root_client(sb)
+                nxclient = self._controller.get_remote_client(sb)
                 if not nxclient.is_addon_installed():
                     continue
                 if repository is not None:
@@ -1566,53 +1564,30 @@ class Synchronizer(object):
             base_folder = None
         return self.get_remote_client(server_binding, base_folder = base_folder)
 
-    def update_storage_used(self, session = None):
+    def fire_notifications(self, session=None):
         if session is None:
-            session = self.get_session()
-        for sb in session.query(ServerBinding).all():
-            remote_client = self._controller.get_remote_client(sb)
-            if remote_client is not None:
-                try:
-                    self.storage[sb.local_folder] = remote_client.get_storage_used()
-                except ValueError:
-                    # operation not implemented
-                    pass
-
-
-    def update_server_storage_used(self, url, user, session = None):
-        if session is None:
-            session = self.get_session()
-        for sb in session.query(ServerBinding).all():
-            if url.startswith(sb.server_url) and user == sb.remote_user:
-                remote_client = self._controller.get_remote_client(sb)
-                if remote_client is not None:
-                    try:
-                        self.storage[sb.local_folder] = remote_client.get_storage_used()
-                        return self.storage[sb.local_folder]
-                    except ValueError:
-                        # operation not implemented
-                        pass
-                break
-
-        return (0, 0)
-
-    def fire_notifications(self, synchronizer, session):
+            session = self._controller.get_session()
+            
         server_bindings = session.query(ServerBinding).all()
         for sb in server_bindings:
             if sb.nag_maintenance_schedule():
-                remote_client = synchronizer._controller.get_remote_client(sb)
+                remote_client = self._controller.get_remote_client(sb)
                 schedules = remote_client.get_maintenance_schedule(sb)
                 if schedules is not None:
                     sb.update_server_maintenance_schedule()
-                    if synchronizer._frontend is not None:
-                        synchronizer._frontend.notify_maintenance_schedule(get_maintenance_message(schedules))
+                    if self._frontend is not None:
+                        self._frontend.notify_maintenance_schedule(get_maintenance_message(schedules))
                         
             if sb.nag_quota_exceeded():
-                if synchronizer._frontend is not None:
-                    synchronizer._frontend.notify_quota_exceeded()
+                if self._frontend is not None:
+                    self._frontend.notify_quota_exceeded()
                     
             if sb.maintenance_check():
-                if synchronizer._frontend is not None:
-                    synchronizer._frontend.notify_quota_exceeded()           
-                    
-        self.timer.start()     
+                if self._frontend is not None:
+                    self._frontend.notify_quota_exceeded()           
+  
+    def update_last_access(self, sb):
+        remote_client = self._controller.get_remote_client(sb)
+        if remote_client is not None:
+            remote_client.update_last_access(sb.remote_token)
+            

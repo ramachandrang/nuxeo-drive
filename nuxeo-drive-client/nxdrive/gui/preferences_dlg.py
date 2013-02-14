@@ -149,9 +149,15 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
     def showEvent(self, evt):
         if evt.spontaneous:
-            used, total = self.controller.get_storage(self.local_folder)
-            storage_text = '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used/1000000000, used/total, total/1000000000)
-            self.lblStorage.setText(storage_text)
+            if self.server_binding is None:
+                storage_text = None
+            else:
+                storage_text = self.controller.get_storage(self.server_binding.server_url, self.server_binding.remote_user)
+            if storage_text is None:
+                self.lblStorage.setText(self.tr('not available'))
+            else:
+                self.lblStorage.setVisible(True)
+                self.lblStorage.setText(storage_text)
             
             self.lblComputer.setText(platform.node())
             self.rbProxy.setChecked(self.proxy != None)
