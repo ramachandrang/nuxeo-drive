@@ -4,6 +4,17 @@ import sys
 import argparse
 from getpass import getpass
 import traceback
+
+from nxdrive.controller import Controller
+from nxdrive.daemon import daemonize
+from nxdrive.logging_config import configure
+from nxdrive.logging_config import get_logger
+from nxdrive.protocol_handler import parse_protocol_url
+from nxdrive.protocol_handler import register_protocol_handlers
+from nxdrive.utils import register_startup
+from nxdrive import Constants
+from nxdrive.controller import default_nuxeo_drive_folder
+
 try:
     import ipdb
     debugger = ipdb
@@ -14,17 +25,6 @@ except ImportError:
 if sys.platform == 'win32':
     import win32api
     import win32con
-
-from nxdrive.controller import Controller
-from nxdrive.daemon import daemonize
-from nxdrive.controller import default_nuxeo_drive_folder
-from nxdrive.logging_config import configure
-from nxdrive.logging_config import get_logger
-from nxdrive.protocol_handler import parse_protocol_url
-from nxdrive.protocol_handler import register_protocol_handlers
-from nxdrive.utils import register_startup
-from nxdrive import Constants
-
 
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_DELAY = 5.0

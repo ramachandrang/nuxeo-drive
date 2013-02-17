@@ -53,7 +53,7 @@ def get_maintenance_message(status, schedule=None):
     # Ignore the 'Service' in the schedule because the service url is 
     # passed in the request anyway.
     if schedule is None and status == 'maintenance':
-        msg = '%s is not in service for maintenance' % Constants.SERVICE_NAME
+        msg = '%s is not in service due to maintenance' % Constants.SERVICE_NAME
     elif schedule is not None:
         service = schedule['Service']
         # get UTC times

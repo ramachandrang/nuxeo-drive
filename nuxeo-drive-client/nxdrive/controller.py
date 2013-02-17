@@ -1,5 +1,7 @@
 """Main API to perform Nuxeo Drive operations"""
 
+from __future__ import division
+
 import sys
 import os.path
 from datetime import datetime
@@ -15,16 +17,14 @@ import subprocess
 from datetime import datetime
 from datetime import timedelta
 import logging
-
+        
 import nxdrive
-from nxdrive.client import Unauthorized
 from nxdrive.client import LocalClient
 from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import RemoteDocumentClient
-from nxdrive.client import safe_filename
+from nxdrive.client import Unauthorized
 from nxdrive.client import BaseAutomationClient
 from nxdrive.client import NotFound
-from nxdrive.client import Unauthorized
 from nxdrive.model import init_db
 from nxdrive.model import DeviceConfig
 from nxdrive.model import ServerBinding
@@ -32,7 +32,6 @@ from nxdrive.model import LastKnownState
 from nxdrive.model import SyncFolders
 from nxdrive.model import RootBinding
 from nxdrive.synchronizer import Synchronizer
-from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
 from nxdrive import Constants
@@ -519,8 +518,8 @@ class Controller(object):
         # check the connection to the server by issuing an authenticated 'fetch API' request
         # if invalid credentials, raises Unauthorized, or for invalid url, a generic exception
         server_url = self._normalize_url(server_url)
-        nxclient = self.nuxeo_client_factory(server_url, username, self.device_id,
-                                             password)
+        nxclient = self.remote_doc_client_factory(server_url, username, self.device_id,
+                                                  password)
 
     def _update_hash(self, password):
         return md5.new(password).digest()
@@ -601,27 +600,27 @@ class Controller(object):
 
         return fdtoken
 
-    def get_sync_status(self, local_folder = None, from_time = None, delay = 10):
-        """retrieve count of created/modified/deleted local files since 'from_time'.
-        If 'from_time is None, use current time minus delay.
-        If local_folder is None, return results for all bindings.
-        Return a list of tuples of the form [('<local_folder>', '<pair_state>', count),...]
-        """
-        after = from_time if from_time is not None else datetime.now() - delay
-
-        # query for result of last synchronize cycle
-        session = self.get_session()
-        q = session.query(RootBinding.local_folder, LastKnownState.pair_state, func.count(LastKnownState.pair_state)).\
-                    filter(RootBinding.local_root == LastKnownState.local_root).\
-                    filter(LastKnownState.folderish == 0).\
-                    filter(LastKnownState.last_local_updated >= after).\
-                    group_by(RootBinding.local_folder).\
-                    group_by(LastKnownState.pair_state)
-
-        if local_folder is None:
-            return q.all()
-        else:
-            return q.filter(RootBinding.local_folder == local_folder).all()
+#    def get_sync_status(self, local_folder = None, from_time = None, delay = 10):
+#        """retrieve count of created/modified/deleted local files since 'from_time'.
+#        If 'from_time is None, use current time minus delay.
+#        If local_folder is None, return results for all bindings.
+#        Return a list of tuples of the form [('<local_folder>', '<pair_state>', count),...]
+#        """
+#        after = from_time if from_time is not None else datetime.now() - delay
+#
+#        # query for result of last synchronize cycle
+#        session = self.get_session()
+#        q = session.query(RootBinding.local_folder, LastKnownState.pair_state, func.count(LastKnownState.pair_state)).\
+#                    filter(RootBinding.local_root == LastKnownState.local_root).\
+#                    filter(LastKnownState.folderish == 0).\
+#                    filter(LastKnownState.last_local_updated >= after).\
+#                    group_by(RootBinding.local_folder).\
+#                    group_by(LastKnownState.pair_state)
+#
+#        if local_folder is None:
+#            return q.all()
+#        else:
+#            return q.filter(RootBinding.local_folder == local_folder).all()
 
     def bind_root(self, local_folder, remote_ref, repository='default',
                   session=None):
@@ -724,8 +723,10 @@ class Controller(object):
         return remote_client
 
     def get_remote_doc_client(self, server_binding, repository='default',
-                              base_folder='/'):
+                              base_folder=None):
         """Return an instance of Nuxeo Document Client"""
+        if base_folder is None:
+            base_folder = self._get_mydocs_folder(server_binding)
         sb = server_binding
         return self.remote_doc_client_factory(
             sb.server_url, sb.remote_user, self.device_id,
@@ -733,10 +734,10 @@ class Controller(object):
             repository=repository, base_folder=base_folder)
 
     def get_remote_client(self, server_binding, repository='default',
-                          base_folder='/'):
+                          base_folder=None):
         # Backward compat
         return self.get_remote_doc_client(server_binding,
-            repository=repository, base_folder=remote_root)
+            repository=repository, base_folder=base_folder)
 
     def invalidate_client_cache(self, server_url):
         cache = self._get_client_cache()
@@ -825,15 +826,15 @@ class Controller(object):
         except KeyError:
             return None
 
-   def launch_file_editor(self, server_url, remote_ref):
+    def launch_file_editor(self, server_url, remote_ref):
         """Find the local file if any and start OS editor on it."""
 
-        state = self.get_state(server_url, remote_repo, remote_ref)
+        state = self.get_state(server_url, remote_ref, remote_ref)
         if state is None:
             # TODO: synchronize to a dedicated special root for one time edit
             log.warning('Could not find local file for '
                         'server_url=%s and remote_ref=%s',
-                        server_url, remote_repo, remote_ref)
+                        server_url, remote_ref, remote_ref)
             return
 
         # TODO: check synchronization of this state first

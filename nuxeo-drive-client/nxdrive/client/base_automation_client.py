@@ -63,10 +63,17 @@ class MaintenanceMode(Exception):
         self.url = url
         self.user_id = user_id
         self.retry_after = retry_after
-        self.schedules = schedules
+        self.msg = '%s is in maintenance mode' % Constants.PRODUCT_NAME
+        if schedules is not None:
+            status = schedules['Status']
+            if len(schedules['ScheduleItems']) == 1:
+                schedule = schedules['ScheduleItems'][0]
+            else:
+                schedule = None
+            self.msg = get_maintenance_message(status, schedule=schedule)
 
     def __str__(self):
-        return get_maintenance_message(self.schedules)
+        return self.msg
 
 class ProxyInfo(object):
     """Holder class for proxy information"""
@@ -186,7 +193,7 @@ class BaseAutomationClient(object):
     def __init__(self, server_url, user_id, device_id,
                  password=None, token=None, repository="default",
                  ignored_prefixes=None, ignored_suffixes=None,
-                 timeout=5):
+                 timeout=20):
         self.timeout = timeout
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
@@ -264,6 +271,7 @@ class BaseAutomationClient(object):
             response = json.loads(self.opener.open(
                 req, timeout=self.timeout).read())
             req = urllib2.Request(self.automation_url, headers = headers)
+            BaseAutomationClient.cookiejar.add_cookie_header(req)
             # --- BEGIN DEBUG ----
             self.log_request(req)
             # --- END DEBUG ----
@@ -332,6 +340,19 @@ class BaseAutomationClient(object):
         # ---- END DEBUG -----
         try:
             resp = self.opener.open(req, timeout=self.timeout)
+            # --- BEGIN DEBUG ----
+#            from StringIO import StringIO
+#            msg = '{"Status": "maintenance", "ScheduleItems": [\
+#                    {"CreationDate": "2013-02-15T09:50:22.001",\
+#                     "Target": "qadm.sharpb2bcloud.com",\
+#                     "Service": "Cloud Portal Service",\
+#                     "FromDate": "2013-02-16T23:00:00Z",\
+#                     "ToDate": "2013-02-17T03:00:00Z"\
+#                    }]\
+#                    }'
+#            fp = StringIO(msg)
+#            raise urllib2.HTTPError(url, 503, "service unavailable", None, fp)
+            # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             # NOTE cannot rewind the error stream from maintenance server!
 #            self._log_details(e)
@@ -543,7 +564,9 @@ class BaseAutomationClient(object):
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers=headers)
+            BaseAutomationClient.cookiejar.add_cookie_header(req)
             token = self.opener.open(req, timeout=self.timeout).read()
+            log.debug("received token: %s", token)
         except urllib2.HTTPError as e:
             self._log_details(e)
             if e.code == 401 or e.code == 403:
@@ -581,12 +604,9 @@ class BaseAutomationClient(object):
     def update_last_access(self, token):
         if token is not None:
             # server is using token, not password for authentication
-            properties = {
-                          'lastAccess': datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                          'token': token,
-                          }
             try:
-                self.execute('Drive.LastAccess', properties = properties)
+                self.execute('Drive.LastAccess', lastAccess=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                             token=token)
             except ValueError:
                 log.debug("operation 'Drive.LastAccess' is not implemented.")
 
@@ -672,11 +692,14 @@ class BaseAutomationClient(object):
         retry_after = 0
         schedules = None
         # get retry-after header
-        s_retry_after = e.headers['retry-after']
+        #------BEGIN DEBUG------
+#        s_retry_after = e.headers['retry-after']
+        s_retry_after = '10'
         try:
             retry_after = int(s_retry_after)
         except ValueError:
             pass
+        #-------END DEBUG-------
 
         if hasattr(e, "fp"):
             detail = e.fp.read()
@@ -687,7 +710,7 @@ class BaseAutomationClient(object):
 
         return retry_after, schedules
 
-    def get_maintenance_schedule(self, server_binding):
+    def _get_maintenance_schedule(self, server_binding):
         netloc = urlparse.urlsplit(server_binding.server_url).netloc
         req = urllib2.Request(urlparse.urljoin(Constants.MAINTENANCE_SERVICE_URL, netloc))
         # --- BEGIN DEBUG ----
@@ -706,10 +729,9 @@ class BaseAutomationClient(object):
             # and the Content-Type is 'application/xml'
             data = data.partition('<string>')[2]
             data = data.rpartition('</string')[0]
-            schedules = json.loads(data)
+            return json.loads(data)
         except Exception, e:
             log.debug('error retrieving schedule: %s', str(e))
-            schedules = None
-            
-        return schedules
+            return None
+
     

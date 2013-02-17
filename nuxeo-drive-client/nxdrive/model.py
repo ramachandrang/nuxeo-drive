@@ -209,10 +209,9 @@ class ServerBinding(Base):
         else:
             return False
             
-    def maintenance_check(self):
+    def check_for_maintenance(self):
         if self.maintenance and datetime.now() > self.next_maintenance_check:
             self.maintenance = False
-            self.next_maintenance_check = datetime.now()
             return True
         else:
             return False
@@ -314,10 +313,6 @@ class LastKnownState(Base):
     server_binding = relationship(
         'ServerBinding',
         backref=backref("states", cascade="all, delete-orphan"))
-
-    root_binding = relationship(
-        'RootBinding',
-        backref = backref("states", cascade = "all, delete-orphan"))
 
     # Timestamps to detect modifications
     last_local_updated = Column(DateTime)
@@ -551,14 +546,18 @@ class ServerEvent(Base):
     local_folder = Column(String, ForeignKey('server_bindings.local_folder'))
     utc_time = Column(DateTime)
     message = Column(String)
+    message_type = Column(String)
 
-    server_binding = relationship("ServerBinding")
+    server_binding = relationship("ServerBinding", uselist=False, backref="server_events")
 
-    def __init__(self, local_folder, message, utc_time = None):
+    def __init__(self, local_folder, message, message_type, utc_time = None):
         self.local_folder = local_folder
+        self.message = message
+        self.message_type = message_type
         if utc_time is None:
-            utc_time = datetime.utcnow()
-            
+            self.utc_time = datetime.utcnow()
+        else:
+            self.utc_time = utc_time
             
 def init_db(nxdrive_home, echo = False, scoped_sessions = True, poolclass = None):
     """Return an engine and session maker configured for using nxdrive_home

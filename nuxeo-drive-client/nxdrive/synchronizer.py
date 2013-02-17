@@ -10,9 +10,8 @@ import httplib
 import psutil
 from collections import defaultdict, Iterable
 
-from sqlalchemy import not_
-from sqlalchemy import or_
-from sqlalchemy import in_
+
+from sqlalchemy.sql.expression import not_, or_, and_
 from sqlalchemy import asc, desc
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
@@ -184,10 +183,13 @@ class Synchronizer(object):
             server_binding = server_binding_or_local_path
 
         if from_state is None:
-            from_state = session.query(LastKnownState).filter_by(
-                local_path='/',
-                local_folder=server_binding.local_folder).one()
-
+            try:
+                from_state = session.query(LastKnownState).filter_by(
+                    local_path='/',
+                    local_folder=server_binding.local_folder).one()
+            except NoResultFound:
+                return
+                    
         client = from_state.get_local_client()
         info = client.get_info('/')
         # recursive update
@@ -323,8 +325,11 @@ class Synchronizer(object):
         self._notify_refreshing(server_binding)
 
         if from_state is None:
-            from_state = session.query(LastKnownState).filter_by(
-                local_path='/', local_folder=server_binding.local_folder).one()
+            try:
+                from_state = session.query(LastKnownState).filter_by(
+                    local_path='/', local_folder=server_binding.local_folder).one()
+            except NoResultFound:
+                return
 
         try:
             client = self.get_remote_fs_client(from_state.server_binding)
@@ -612,7 +617,7 @@ class Synchronizer(object):
                     # TODO: handle OS-specific trash management?
                     log.debug("Deleting local doc '%s'",
                               doc_pair.get_local_abspath())
-					self.update_recent_files(doc_pair, status = status, session = session)
+                    self.update_recent_files(doc_pair, status = status, session = session)
                     local_client.delete(doc_pair.local_path)
                     self._delete_with_descendant_states(session, doc_pair)
                     # XXX: shall we also delete all the subcontent / folder at
@@ -633,7 +638,7 @@ class Synchronizer(object):
             # No need to store this information any further
             log.debug('Deleting doc pair %s deleted on both sides',
                 doc_pair.local_path)
-			self.update_recent_files(doc_pair, status = status, session = session)
+            self.update_recent_files(doc_pair, status = status, session = session)
             self._delete_with_descendant_states(session, doc_pair)
 
         elif doc_pair.pair_state == 'conflicted':
@@ -848,13 +853,11 @@ class Synchronizer(object):
         log.info("Starting synchronization (pid=%d)", pid)
 
         previous_time = time()
-        self.service_notification_time = previous_time
         session = self.get_session()
         self.loop_count = 0
-        
-        self.get_folders()
 
         try:
+            self.get_folders()
             while True:
                 n_synchronized = 0
                 if self.should_stop_synchronization():
@@ -868,33 +871,26 @@ class Synchronizer(object):
                     break
 
                 bindings = session.query(ServerBinding).all()
-                if len(server_bindings) == 0:
+                if len(bindings) == 0:
                     self._controller.notify_to_signin()
                     break
                 if self._frontend is not None:
                     local_folders = [sb.local_folder for sb in bindings]
                     self._frontend.notify_local_folders(local_folders)
 
-                for sb in server_bindings:
+                status = {}
+                for sb in bindings:
                     if sb.has_invalid_credentials():
-                        if len(server_bindings) == 1:
+                        if len(bindings) == 1:
                             # Let's wait for the user to (re-)enter valid credentials
                             self._controller.notify_to_signin(sb)
                         else:
                             continue
-
-                    status = {}
-                    # BEGIN TEST ONLY
-                    self._controller.update_storage_used(session = session)
-#                    synchronized = self.update_synchronize_server(
-#                        sb, session = session, status = status)
-#                    n_synchronized += synchronized
-
-                    synchronized = 1
-                    if synchronized > 0:
-                        self.update_last_access(sb)
-                            
-                    # END TEST ONLY
+                    if sb.check_for_maintenance():
+                        continue
+                    
+                    n_synchronized += self.update_synchronize_server(
+                        sb, session = session, status = status)
                     
                 if self._frontend is not None:
                     self._frontend.notify_sync_completed(status)
@@ -911,12 +907,11 @@ class Synchronizer(object):
                 previous_time = time()
                 log.debug("iteration %d, synchronized %d", self.loop_count, n_synchronized)
                 self.loop_count += 1
-                self.fire_notifications(session=session)
 
-        except KeyboardInterrupt:
+        except KeyboardInterrupt, e:
             self.get_session().rollback()
             log.info("Interrupted synchronization on user's request.")
-        except:
+        except Exception, e:
             self.get_session().rollback()
             raise
         finally:
@@ -1106,24 +1101,12 @@ class Synchronizer(object):
             # pending tasks
             n_pending = self._notify_pending(server_binding)
 
-            if self._frontend is not None:
-                # XXX: this is broken: list pending should be able to count
-                # pending operations on a per-server basis!
-                self._frontend.notify_pending(
-                    server_binding.local_folder, n_pending,
-                    or_more = reached_limit)
-
-                if n_pending > 0:
-                    self._frontend.notify_start_transfer()
+            if self._frontend is not None and n_pending > 0:
+                self._frontend.notify_start_transfer()
 
             n_synchronized = self.synchronize(limit=self.max_sync_step,
                 local_folder=server_binding.local_folder)
             synchronization_duration = time() - tick
-
-            if n_pending > 0:
-                self.update_storage_used(session = session)
-                if self._frontend is not None:
-                    self._frontend.notify_stop_transfer()
 
             log.debug("[%s] - [%s]: synchronized: %d, pending: %d, "
                       "local: %0.3fs, remote: %0.3fs sync: %0.3fs",
@@ -1133,6 +1116,19 @@ class Synchronizer(object):
                       local_refresh_duration,
                       remote_refresh_duration,
                       synchronization_duration)
+       
+            if self._frontend is not None and n_pending > 0:
+                self._frontend.notify_stop_transfer()   
+                
+            # update storage used info  
+            # BEGIN TEST ONLY
+#            n_synchronized = 1
+            # END TEST ONLY
+            if n_synchronized > 0:
+                self._controller.update_storage_used(session = session)
+                self.update_last_access(server_binding)   
+
+            self.fire_notifications(session=session)
             return n_synchronized
 
         except POSSIBLE_NETWORK_ERROR_TYPES as e:
@@ -1179,8 +1175,9 @@ class Synchronizer(object):
                     'binding user=%s is different from exception user=%s' % (server_binding.remote_user, e.user_id)
 
             server_binding.update_server_maintenance_status(e.retry_after)
-            if self._frontend is not None and server_binding.nag_maintenance_schedule():
-                self._frontend.notify_maintenance_schedule(str(e))
+            self.persist_server_event2(e.url, e.user_id, str(e), 'maintenance', session=session)
+            if self._frontend is not None:
+                self._frontend.notify_maintenance_mode(str(e))
             return False
 
         elif isinstance(e, QuotaExceeded):
@@ -1194,6 +1191,7 @@ class Synchronizer(object):
             server_binding.update_server_quota_status(used, total, e.size)
             if self._frontend is not None and server_binding.nag_quota_exceeded():
                 self._frontend.notify_quota_exceeded()
+            return True
 
         else:
             self._controller._log_offline(e, "synchronization loop")
@@ -1312,12 +1310,13 @@ class Synchronizer(object):
                         nxclient.get_subfolders(fld, nodes[fld[u'title']])
 
                     self._update_docs(othersdocs_folder, nodes, sb.local_folder, session = session, dirty = dirty)
-
+                    self._controller._get_mydocs_folder(sb, session=session)
+                    success = True
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # Ignore expected possible network related errors
-                self._handle_network_error(sb, e, session = session)
+                success = self._handle_network_error(sb, e, session = session)
 
-        if self._frontend is not None:
+        if self._frontend is not None and success:
             try:
                 if dirty['add'] > 0 or dirty['del'] > 0:
                     self._frontend.notify_folders_changed()
@@ -1421,28 +1420,25 @@ class Synchronizer(object):
                             filter(ServerBinding.local_folder == SyncFolders.local_folder).\
                             all()
 
-        server_binding_failed = []
-        for tuple in roots_to_register:
+        for root_tuple in roots_to_register:
             try:
-                sync_folder, server_binding = tuple
+                sync_folder, server_binding = root_tuple
                 remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id, repository = sync_folder.remote_repo)
                 remote_client.register_as_root(sync_folder.remote_id)
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 server_binding = tuple[1]
-                if server_binding not in server_binding_failed:
-                    if not self._handle_network_error(server_binding, e, session = session):
-                        server_binding_failed.append(server_binding)
+                if not self._handle_network_error(server_binding, e, session = session):
+                    raise
 
-        for tuple in roots_to_unregister:
+        for root_tuple in roots_to_unregister:
             try:
-                sync_folder, server_binding = tuple
+                sync_folder, server_binding = root_tuple
                 remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id, repository = sync_folder.remote_repo)
                 remote_client.unregister_as_root(sync_folder.remote_id)
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 server_binding = tuple[1]
-                if server_binding not in server_binding_failed:
-                    if not self._handle_network_error(server_binding, e, session = session):
-                        server_binding_failed.append(server_binding)
+                if not self._handle_network_error(server_binding, e, session = session):
+                    raise
 
     def update_server_roots(self, server_binding, session, local_roots,
             remote_roots, repository):
@@ -1591,19 +1587,17 @@ class Synchronizer(object):
                 self.process_maintenance_schedule(sb, schedules=remote_client._get_maintenance_schedule(sb))
                         
             if sb.nag_quota_exceeded():
+                self.persist_server_event(sb, 'Storage Quota exceeded', 
+                                          message_type='quota', session=session)
                 if self._frontend is not None:
-                    self._frontend.notify_quota_exceeded()
-                    
-            if sb.maintenance_check():
-                if self._frontend is not None:
-                    self._frontend.notify_quota_exceeded()           
+                    self._frontend.notify_quota_exceeded()       
   
     def update_last_access(self, sb):
         remote_client = self._controller.get_remote_client(sb)
         if remote_client is not None:
             remote_client.update_last_access(sb.remote_token)
             
-    def process_maintennace_schedule(self, sb, schedules=None, session=None):
+    def process_maintenance_schedule(self, sb, schedules=None, session=None):
         """The maintenance service may report different conditions:
         - currently in maintenance: status is 'maintenance'
         - available but provide future maintenance schedules"""      
@@ -1621,19 +1615,37 @@ class Synchronizer(object):
         if msg is None:
             return
         
-        if status == 'available':
-            sb.update_server_maintenance_schedule()
         # persist server event in the database
-        self.persist_maintenance_schedule(sb, msg, session=session)
+        if schedule is not None:
+            creation_date = datetime.strptime(schedule['CreationDate'], '%Y-%m-%dT%H:%M:%S.%f')
+        else:
+            # uses current utc time
+            creation_date = None
+        self.persist_server_event(sb, msg, message_type='maintenance', 
+                                          utc_time=creation_date, session=session)
         if self._frontend is not None:
             if status == 'available' and sb.nag_maintenance_schedule():
                 self._frontend.notify_maintenance_schedule(msg)
+                sb.update_server_maintenance_schedule()
             elif status == 'maintenance':
                 self._frontend.notify_maintenance_mode(msg)
                 
-    def persist_maintenance_schedule(self, server_binding, message, session=None):
+    def persist_server_event(self, server_binding, message, message_type, utc_time=None, session=None):
         if session is None:
             session = self._controller.get_session()
-        server_event = ServerEvent(server_binding.local_folder)
+        server_event = ServerEvent(server_binding.local_folder, message, message_type=message_type, utc_time=utc_time)
         session.add(server_event)
-        
+        session.commit()
+
+    def persist_server_event2(self, url, user_id, message, message_type, utc_time=None, session=None):
+        if session is None:
+            session = self._controller.get_session()
+        try:
+            server_binding = session.query(ServerBinding).\
+                                        filter(and_(ServerBinding.server_url == url, ServerBinding.remote_user == user_id)).\
+                                        one()
+            server_event = ServerEvent(server_binding.local_folder, message, message_type=message_type, utc_time=utc_time)
+            session.add(server_event)
+            session.commit()
+        except NoResultFound:
+            pass

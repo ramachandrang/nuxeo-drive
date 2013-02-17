@@ -24,5 +24,8 @@
      <file alias="systray.png">nxdrive/data/images/systray.png</file>
      <file alias="final_page_darwin.png">nxdrive/data/images/final_page_darwin.png</file>
      <file alias="final_page_win32.png">nxdrive/data/images/final_page_win32.png</file>
+     <file alias="maintenance.png">nxdrive/data/icons/maintenance.png</file>
+     <file alias="gauge.png">nxdrive/data/icons/gauge.png</file>
+     <file alias="unknown.png">nxdrive/data/icons/unknown.png</file>
 </qresource>
 </RCC>
