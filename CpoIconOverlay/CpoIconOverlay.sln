@@ -1,0 +1,44 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CpoIconOverlaySynced", "CpoIconOverlay.vcxproj", "{ECB9685F-CCB7-4298-9B1F-419E08900415}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ShellTest", "..\ShellTest\ShellTest.vcxproj", "{0ED1A816-ED51-4496-B564-CB544BCADC66}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CpoIconOverlayNotSynced", "..\CpoIconOverlayNotSynced\CpoIconOverlayNotSynced.vcxproj", "{9814A24F-ED63-4BEB-84CE-81F063F44BF4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug|x64 = Debug|x64
+		Release|Win32 = Release|Win32
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ECB9685F-CCB7-4298-9B1F-419E08900415}.Debug|Win32.ActiveCfg = Debug|Win32
+		{ECB9685F-CCB7-4298-9B1F-419E08900415}.Debug|Win32.Build.0 = Debug|Win32
+		{ECB9685F-CCB7-4298-9B1F-419E08900415}.Debug|x64.ActiveCfg = Debug|x64
+		{ECB9685F-CCB7-4298-9B1F-419E08900415}.Debug|x64.Build.0 = Debug|x64
+		{ECB9685F-CCB7-4298-9B1F-419E08900415}.Release|Win32.ActiveCfg = Release|Win32
+		{ECB9685F-CCB7-4298-9B1F-419E08900415}.Release|Win32.Build.0 = Release|Win32
+		{ECB9685F-CCB7-4298-9B1F-419E08900415}.Release|x64.ActiveCfg = Debug|Win32
+		{ECB9685F-CCB7-4298-9B1F-419E08900415}.Release|x64.Build.0 = Debug|Win32
+		{0ED1A816-ED51-4496-B564-CB544BCADC66}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0ED1A816-ED51-4496-B564-CB544BCADC66}.Debug|Win32.Build.0 = Debug|Win32
+		{0ED1A816-ED51-4496-B564-CB544BCADC66}.Debug|x64.ActiveCfg = Debug|x64
+		{0ED1A816-ED51-4496-B564-CB544BCADC66}.Debug|x64.Build.0 = Debug|x64
+		{0ED1A816-ED51-4496-B564-CB544BCADC66}.Release|Win32.ActiveCfg = Release|Win32
+		{0ED1A816-ED51-4496-B564-CB544BCADC66}.Release|Win32.Build.0 = Release|Win32
+		{0ED1A816-ED51-4496-B564-CB544BCADC66}.Release|x64.ActiveCfg = Debug|Win32
+		{0ED1A816-ED51-4496-B564-CB544BCADC66}.Release|x64.Build.0 = Debug|Win32
+		{9814A24F-ED63-4BEB-84CE-81F063F44BF4}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9814A24F-ED63-4BEB-84CE-81F063F44BF4}.Debug|x64.ActiveCfg = Debug|x64
+		{9814A24F-ED63-4BEB-84CE-81F063F44BF4}.Release|Win32.ActiveCfg = Release|Win32
+		{9814A24F-ED63-4BEB-84CE-81F063F44BF4}.Release|Win32.Build.0 = Release|Win32
+		{9814A24F-ED63-4BEB-84CE-81F063F44BF4}.Release|x64.ActiveCfg = Debug|Win32
+		{9814A24F-ED63-4BEB-84CE-81F063F44BF4}.Release|x64.Build.0 = Debug|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

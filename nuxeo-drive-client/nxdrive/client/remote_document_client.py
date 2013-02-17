@@ -9,7 +9,6 @@ from nxdrive.logging_config import get_logger
 from nxdrive.client.common import NotFound
 from nxdrive.client.base_automation_client import BaseAutomationClient
 
-
 log = get_logger(__name__)
 
 
@@ -45,7 +44,18 @@ class NuxeoDocumentInfo(BaseNuxeoDocumentInfo):
     def get_digest(self):
         return self.digest
 
+class FolderInfo(object):
+    """Folder node for retrieving folder hierarchy"""
 
+    def __init__(self, docId, title, parentId):
+        self.docId = docId
+        self.title = title
+        self.parentId = parentId
+
+    def __str__(self):
+        return "folder '%s', docId=%s, parentId=%s" % (self.title, self.docId, self.parentId)
+    
+    
 class RemoteDocumentClient(BaseAutomationClient):
     """Nuxeo document oriented Automation client
 
@@ -200,13 +210,14 @@ class RemoteDocumentClient(BaseAutomationClient):
                 digest = blob.get('digest')
 
         # XXX: we need another roundtrip just to fetch the parent uid...
+        
         if parent_uid is None and fetch_parent_uid:
             parent_uid = self.fetch(os.path.dirname(doc['path']))['uid']
         return NuxeoDocumentInfo(
             self._base_folder_ref, props['dc:title'], doc['uid'], parent_uid,
             doc['path'], folderish, last_update, digest, self.repository,
             doc['type'])
-
+    
     def _filtered_results(self, entries, fetch_parent_uid=True,
                           parent_uid=None):
         # Filter out filenames that would be ignored by the file system client
@@ -315,3 +326,53 @@ class RemoteDocumentClient(BaseAutomationClient):
         self.execute("NuxeoDrive.SetSynchronization", input="doc:" + ref,
                      enable=False)
         return True
+
+    def get_mydocs(self):
+        return self.execute("UserWorkspace.Get")
+
+    def get_othersdocs(self):
+        query = """SELECT * FROM Document WHERE
+                   sh:rootshared = 1 AND
+                   sh:isWritePermission = 1 AND
+                   ecm:currentLifeCycleState!= 'deleted' AND
+                   ecm:mixinType = 'Folderish' AND
+                   dc:creator != 'system' AND
+                   ecm:name != 'Guest Folder' AND
+                   ecm:primaryType!='Domain' AND
+                   ecm:primaryType!='SocialDomain' AND
+                   ecm:mixinType != 'HiddenInNavigation'
+                   AND ecm:mixinType!='HiddenInFacetedSearch' AND
+                   dc:creator != '"+username+"'
+                   """
+
+        return self.execute('Document.Query', query = query)[u'entries']
+        # TODO return result - any filtering needed?
+
+    def get_subfolders(self, parent, nodes):
+        docId = parent[u'uid']
+        query = """SELECT * FROM Document WHERE
+                ecm:parentId = '%s' AND
+                ecm:currentLifeCycleState != 'deleted' AND
+                ecm:mixinType = 'Folderish' and
+                ecm:mixinType != 'HiddenInNavigation' AND
+                ecm:isCheckedInVersion = 0""" % docId
+
+        subfolders = self.execute('Document.Query', query = query)[u'entries']
+        for sf in subfolders:
+            nodes[sf[u'title']]['value'] = FolderInfo(sf[u'uid'], sf[u'title'], docId)
+            self.get_subfolders(sf, nodes[sf[u'title']])
+
+    def get_changes(self, last_sync_date=None, last_root_definitions=None):
+        return self.execute(
+            'NuxeoDrive.GetChangeSummary',
+            lastSyncDate=last_sync_date,
+            lastSyncActiveRootDefinitions=last_root_definitions)
+
+    def get_storage_used(self):
+        try:
+            storage_info = self.execute('StorageUsed.Get')
+            return storage_info['used'], storage_info['total']
+        except ValueError:
+            log.debug("operation 'StorageUsed.Get' is not implemented.")
+            raise
+    

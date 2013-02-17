@@ -65,7 +65,6 @@ class FileInfo(object):
                 h.update(buffer)
         return h.hexdigest()
 
-
 class LocalClient(object):
     """Client API implementation for the local file system"""
 
