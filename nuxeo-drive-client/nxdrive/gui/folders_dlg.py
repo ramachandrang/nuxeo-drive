@@ -59,14 +59,17 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         update_model(session, root)
         
     def set_checked_state(self, parent):
-        """Initialize the state of all checkboxes based on the model.
-        If there are no bindings at all, set all checkboxes.
-        This is used as default when first installing the app (e.g. thru using the wizard)."""
+        """Initialize the state of all checkboxes based on the model."""
 
         session = self.frontend.controller.get_session()
-        if no_bindings(session):
-            self.set_all(parent)
-            return
+        # If there are no bindings at all, set all checkboxes.
+        # This is used as default when first installing the app (e.g. thru using the wizard).
+        # Update: checking all folders is misleading: user may think all folders are synced
+        # and press cancel
+        
+#        if no_bindings(session):
+#            self.set_all(parent)
+#            return
         
         for i in range(parent.rowCount()):
             item = parent.child(i)

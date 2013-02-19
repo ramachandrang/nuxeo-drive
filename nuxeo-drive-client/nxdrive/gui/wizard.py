@@ -16,16 +16,20 @@ from PySide.QtGui import QPushButton, QRadioButton, QCheckBox, QGroupBox, QFileD
 from PySide.QtWebKit import QWebView
 
 from folders_dlg import SyncFoldersDlg
+from nxdrive.model import SyncFolders
 from nxdrive.utils import QApplicationSingleton, EventFilter
 from nxdrive.utils import Communicator
 from nxdrive.utils import win32utils
+from nxdrive.utils import create_settings
 from nxdrive.gui.menubar import DEFAULT_EX_NX_DRIVE_FOLDER
 from nxdrive import Constants
+from nxdrive.logging_config import get_logger
 import nxdrive.gui.qrc_resources
 
 if sys.platform == 'win32':
     from nxdrive.protocol_handler import win32
 
+log = get_logger(__name__)
 
 class CpoWizard(QWizard):
     pages = {
@@ -151,7 +155,6 @@ class CpoWizard(QWizard):
 
     def accept(self):
         from nxdrive.client import ProxyInfo
-        from nxdrive.utils import create_settings
 
         if self.local_folder is not None and not os.path.exists(self.local_folder):
             os.makedirs(self.local_folder)
@@ -172,6 +175,8 @@ class CpoWizard(QWizard):
         settings.setValue('preferences/icon-overlays', True)
         settings.setValue('preferences/autostart', True)
         settings.setValue('preferences/log', True)
+        # change wizard mode to false (start as app)
+        settings.setValue('wizard', False)
 
         launch = self.field('launch')
         if launch:
@@ -188,6 +193,16 @@ class CpoWizard(QWizard):
 
     def reject(self):
         self.session.rollback()
+        # prompt user for wizard mode
+        msgbox = QMessageBox(QMessageBox.Question, Constants.PRODUCT_NAME,
+                                                  self.tr('Do you want to start next time in wizard mode?'))
+        msgbox.setInformativeText(self.tr("Select Yes to start in wizard mode or No to start the normal application, when launched next time."))
+        msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        ret = msgbox.exec_()
+        if ret == QMessageBox.No:
+            settings = create_settings()
+            settings.setValue('wizard', False)
+                
         return super(CpoWizard, self).reject()
 
 
@@ -355,9 +370,27 @@ class InstallOptionsPage(QWizardPage):
     def initializePage(self):
         self.rdButtonTypical.setChecked(True)
         self.wizard().add_skip_tour(True)
+        
+        app = QApplication.instance()
+        process_filter = EventFilter(self)
+        # Note retrieve folders hierarchy and the sync roots
+        try:
+            app.setOverrideCursor(Qt.WaitCursor)
+            self.installEventFilter(process_filter)
+            # retrieve folders
+            self.wizard().controller.synchronizer.get_folders()
+            self.wizard().controller.synchronizer.update_roots()
+            app.restoreOverrideCursor()
+            self.removeEventFilter(process_filter)
+        except Exception as e:
+            pass
+        finally:
+            app.restoreOverrideCursor()
+            self.removeEventFilter(process_filter)
 
     def validatePage(self):
         if not self.rdButtonAdvanced.isChecked():
+            # 'typical' route
             folder = DEFAULT_EX_NX_DRIVE_FOLDER
 
             if os.path.exists(folder) and not self.wizard().keep_location:
@@ -381,6 +414,32 @@ class InstallOptionsPage(QWizardPage):
                 # create the default server binding
                 self.wizard()._bind(folder)
 
+            # if no root binding  exists, bind everything
+            session = self.wizard().session
+            count = session.query(SyncFolders).\
+                   filter(SyncFolders.checked != None).count()
+            if count == 0:
+                folders = session.query(SyncFolders).\
+                                        filter(SyncFolders.remote_id != Constants.CLOUDDESK_UID).all()
+                for fld in folders:
+                    fld.state = True
+                session.commit()
+                
+                # set the synchronized roots
+                app = QApplication.instance()
+                process_filter = EventFilter(self)
+                app.setOverrideCursor(Qt.WaitCursor)
+                self.installEventFilter(process_filter)
+                try:
+                    self.wizard().controller.synchronizer.set_roots()
+                except Exception as e:
+                    username = self.field('username')
+                    log.error(self.tr("Unable to set roots on '%s' for user '%s' (%s)"), 
+                                        Constants.DEFAULT_CLOUDDESK_URL, username, str(e))        
+                finally:
+                    app.restoreOverrideCursor()
+                    self.removeEventFilter(process_filter)
+                
         return True
 
     def change_option(self, state):

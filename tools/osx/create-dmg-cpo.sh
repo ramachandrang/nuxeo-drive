@@ -1,7 +1,7 @@
 #! /bin/bash
 
 VOLUME_NAME="Cloud Portal Office"
-DMG_SIZE=50m
+DMG_SIZE=100m
 SCRIPT_LOCATION="`dirname \"$0\"`"
 SRC_FOLDER_TEMP="$SCRIPT_LOCATION/dmg_src_folder.tmp"
 DMG_TEMP="$SCRIPT_LOCATION/cpo-desktop.tmp.dmg"

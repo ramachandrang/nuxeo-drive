@@ -5,7 +5,7 @@
 # Therefore the result of this script is checked in under version control.
 set -ex
 VOLUME_NAME="Cloud Portal Office"
-DMG_SIZE=50m
+DMG_SIZE=100m
 
 SCRIPT_LOCATION="`dirname \"$0\"`"
 BACKGROUND_FILE=$SCRIPT_LOCATION/dmgbackground.png

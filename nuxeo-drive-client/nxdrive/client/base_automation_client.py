@@ -263,7 +263,7 @@ class BaseAutomationClient(object):
     def fetch_api(self):
         headers = self._get_common_headers()
         base_error_message = (
-            "Failed not connect to %s Content Automation on server %r"
+            "Failed to connect to %s Content Automation on server %r"
             " with user %r"
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
@@ -329,7 +329,7 @@ class BaseAutomationClient(object):
         url = self.automation_url + command
         log.trace("Calling '%s' with json payload: %r", url, data)
         base_error_message = (
-            "Failed not connect to %s Content Automation on server %r"
+            "Failed to connect to %s Content Automation on server %r"
             " with user %r"
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
 
@@ -464,7 +464,7 @@ class BaseAutomationClient(object):
         )
         url = self.automation_url.encode('ascii') + command
         base_error_message = (
-            "Failed not connect to %s Content Automation on server %r"
+            "Failed to connect to %s Content Automation on server %r"
             " with user %r"
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         log.trace("Calling '%s' for file '%s'", url, filename)

@@ -16,9 +16,7 @@ VERSIONFILE = r"nuxeo-drive-client/nxdrive/_version.py"
 
 PRODUCT_NAME = 'Cloud Portal Office'
 APP_NAME = PRODUCT_NAME + ' Desktop'
-WIZARD_NAME = PRODUCT_NAME + ' Wizard'
 SHORT_APP_NAME = 'CpoDesktop'
-SHORT_WIZARD_NAME = 'CpoWizard'
 DEFAULT_ROOT_FOLDER = PRODUCT_NAME
 
 def get_version():
@@ -168,19 +166,6 @@ if '--freeze' in sys.argv:
 
 #    executables = [Executable(script, base=None)]
     executables = []
-
-    if sys.platform == "win32":
-        # Windows GUI program that can be launched without a cmd console
-        executables.append(
-            Executable(script, targetName = SHORT_APP_NAME + '.exe', base = "Win32GUI",
-                       icon = icon, shortcutDir = "ProgramMenuFolder",
-                       shortcutName = APP_NAME))
-
-        executables.append(
-            Executable(scriptwzd, targetName = SHORT_WIZARD_NAME + '.exe', base = "Win32GUI",
-                       icon = icon, shortcutDir = "ProgramMenuFolder",
-                       shortcutName = WIZARD_NAME))
-
     # special handling for data files
     packages.remove('nxdrive.data')
     packages.remove('nxdrive.data.icons')
@@ -199,44 +184,63 @@ if '--freeze' in sys.argv:
                 "atexit",  # implicitly required by PySide
                 "sqlalchemy.dialects.sqlite",
                 ]
-    freeze_options = dict(
-        executables = executables,
-        data_files = [('icons', icons_files),
-                    ('data', others_files),
-                    ('bin', bin_files),
-                    ('images', images_files),
+    
+    excludes = [
+                "ipdb",
+                "clf",
+                "IronPython",
+                "pydoc",
+                "tkinter",
+                ]
+    
+    if sys.platform == "win32":
+        # Windows GUI program that can be launched without a cmd console
+        executables.append(
+            Executable(script, targetName = SHORT_APP_NAME + '.exe', base = "Win32GUI",
+                       icon = icon, shortcutDir = "ProgramMenuFolder",
+                       shortcutName = APP_NAME))
+    
+        freeze_options = dict(
+            executables = executables,
+            data_files = [('icons', icons_files),
+                        ('data', others_files),
+                        ('bin', bin_files),
+                        ('images', images_files),
+                        ],
+            options = {
+                "build_exe": {
+                    "includes": includes,
+                    "excludes": excludes,
+                    "packages": packages + [
+                        "nose",
+                        "icemac.truncatetext",
                     ],
-        options = {
-            "build_exe": {
-                "includes": includes,
-                "packages": packages + [
-                    "nose",
-                    "icemac.truncatetext",
-                ],
-                "excludes": [
-                    "ipdb",
-                    "clf",
-                    "IronPython",
-                    "pydoc",
-                    "tkinter",
-                ],
-                "include_files": include_files,
+                    "include_files": include_files,
+                },
+                "bdist_msi": {
+                    "add_to_path": True,
+                    "upgrade_code": '{800B7778-1B71-11E2-9D65-A0FD6088709B}',
+                },
             },
-            "bdist_msi": {
-                "add_to_path": True,
-                "upgrade_code": '{800B7778-1B71-11E2-9D65-A0FD6088709B}',
-            },
-        },
-    )
-    # TODO: investigate with esky to get an auto-updateable version but
-    # then make sure that we can still have .msi and .dmg packages
-    # instead of simple zip files.
+        )
+    
+# TODO: investigate with esky to get an auto-updateable version but
+# then make sure that we can still have .msi and .dmg packages
+# instead of simple zip files.
 elif sys.platform == 'darwin':
     # Under OSX we use py2app instead of cx_Freeze because we need:
     # - argv_emulation=True for nxdrive:// URL scheme handling
     # - easy Info.plit customization
     import py2app  # install the py2app command
-
+    
+    excludes = [
+                "ipdb",
+                "clf",
+                "IronPython",
+                "pydoc",
+                "tkinter",
+                ]
+                
     freeze_options = dict(
         app = [script],
         data_files = [('icons', icons_files),
@@ -258,6 +262,7 @@ elif sys.platform == 'darwin':
                     ]
                 ),
                 includes = includes,
+                excludes = excludes,
             )
         )
     )

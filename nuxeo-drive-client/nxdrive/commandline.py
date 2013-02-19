@@ -12,6 +12,7 @@ from nxdrive.logging_config import get_logger
 from nxdrive.protocol_handler import parse_protocol_url
 from nxdrive.protocol_handler import register_protocol_handlers
 from nxdrive.utils import register_startup
+from nxdrive.utils import create_settings
 from nxdrive import Constants
 from nxdrive.controller import default_nuxeo_drive_folder
 
@@ -25,6 +26,8 @@ except ImportError:
 if sys.platform == 'win32':
     import win32api
     import win32con
+
+settings = create_settings()
 
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_DELAY = 5.0
@@ -245,6 +248,16 @@ def make_cli_parser(add_subparsers = True):
         parents = [common_parser],
     )
     wizard_parser.set_defaults(command = 'wizard')
+    
+    switch_parser = subparsers.add_parser(
+        'switch',
+        help = 'Switch between wizard and normal mode, when launching the app with no command')
+    mode = switch_parser.add_mutually_exclusive_group(required = True)
+    switch_parser.set_defaults(command = 'switch')
+    mode.add_argument(
+        '--wizard', '-w', required = False, action = 'store_true', default = False)
+    mode.add_argument(
+        '--normal', '-n', required = False, action = 'store_true', default = False)
 
     test_parser.set_defaults(command = 'test')
     test_parser.add_argument(
@@ -364,8 +377,20 @@ class CliHandler(object):
 
     def launch(self, options=None):
         """Launch the QT app in the main thread and sync in another thread."""
-        # TODO: use the start method as default once implemented
-        self.gui(options)
+        # check is in wizard mode
+        wizard_mode = settings.value('wizard', 'true')
+        if sys.platform == 'win32':
+            if wizard_mode.lower() == 'true':
+                wizard_mode = True
+            elif wizard_mode.lower() == 'false':
+                wizard_mode = False
+            else:
+                wizard_mode = True
+                
+        if wizard_mode:
+            self.wizard(options)
+        else:
+            self.gui(options)
 
     def gui(self, options = None):
         from nxdrive.gui.menubar import startApp
@@ -376,6 +401,12 @@ class CliHandler(object):
         from nxdrive.gui.wizard import startWizard
         return startWizard(self.controller, options)
 
+    def switch(self, options = None):
+        if options.wizard:
+            settings.setValue('wizard', True)
+        elif options.normal:
+            settings.setValue('wizard', False)
+        
     def start(self, options=None):
         """Launch the synchronization in a daemonized process (under POSIX)"""
         # Close DB connections before Daemonization
