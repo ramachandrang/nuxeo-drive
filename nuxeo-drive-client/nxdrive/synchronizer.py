@@ -191,6 +191,7 @@ class Synchronizer(object):
                 return
                     
         client = from_state.get_local_client()
+        # TODO Map to the correct local root
         info = client.get_info('/')
         # recursive update
         self._scan_local_recursive(session, client, from_state, info)
@@ -464,7 +465,7 @@ class Synchronizer(object):
             remote_roots = nxclient.get_roots()
             local_roots = [r for r in server_binding.roots
                             if r.remote_repo == repo]
-            self._controller.update_server_roots(
+            self.update_server_roots(
                 server_binding, session, local_roots, remote_roots, repo)
 
         # XXX: we should probably move that elsewhere
@@ -858,6 +859,9 @@ class Synchronizer(object):
 
         try:
             self.get_folders()
+            # start status thread used to provide file status for icon overlays
+            self._controller.start_status_thread()
+            
             while True:
                 n_synchronized = 0
                 if self.should_stop_synchronization():
@@ -923,6 +927,8 @@ class Synchronizer(object):
                 log.warning("Failed to remove stalled pid file: %s"
                             " for stopped process %d: %r", pid_filepath, pid, e)
             self._controller.save_storage(session=session)
+            # stop the thread providing file status for icon overlays
+            self._controller.stop_status_thread()
             # Notify UI frontend to take synchronization stop into account and
             # potentially quit the app
             if self._frontend is not None:
@@ -1155,7 +1161,7 @@ class Synchronizer(object):
                         limit=self.limit_pending))
 
         reached_limit = n_pending == self.limit_pending
-        if self._frontend is not None:
+        if self._frontend is not None and n_pending > 0:
             # XXX: this is broken: list pending should be able to count
             # pending operations on a per-server basis!
             self._frontend.notify_pending(

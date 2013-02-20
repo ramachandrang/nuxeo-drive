@@ -190,7 +190,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         try:
             # retrieve folders
             self.controller.synchronizer.get_folders()
-            self.controller.synchronizer.update_roots()
+            self.controller.synchronizer.update_roots(self.server_binding)
 
         except Exception as e:
             log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
@@ -365,7 +365,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                         self.server_binding.remote_password)
 
                     self.controller.synchronizer.get_folders()
-                    self.controller.synchronizer.update_roots()
+                    self.controller.synchronizer.update_roots(self.server_binding)
 
             except Exception as ex:
                 log.debug("failed to bind or unbind: %s", str(ex))

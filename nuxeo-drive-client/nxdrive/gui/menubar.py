@@ -543,6 +543,13 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         info.n_pending = n_pending
         info.has_more_pending = or_more
 
+        # Inform user of a 'lengthy' operation
+        # TODO adjust the threshold for message notification
+        if n_pending > 20:
+            msg = self.tr('%d items are pending synchronization. This may take a while...') % n_pending
+            self.communicator.message.emit(Constants.APP_NAME,
+                                           msg,
+                                           QtGui.QSystemTrayIcon.Information)
         if not info.online:
             log.debug("Switching to online mode for: %s", local_folder)
             # Mark binding as online and update UI

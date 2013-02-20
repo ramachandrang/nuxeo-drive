@@ -9,7 +9,6 @@ import urlparse
 import mimetypes
 import random
 import time
-import string
 from datetime import datetime
 from urllib import urlencode
 from cookielib import CookieJar

@@ -4,9 +4,6 @@ from __future__ import division
 
 import sys
 import os.path
-from datetime import datetime
-from time import sleep
-from threading import local
 import urllib2
 import md5
 import suds
@@ -16,6 +13,8 @@ import httplib
 import subprocess
 from datetime import datetime
 from datetime import timedelta
+from threading import local
+from threading import Thread
 import logging
         
 import nxdrive
@@ -36,6 +35,8 @@ from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
 from nxdrive import Constants
 from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
+from nxdrive.http_server import HttpServer
+from nxdrive.http_server import http_server_loop
 
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy import func
@@ -52,6 +53,17 @@ POSSIBLE_NETWORK_ERROR_TYPES = (
     ProxyConnectionError,
     ProxyConfigurationError,
 )
+
+# states used by the icon overlay status requests
+PROGRESS_STATES = ['unknown',
+                   'locally_created',
+                   'remotely_created',
+                   'locally_modified',
+                   'remotely_modified',
+                   'remotely_deleted',
+                   ]
+
+CONFLICTED_STATES = [ 'conflicted', ]
 
 schema_url = r'federatedloginservices.xml'
 # service_url = 'https://swee.sharpb2bcloud.com/login/auth.ejs'
@@ -198,8 +210,10 @@ class Controller(object):
         self.loop_count = 0
         self._init_storage()
         self.mydocs_folder = None
-        Controller.__instance = self
         self.synchronizer = Synchronizer(self)
+        self.http_server = None
+        self.status_thread = None
+        Controller.__instance = self
 
     def get_session(self):
         """Reuse the thread local session for this controller
@@ -925,3 +939,71 @@ class Controller(object):
         
     def enable_trace(self, state):
         BaseAutomationClient._enable_trace = state
+
+    def start_status_thread(self):
+        if self.status_thread is None or not self.status_thread.isAlive():
+            self.http_server = HttpServer(Constants.INTERNAL_HTTP_PORT, self.sync_status_app)
+            self.status_thread = Thread(target=http_server_loop,
+                                      args=(self.http_server,))
+            self.status_thread.start()
+            
+    def stop_status_thread(self):
+        self.http_server.stop()
+        
+    def sync_status_app(self, environ, start_response):
+        import json
+        from cgi import parse_qs, escape
+        
+        # Returns a dictionary containing lists as values.
+        d = parse_qs(environ['QUERY_STRING'])
+        # select the first state
+        state = d.get('state', [''])[0]
+        folders = d.get('folder', [])
+        
+        # Always escape user input to avoid script injection
+        state = escape(state)
+        folders = [escape(folder) for folder in folders]
+        
+        status = '200 OK'
+        
+        # response is json in the following format:
+        # { "list": ["folder" : {"name": "/users/bob/loud portal office desktop/My Docs/work",
+        #                         "files": ["foo.txt",
+        #                                   "bar.doc"
+        #                                  ]
+        #                        },
+        #             "folder" : {"name": "/users/bob/loud portal office desktop/My Docs/hobby",
+        #                         "files": ["itinerary.doc",
+        #                                   "reservation.html"
+        #                                  ]
+        #                        }
+        #            ]
+        # }
+            
+        json_struct = { 'list': {}}
+        folder_list = []
+        for folder in folders:
+            
+            folder_struct = {}
+            folder_struct['name'] = folder
+            states = self.children_states(folder)
+            if state == 'synchronized':
+                files = [f for f, status in states if status == state]
+            elif state == 'progress':
+                files = [f for f, status in states if status in PROGRESS_STATES]
+            elif state == 'conflicted':
+                files = [f for f, status in states if status in CONFLICTED_STATES]
+            else:
+                files = []
+            folder_struct['files'] = files
+            folder_list.append({'folder': folder_struct})
+        json_struct['list'] = folder_list
+            
+        response_body = json.dumps(json_struct)        
+        http_status = '200 OK'
+        response_headers = [('Content-Type', 'application/json'),
+                            ('Content-Length', str(len(response_body)))]
+        
+        start_response(http_status, response_headers)
+        return [response_body]
+
