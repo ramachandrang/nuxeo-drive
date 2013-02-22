@@ -62,17 +62,18 @@ class MaintenanceMode(Exception):
         self.url = url
         self.user_id = user_id
         self.retry_after = retry_after
-        self.msg = '%s is in maintenance mode' % Constants.PRODUCT_NAME
         if schedules is not None:
             status = schedules['Status']
             if len(schedules['ScheduleItems']) == 1:
                 schedule = schedules['ScheduleItems'][0]
             else:
                 schedule = None
-            self.msg = get_maintenance_message(status, schedule=schedule)
+            self.msg, self.detail = get_maintenance_message(status, schedule=schedule)
+        else:
+            self.msg, self.detail = get_maintenance_message('maintenance')
 
     def __str__(self):
-        return self.msg
+        return '\n'.join((self.msg, self.detail))
 
 class ProxyInfo(object):
     """Holder class for proxy information"""
@@ -340,17 +341,17 @@ class BaseAutomationClient(object):
         try:
             resp = self.opener.open(req, timeout=self.timeout)
             # --- BEGIN DEBUG ----
-#            from StringIO import StringIO
-#            msg = '{"Status": "maintenance", "ScheduleItems": [\
-#                    {"CreationDate": "2013-02-15T09:50:22.001",\
-#                     "Target": "qadm.sharpb2bcloud.com",\
-#                     "Service": "Cloud Portal Service",\
-#                     "FromDate": "2013-02-16T23:00:00Z",\
-#                     "ToDate": "2013-02-17T03:00:00Z"\
-#                    }]\
-#                    }'
-#            fp = StringIO(msg)
-#            raise urllib2.HTTPError(url, 503, "service unavailable", None, fp)
+            from StringIO import StringIO
+            msg = '{"Status": "maintenance", "ScheduleItems": [\
+                    {"CreationDate": "2013-02-15T09:50:22.001",\
+                     "Target": "qadm.sharpb2bcloud.com",\
+                     "Service": "Cloud Portal Service",\
+                     "FromDate": "2013-02-16T23:00:00Z",\
+                     "ToDate": "2013-02-17T03:00:00Z"\
+                    }]\
+                    }'
+            fp = StringIO(msg)
+            raise urllib2.HTTPError(url, 503, "service unavailable", None, fp)
             # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             # NOTE cannot rewind the error stream from maintenance server!

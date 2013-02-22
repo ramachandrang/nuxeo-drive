@@ -687,12 +687,17 @@ class Synchronizer(object):
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # This is expected and should interrupt the sync process for
                 # this local_folder and should be dealt with in the main loop
-                if e.code == 500:
-                    log.error("Failed to sync %r", pair_state, exc_info=True)
-                    pair_state.last_sync_error_date = datetime.utcnow()
-                    session.commit()
+                if hasattr(e, 'code'):
+                    if e.code == 500:
+                        log.error("Failed to sync %r", pair_state, exc_info=True)
+                        pair_state.last_sync_error_date = datetime.utcnow()
+                        session.commit()
+                    else:
+                        raise e
                 else:
-                    raise e
+                    # TODO how to deal with an error which has no 'code'?
+                    # observed error SSLError which did not have the 'code' attribute
+                    pass
             except Exception as e:
                 # Unexpected exception
                 log.error("Failed to sync %r", pair_state, exc_info=True)
@@ -1183,7 +1188,7 @@ class Synchronizer(object):
             server_binding.update_server_maintenance_status(e.retry_after)
             self.persist_server_event2(e.url, e.user_id, str(e), 'maintenance', session=session)
             if self._frontend is not None:
-                self._frontend.notify_maintenance_mode(str(e))
+                self._frontend.notify_maintenance_mode(e.msg, e.detail)
             return False
 
         elif isinstance(e, QuotaExceeded):
@@ -1616,7 +1621,7 @@ class Synchronizer(object):
         else:
             schedule = None
             
-        msg = get_maintenance_message(status, schedule=schedule)
+        msg, detail = get_maintenance_message(status, schedule=schedule)
         # nothing to notify or persist
         if msg is None:
             return
@@ -1627,14 +1632,14 @@ class Synchronizer(object):
         else:
             # uses current utc time
             creation_date = None
-        self.persist_server_event(sb, msg, message_type='maintenance', 
+        self.persist_server_event(sb, '%s. %s' % (msg, detail), message_type='maintenance', 
                                           utc_time=creation_date, session=session)
         if self._frontend is not None:
             if status == 'available' and sb.nag_maintenance_schedule():
-                self._frontend.notify_maintenance_schedule(msg)
+                self._frontend.notify_maintenance_schedule(msg, detail)
                 sb.update_server_maintenance_schedule()
             elif status == 'maintenance':
-                self._frontend.notify_maintenance_mode(msg)
+                self._frontend.notify_maintenance_mode(msg, detail)
                 
     def persist_server_event(self, server_binding, message, message_type, utc_time=None, session=None):
         if session is None:

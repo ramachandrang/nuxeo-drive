@@ -283,6 +283,27 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox.setDefaultButton(QMessageBox.Ok)
         msgbox.exec_()
 
+    def _authenticate(self):
+        # Launch the GUI to create a binding
+        from nxdrive.gui.authentication import prompt_authentication
+        server_binding = self.controller.get_server_binding(self.local_folder, 
+                                                            raise_if_missing = False)
+        if server_binding is None:
+            if self.local_folder is None:
+                self.local_folder = DEFAULT_NX_DRIVE_FOLDER
+            success = prompt_authentication(self.controller, self.local_folder)
+        else:                 
+            success = prompt_authentication(self.controller, server_binding.local_folder,
+                                   url = server_binding.server_url,
+                                   username = server_binding.remote_user)
+
+        if success[0]:
+            if self.local_folder is None:
+                self.local_folder = server_binding.local_folder
+            self.server_binding = self.controller.get_server_binding(self.local_folder)
+
+        return success[0]
+            
     def handle_recoverable_error(self, text, info, buttons):
         mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, text)
         if buttons is not None:
@@ -304,12 +325,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def _get_local_folder(self):
         # verify that a binding still exists for the local folder
-        binding = self.controller.get_server_binding(self.local_folder, 
-                                                     raise_if_missing = False)
-        if binding is None:
-            # get the 'first' existing binding, if any
-            binding = self.controller.get_server_binding()
-            self.local_folder = binding.local_folder if binding is not None else DEFAULT_EX_NX_DRIVE_FOLDER
+        if self.local_folder is not None:
+            return self.local_folder
+    
+        # get the 'first' existing binding, if any
+        binding = self.controller.get_server_binding(raise_if_missing = False)
+        self.local_folder = binding.local_folder if binding is not None else DEFAULT_EX_NX_DRIVE_FOLDER
 
         return self.local_folder
 
@@ -474,17 +495,18 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # TODO add ui for signing in
         pass
 
-    def notify_maintenance_schedule(self, msg):
+    def notify_maintenance_schedule(self, msg, detail):
         self.server_binding = self.controller.get_server_binding(self.local_folder)
-        self.communicator.message.emit(Constants.APP_NAME, msg,
+        self.communicator.message.emit(msg,
+                                       detail,
                                        QtGui.QSystemTrayIcon.Information)
         
-    def notify_maintenance_mode(self, msg):
+    def notify_maintenance_mode(self, msg, detail):
         # TODO update menu, icon
         self.substate = Constants.APP_SUBSTATE_MAINTENANCE
         self.server_binding = self.controller.get_server_binding(self.local_folder)
-        self.communicator.message.emit(Constants.APP_NAME,
-                                       msg,
+        self.communicator.message.emit(msg,
+                                       detail,
                                        QtGui.QSystemTrayIcon.Warning)  
         self.notify_offline(self.local_folder)      
 
@@ -831,13 +853,13 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if len(self.controller.list_server_bindings()) == 0:
             # Launch the GUI to create a binding
             from nxdrive.gui.authentication import prompt_authentication
-            result = prompt_authentication(self.controller, DEFAULT_NX_DRIVE_FOLDER,
+            result = prompt_authentication(self.controller, self.local_folder,
                                        url = Constants.DEFAULT_CLOUDDESK_URL,
                                        username = Constants.DEFAULT_ACCOUNT)
             ok = result[0]
-            if not ok: return
-
-        self.server_binding = self.controller.get_server_binding(DEFAULT_NX_DRIVE_FOLDER)
+            if not ok: 
+                return
+            self.server_binding = self.controller.get_server_binding(self.local_folder)
         self.setupProcessing()
 
     def started(self):
@@ -877,16 +899,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # clicking on the message notification is not working on the Mac
         if sys.platform == 'darwin':
             if not self.get_binding_info(self.local_folder).online:
-                # Launch the GUI to create a binding
-                from nxdrive.gui.authentication import prompt_authentication
-                server_binding = self.controller.get_server_binding(self.local_folder, 
-                                                                    raise_if_missing = False)
-                success = prompt_authentication(self.controller, self.local_folder,
-                                       url = server_binding.server_url,
-                                       username = server_binding.remote_user)
-
-                if success:
-                    self.server_binding = self.controller.get_server_binding(self.local_folder)
+                if self._authenticate():
                     self.doWork()
 
     @QtCore.Slot()
@@ -907,15 +920,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def handle_message_clicked(self):
         # handle only the click for entering credentials
         if not self.get_binding_info(self.local_folder).online:
-            # Launch the GUI to create a binding
-            from nxdrive.gui.authentication import prompt_authentication
-            server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
-            success = prompt_authentication(self.controller, self.local_folder,
-                                   url = server_binding.server_url,
-                                   username = server_binding.remote_user)
-
-            if success[0]:
-                self.server_binding = self.controller.get_server_binding(self.local_folder)
+            if self._authenticate():
                 self.doWork()
 
     def _getUserName(self):
