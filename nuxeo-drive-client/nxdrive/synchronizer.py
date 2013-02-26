@@ -452,26 +452,31 @@ class Synchronizer(object):
         session.add(child_pair)
         return child_pair, True
 
-    def update_roots(self, server_binding, session=None, repository=None):
+    def update_roots(self, server_binding=None, session=None, repository=None):
         """Ensure that the list of bound roots match server-side info"""
         session = self.get_session() if session is None else session
-        nxclient = self.get_remote_client(server_binding)
-        if repository is not None:
-            repositories = [repository]
+        if server_binding is not None:
+            server_bindings = [server_binding]
         else:
-            repositories = nxclient.get_repository_names()
-        for repo in repositories:
-            nxclient = self.get_remote_client(server_binding, repository=repo)
-            remote_roots = nxclient.get_roots()
-            local_roots = [r for r in server_binding.roots
-                            if r.remote_repo == repo]
-            self.update_server_roots(
-                server_binding, session, local_roots, remote_roots, repo)
-
+            server_bindings = session.query(ServerBinding).all()
+            
+        for sb in server_bindings:
+            nxclient = self.get_remote_client(sb)
+            if repository is not None:
+                repositories = [repository]
+            else:
+                repositories = nxclient.get_repository_names()
+            for repo in repositories:
+                nxclient = self.get_remote_client(sb, repository=repo)
+                remote_roots = nxclient.get_roots()
+                local_roots = [r for r in sb.roots
+                                if r.remote_repo == repo]
+                self.update_server_roots(
+                    sb, session, local_roots, remote_roots, repo)
+    
         # XXX: we should probably move that elsewhere
         if self._frontend is not None:
-            local_folders = [sb.local_folder
-                    for sb in session.query(ServerBinding).all()]
+            local_folders = [sb.local_folder for sb in server_bindings]
             self._frontend.notify_local_folders(local_folders)
 
     def synchronize_one(self, doc_pair, session = None, status = None):
@@ -1208,13 +1213,12 @@ class Synchronizer(object):
             return True
 
         else:
-            self._controller._log_offline(e, "synchronization loop")
-            log.trace("Traceback of ignored network error:",
-                      exc_info = True)
             if not self._controller.recover_from_invalid_credentials(server_binding, e):
                 if self._frontend is not None:
-                    self._frontend.notify_offline(
-                        server_binding.local_folder, e)
+                    # skip if called from wizard
+                    if hasattr(self._frontend, 'notify_offline'):
+                        self._frontend.notify_offline(
+                            server_binding.local_folder, e)
 
                 self._controller.invalidate_client_cache(
                     server_binding.server_url)
