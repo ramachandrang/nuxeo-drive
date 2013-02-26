@@ -9,7 +9,6 @@ import sys
 from PySide.QtCore import Signal, QCoreApplication, QSettings, QObject, QEvent
 from PySide.QtGui import QSystemTrayIcon, QMessageBox
 from nxdrive import Constants
-
 from nxdrive.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -32,13 +31,13 @@ def find_exe_path():
 
     # Detect frozen win32 executable under Windows
     if nxdrive_path.endswith(WIN32_SUFFIX):
-        exe_path = nxdrive_path.replace(WIN32_SUFFIX, 'ndrivew.exe')
+        exe_path = nxdrive_path.replace(WIN32_SUFFIX, '%s.exe' % Constants.SHORT_APP_NAME)
         if os.path.exists(exe_path):
             return exe_path
 
     # Detect OSX frozen app
     if nxdrive_path.endswith(OSX_SUFFIX):
-        exe_path = nxdrive_path.replace(OSX_SUFFIX, "Contents/MacOS/Nuxeo Drive")
+        exe_path = nxdrive_path.replace(OSX_SUFFIX, 'Contents/MacOS/%s' % Constants.APP_NAME)
         if os.path.exists(exe_path):
             return exe_path
 
@@ -159,5 +158,5 @@ class classproperty(property):
 #        return classmethod(self.fget).__get__(None, owner)()
         return self.fget.__get__(None, owner)()
 
-#    def __set__(self, cls, owner, value):
-#        return classmethod(self.fset).__set__(None, owner, value)()
+    def __set__(self, cls, owner, value):
+        return self.fset.__set__(None, owner, value)()

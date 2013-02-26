@@ -13,9 +13,6 @@ class Ui_ProxyDialog(object):
     def setupUi(self, ProxyDialog):
         ProxyDialog.setObjectName("ProxyDialog")
         ProxyDialog.resize(583, 241)
-        self.lblProxy = QtGui.QLabel(ProxyDialog)
-        self.lblProxy.setGeometry(QtCore.QRect(10, 20, 81, 16))
-        self.lblProxy.setObjectName("lblProxy")
         self.lblServer = QtGui.QLabel(ProxyDialog)
         self.lblServer.setGeometry(QtCore.QRect(10, 60, 91, 16))
         self.lblServer.setObjectName("lblServer")
@@ -31,10 +28,6 @@ class Ui_ProxyDialog(object):
         self.lblPort = QtGui.QLabel(ProxyDialog)
         self.lblPort.setGeometry(QtCore.QRect(420, 50, 62, 16))
         self.lblPort.setObjectName("lblPort")
-        self.comboType = QtGui.QComboBox(ProxyDialog)
-        self.comboType.setGeometry(QtCore.QRect(90, 16, 111, 26))
-        self.comboType.setMaxVisibleItems(3)
-        self.comboType.setObjectName("comboType")
         self.txtServer = QtGui.QLineEdit(ProxyDialog)
         self.txtServer.setGeometry(QtCore.QRect(90, 50, 311, 22))
         self.txtServer.setObjectName("txtServer")
@@ -74,7 +67,6 @@ class Ui_ProxyDialog(object):
 
     def retranslateUi(self, ProxyDialog):
         ProxyDialog.setWindowTitle(QtGui.QApplication.translate("ProxyDialog", "Proxy Configuration", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblProxy.setText(QtGui.QApplication.translate("ProxyDialog", "Proxy Type", None, QtGui.QApplication.UnicodeUTF8))
         self.lblServer.setText(QtGui.QApplication.translate("ProxyDialog", "Server", None, QtGui.QApplication.UnicodeUTF8))
         self.cbAuthN.setText(QtGui.QApplication.translate("ProxyDialog", "Proxy requires authentication", None, QtGui.QApplication.UnicodeUTF8))
         self.lblUser.setText(QtGui.QApplication.translate("ProxyDialog", "Username", None, QtGui.QApplication.UnicodeUTF8))

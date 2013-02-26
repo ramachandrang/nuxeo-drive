@@ -23,6 +23,7 @@ from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import RemoteDocumentClient
 from nxdrive.client import Unauthorized
 from nxdrive.client import BaseAutomationClient
+from nxdrive.client import ProxyInfo
 from nxdrive.client import NotFound
 from nxdrive.model import init_db
 from nxdrive.model import DeviceConfig
@@ -428,7 +429,11 @@ class Controller(object):
                                            remote_token=token)
             session.add(server_binding)
             
-            self.update_server_storage_used(server_url, username, session = session)
+            # ignore if this fails
+            try:
+                self.update_server_storage_used(server_url, username, session = session)
+            except Exception as e:
+                log.debug("Failed to retrieve storage: %s", str(e))
 
             # Creating the toplevel state for the server binding
             local_client = LocalClient(server_binding.local_folder)
@@ -444,6 +449,9 @@ class Controller(object):
                                    remote_state='synchronized')
             session.add(state)
             session.commit()
+        except Exception as e:
+            log.debug("Failed to bind serverL: %s", str(e))
+            session.rollback()
 
         # Create the local folder to host the synchronized files: this
         # is useless as long as bind_root is not called
@@ -534,6 +542,10 @@ class Controller(object):
         server_url = self._normalize_url(server_url)
         nxclient = self.remote_doc_client_factory(server_url, username, self.device_id,
                                                   password)
+        # TODO request token
+        # How to validate the returned token that it is a valid token (vs e,g, the login page)
+        if nxclient.request_token() is None:
+            raise Unauthorized(server_url, username)
 
     def _update_hash(self, password):
         return md5.new(password).digest()
@@ -1007,3 +1019,13 @@ class Controller(object):
         start_response(http_status, response_headers)
         return [response_body]
 
+    def reset_proxy(self):
+        BaseAutomationClient.set_proxy()
+        
+    def setProxy(self):
+        BaseAutomationClient.set_proxy(ProxyInfo.get_proxy())
+        
+    def proxy_changed(self):
+        return BaseAutomationClient.get_proxy() != ProxyInfo.get_proxy()
+        
+        

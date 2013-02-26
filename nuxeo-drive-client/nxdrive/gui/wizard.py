@@ -16,11 +16,14 @@ from PySide.QtGui import QPushButton, QRadioButton, QCheckBox, QGroupBox, QFileD
 from PySide.QtWebKit import QWebView
 
 from folders_dlg import SyncFoldersDlg
+from proxy_dlg import ProxyDlg
 from nxdrive.model import SyncFolders
+from nxdrive.client import ProxyInfo
 from nxdrive.utils import QApplicationSingleton, EventFilter
 from nxdrive.utils import Communicator
 from nxdrive.utils import win32utils
 from nxdrive.utils import create_settings
+from nxdrive.utils import find_exe_path
 from nxdrive.gui.menubar import DEFAULT_EX_NX_DRIVE_FOLDER
 from nxdrive import Constants
 from nxdrive.logging_config import get_logger
@@ -154,8 +157,6 @@ class CpoWizard(QWizard):
         pass
 
     def accept(self):
-        from nxdrive.client import ProxyInfo
-
         if self.local_folder is not None and not os.path.exists(self.local_folder):
             os.makedirs(self.local_folder)
 
@@ -180,14 +181,20 @@ class CpoWizard(QWizard):
 
         launch = self.field('launch')
         if launch:
-            exe_path = win32.find_exe_path()
-            if exe_path is not None:
-                subprocess.Popen([exe_path, '--start'])
-            else:
-                base = os.path.split(os.path.split(__file__)[0])[0]
-                script = os.path.join(base, 'commandline.py')
+            exe_path = find_exe_path()
+            script, ext = os.path.splitext(exe_path)
+#            if exe_path is not None:
+#                subprocess.Popen([exe_path])
+#            else:
+#                base = os.path.split(os.path.split(__file__)[0])[0]
+#                script = os.path.join(base, 'commandline.py')
+#                python = sys.executable
+#                subprocess.Popen([python, script, 'gui'])
+            if ext == '.py':
                 python = sys.executable
-                subprocess.Popen([python, script, '--start'])
+                subprocess.Popen([python, exe_path])
+            else:
+                subprocess.Popen([exe_path])
 
         return super(CpoWizard, self).accept()
 
@@ -231,9 +238,10 @@ class IntroPage(QWizardPage):
         self.btnLogin = QPushButton(self.tr('Login'))
         self.lblMessage = QLabel()
         self.lblMessage.setObjectName('message')
-
         self.lblMessage.setWordWrap(True)
         self.lblMessage.setVisible(False)
+        self.btnProxy = QPushButton(self.tr('Proxy...'))
+        self.btnProxy.setVisible(False)
 
         grid = QGridLayout()
         grid.addWidget(self.lblInstr, 0, 0, 1, 2)
@@ -246,15 +254,23 @@ class IntroPage(QWizardPage):
         hlayout.addStretch(10)
         hlayout.addWidget(self.btnLogin)
         grid.addLayout(hlayout, 4, 1)
-        grid.addWidget(self.lblMessage, 5, 0, 1, 2)
+        hlayout2 = QHBoxLayout()
+        hlayout2.addWidget(self.lblMessage)
+        hlayout2.addStretch(10)
+        hlayout2.addWidget(self.btnProxy)
+        grid.addLayout(hlayout2, 5, 1)
         self.setLayout(grid)
 
         self.registerField('username', self.txtUsername)
         self.registerField('pwd', self.txtPwd)
 
     def initializePage(self):
+        # clear previous proxy setting
+        settings = create_settings()
+        settings.setValue('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
         self.btnLogin.setText(self.tr('Logout') if self.auth_ok else self.tr('Login'))
         self.btnLogin.clicked.connect(self.login)
+        self.btnProxy.clicked.connect(self.showProxy)
 
     def login(self):
         if self.auth_ok:
@@ -271,43 +287,71 @@ class IntroPage(QWizardPage):
         try:
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
-
+            # This does not validate credentials
             self.wizard().controller.validate_credentials(Constants.DEFAULT_CLOUDDESK_URL,
                 self.txtUsername.text(), self.txtPwd.text())
 
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
-
-            self.wizard().controller.update_storage_used()
-            storage_text = self.wizard().controller.get_storage(Constants.DEFAULT_CLOUDDESK_URL, self.txtUsername.text())
-            if storage_text is None:
-                storage_text = self.tr("Connected")
-            self.lblMessage.setText(storage_text)
+            # no server binding yet, which is required to retrieve storage for the binding server
+#            self.wizard().controller.update_storage_used()
+#            storage_text = self.wizard().controller.get_storage(Constants.DEFAULT_CLOUDDESK_URL, self.txtUsername.text())
+#            if storage_text is None:
+#                storage_text = self.tr("Connected")
+            msg = self.tr("Connected")
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: green }")
             self.auth_ok = True
+            self.btnProxy.setVisible(False)
             self.completeChanged.emit()
         except Unauthorized:
-            self.lblMessage.setText(self.tr('Invalid credentials.'))
+            msg = self.tr('Invalid credentials.')
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
             self.auth_ok = False
         except Exception as e:
-            msg = self.tr('Unable to connect to %s') % Constants.DEFAULT_CLOUDDESK_URL
-            if hasattr(e, 'msg'):
-                msg = e.msg
-            self.lblMessage.setText(msg)
-            self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
             self.auth_ok = False
+            self.wizard().controller.invalidate_client_cache(Constants.DEFAULT_CLOUDDESK_URL)
+            self.wizard().controller.reset_proxy()
+            # retry with proxy set to auto-detect
+            settings = create_settings()
+            useProxy = settings.value('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
+            if useProxy == ProxyInfo.PROXY_DIRECT:
+                settings.setValue('preferences/useProxy', ProxyInfo.PROXY_AUTODETECT)
+                self.login()
+                return
+            elif useProxy == ProxyInfo.PROXY_AUTODETECT:
+                settings.setValue('preferences/useProxy', ProxyInfo.PROXY_SERVER)
+                msg = self.tr("""Unable to connect to %s.
+If a proxy server is required, please configure it here by selecting the Proxy... button""") %\
+                        Constants.DEFAULT_CLOUDDESK_URL
+
+                self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: gray }")
+                self.btnProxy.setVisible(True)
+            else:
+                if str(e):
+                    detail = ' (%s)' % str(e)
+                else:
+                    detail = ''
+                msg = self.tr('Unable to connect to %s%s') % (Constants.DEFAULT_CLOUDDESK_URL, detail)
+                self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
         finally:
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
 
+        self.lblMessage.setText(msg)
         self.lblMessage.setVisible(True)
         self.btnLogin.setText(self.tr('Logout') if self.auth_ok else self.tr('Login'))
 
+    def showProxy(self):
+        dlg = ProxyDlg(frontend = self.wizard())
+        self.result = dlg.exec_()  
+    
     def isComplete(self):
         return self.auth_ok
-        # TODO remove this - for test only
-#        return True
+
+    def validatePage(self):
+        self.btnLogin.setVisible(False)
+        self.lblMessage.setVisible(False)
+        return True
 
 class InstallOptionsPage(QWizardPage):
     def __init__(self, parent = None):
@@ -419,11 +463,8 @@ class InstallOptionsPage(QWizardPage):
             count = session.query(SyncFolders).\
                    filter(SyncFolders.checked != None).count()
             if count == 0:
-                folders = session.query(SyncFolders).\
-                                        filter(SyncFolders.remote_id != Constants.CLOUDDESK_UID).all()
-                for fld in folders:
-                    fld.state = True
-                session.commit()
+                # check top-level folders as sync roots
+                self.check_toplevel_folders(session=session)
                 
                 # set the synchronized roots
                 app = QApplication.instance()
@@ -441,6 +482,22 @@ class InstallOptionsPage(QWizardPage):
                     self.removeEventFilter(process_filter)
                 
         return True
+    
+    def check_toplevel_folders(self, session=None):
+        if session is None:
+            session = self.wizard().session
+        # clear all
+        all_folders = session.query(SyncFolders).all()
+        for fld in all_folders:
+            fld.state = False
+            
+        mydocs = session.query(SyncFolders).filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
+        mydocs.state = True
+        others_folders = session.query(SyncFolders).\
+                                filter(SyncFolders.remote_parent == Constants.OTHERS_DOCS_UID).all()
+        for fld in others_folders:
+            fld.state = True
+        session.commit()
 
     def change_option(self, state):
         if state:

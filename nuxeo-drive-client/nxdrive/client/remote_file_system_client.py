@@ -50,7 +50,7 @@ class RemoteFileSystemClient(BaseAutomationClient):
     # API common with the local client API
     #
 
-    def get_info(self, fs_item_id, raise_if_missing=True):
+    def get_info(self, fs_item_id, fetch_parent_uid=True, raise_if_missing=True):
         fs_item = self.get_fs_item(fs_item_id)
         if fs_item is None:
             if raise_if_missing:

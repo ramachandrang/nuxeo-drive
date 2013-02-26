@@ -83,7 +83,13 @@ class ProgressDialog(QDialog):
         
     @classmethod
     def stopServer(self, frontend, parent = None, cancel = True):
-        if frontend.worker is not None and frontend.worker.isAlive():
+        from threading import Thread
+        
+        if hasattr(frontend, 'worker'):
+            worker = frontend.worker
+        else:
+            worker = None
+        if worker is not None and isinstance(worker, Thread) and worker.isAlive():
             # Ask the controller to stop: the synchronization loop will in turn
             # call notify_sync_stopped and finally handle_stop (without quitting the app)
             frontend.controller.stop()

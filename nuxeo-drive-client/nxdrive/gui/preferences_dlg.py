@@ -85,7 +85,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.cbAutostart.stateChanged.connect(self.setAutostart)
         self.rbProxy.toggled.connect(self.setProxy)
         # REMOVE proxy auto-detect
-#        self.rbAutodetect.toggled.connect(self.setProxy)
+        self.rbAutodetect.toggled.connect(self.setProxy)
 
         self.cbIconOverlays.stateChanged.connect(self.setShowIconOverlays)
         if sys.platform == 'win32':
@@ -128,7 +128,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.rbProxy.setChecked(self.useProxy == ProxyInfo.PROXY_SERVER)
         self.rbDirect.setChecked(self.useProxy == ProxyInfo.PROXY_DIRECT)
         # REMOVE proxy auto-detect
-#        self.rbAutodetect.setChecked(self.useProxy == ProxyInfo.PROXY_AUTODETECT)
+        self.rbAutodetect.setChecked(self.useProxy == ProxyInfo.PROXY_AUTODETECT)
         self.btnProxy.setEnabled(self.useProxy == ProxyInfo.PROXY_SERVER)
 
         self.setAttribute(Qt.WA_DeleteOnClose, False)
@@ -220,9 +220,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def configProxy(self):
         # Proxy... button is only enabled in this case
         self.useProxy = ProxyInfo.PROXY_SERVER
-        # retrieve current proxy
-        # NOTE: will not work for a different remote client
-        proxy = RemoteDocumentClient.proxy
         dlg = ProxyDlg(frontend = self.frontend)
         self.result = dlg.exec_()    
 
@@ -243,8 +240,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if self.rbProxy.isChecked():
             self.btnProxy.setEnabled(True)
         # REMOVE proxy auto-detect
-#        elif self.rbAutodetect.isChecked():
-#            self.btnProxy.setEnabled(False)
+        elif self.rbAutodetect.isChecked():
+            self.btnProxy.setEnabled(False)
         else:
             self.btnProxy.setEnabled(False)
 
@@ -460,8 +457,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if self.rbProxy.isChecked():
             useProxy = ProxyInfo.PROXY_SERVER
         # REMOVE proxy auto-detect
-#        elif self.rbAutodetect.isChecked():
-#            useProxy = ProxyInfo.PROXY_AUTODETECT
+        elif self.rbAutodetect.isChecked():
+            useProxy = ProxyInfo.PROXY_AUTODETECT
         else:
             useProxy = ProxyInfo.PROXY_DIRECT
 
@@ -478,7 +475,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #                self.controller.nuxeo_client_factory(...).proxy = None
                 #NOTE: this will not work for a remote client factory different from RemoteDocumentClient
                 # but requires at least 4 params
-                RemoteDocumentClient.proxy = None
+                self.controller.reset_proxy()
                 
             self.useProxy = useProxy
             if self.useProxy == ProxyInfo.PROXY_AUTODETECT or self.useProxy == ProxyInfo.PROXY_DIRECT:
@@ -488,11 +485,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 settings.setValue('preferences/proxyUser', '')
                 settings.setValue('preferences/proxyPwd', '')
                 settings.setValue('preferences/proxyAuthN', False)
-        elif useProxy and RemoteDocumentClient.proxy != ProxyInfo.get_proxy():
+        elif useProxy and self.controller.proxy_changed():
             self.result = ProgressDialog.stopServer(self.frontend, parent = self)
             if self.result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected
-            RemoteDocumentClient.proxy = ProxyInfo.get_proxy()
+            self.controller.set_proxy()
 
         settings.setValue('preferences/useProxy', self.useProxy)
         settings.setValue('preferences/notifications', self.notifications)

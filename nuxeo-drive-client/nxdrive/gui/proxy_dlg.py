@@ -17,7 +17,6 @@ from nxdrive.gui.progress_dlg import ProgressDialog
 settings = create_settings()
 PORT = '8090'
 PORT_INTEGER = int(PORT)
-TYPES = ['HTTP', 'SOCKS4', 'SOCKS5']
 
 class ProxyDlg(QDialog, Ui_ProxyDialog):
     def __init__(self, frontend = None, parent = None):
@@ -30,12 +29,8 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
 
         applyBtn = self.buttonBox.button(QDialogButtonBox.Apply)
         applyBtn.clicked.connect(self.applyChanges)
-        self.comboType.addItems(TYPES)
-        self.comboType.setCurrentIndex(0)
-        self.comboType.activated.connect(self.setType)
         self.cbAuthN.toggled.connect(self.setAuthN)
 
-        self.proxyType = self.comboType.currentText()
         self.server = None
         self.port = None
         self.user = None
@@ -49,19 +44,18 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
             self.txtUser.clear()
             self.txtPwd.clear()
             self.cbAuthN.setChecked(False)
+            self.txtUser.setEnabled(False)
+            self.txtPwd.setEnabled(False)
         else:
-            if proxy.type is not None:
-                self.proxyType = proxy.type
             self.server = proxy.server_url
             self.port = proxy.port
             self.user = proxy.user
             self.pwd = proxy.pwd
-            if proxy.authn_required is not None:
+            if proxy.authn_required:
                 self.AuthN = proxy.authn_required
 
             self.txtServer.setText(self.server)
             self.txtPort.setText(str(self.port))
-            self.comboType.setCurrentIndex(TYPES.index(self.proxyType,))
             self.cbAuthN.setChecked(self.AuthN)
             if self.AuthN:
                 self.txtUser.setEnabled(True)
@@ -73,10 +67,6 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
                 self.txtUser.clear()
                 self.txtPwd.setEnabled(False)
                 self.txtPwd.clear()
-
-
-    def setType(self, state):
-        self.proxyType = self.comboType.currentText()
 
     def setAuthN(self, state):
         self.AuthN = state
@@ -160,8 +150,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
             result = ProgressDialog.stopServer(self.frontend, parent = self)
             if result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected   
-            
-            settings.setValue('preferences/proxyType', self.proxyType)
+
             settings.setValue('preferences/proxyServer', self.server)
             settings.setValue('preferences/proxyUser', self.user)
             settings.setValue('preferences/proxyPwd', self.pwd)

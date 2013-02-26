@@ -15,6 +15,7 @@ from nxdrive.utils import register_startup
 from nxdrive.utils import create_settings
 from nxdrive import Constants
 from nxdrive.controller import default_nuxeo_drive_folder
+from sqlalchemy.pool import SingletonThreadPool
 
 try:
     import ipdb
@@ -348,7 +349,7 @@ class CliHandler(object):
         self._configure_logger(options)
 
         # Initialize a controller for this process
-        self.controller = Controller(options.nxdrive_home)
+        self.controller = Controller(options.nxdrive_home, poolclass=SingletonThreadPool)
 
         # Find the command to execute based on the
         handler = getattr(self, command, None)

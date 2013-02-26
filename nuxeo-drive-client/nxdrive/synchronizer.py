@@ -490,8 +490,9 @@ class Synchronizer(object):
         if doc_pair.local_path is not None:
             doc_pair.refresh_local(local_client)
         if doc_pair.remote_ref is not None:
-            fetch_parent_uid = self._get_fetch_parent_uid(doc_pair.remote_ref)
-            remote_info = doc_pair.refresh_remote(remote_client, fetch_parent_uid = fetch_parent_uid)
+#            fetch_parent_uid = self._get_fetch_parent_uid(doc_pair.remote_ref)
+#            remote_info = doc_pair.refresh_remote(remote_client, fetch_parent_uid = fetch_parent_uid)
+            remote_info = doc_pair.refresh_remote(remote_client)
 
         # Detect creation
         if (doc_pair.local_state != 'deleted'
@@ -523,8 +524,9 @@ class Synchronizer(object):
                     name=doc_pair.remote_name,
                 )
 
-                fetch_parent_uid = self._get_fetch_parent_uid(doc_pair.remote_ref)
-                doc_pair.refresh_remote(remote_client, fetch_parent_uid = fetch_parent_uid)
+#                fetch_parent_uid = self._get_fetch_parent_uid(doc_pair.remote_ref)
+#                doc_pair.refresh_remote(remote_client, fetch_parent_uid = fetch_parent_uid)
+                doc_pair.refresh_remote(remote_client)
             doc_pair.update_state('synchronized', 'synchronized')
 
         elif doc_pair.pair_state == 'remotely_modified':
@@ -572,8 +574,9 @@ class Synchronizer(object):
                     content=local_client.get_content(doc_pair.local_path))
                 log.debug("Creating remote document '%s' in folder '%s'",
                           name, parent_pair.remote_name)
-            fetch_parent_uid = self._get_fetch_parent_uid(remote_ref, session = session)
-            doc_pair.update_remote(remote_client.get_info(remote_ref, fetch_parent_uid = fetch_parent_uid))
+#            fetch_parent_uid = self._get_fetch_parent_uid(remote_ref, session = session)
+#            doc_pair.update_remote(remote_client.get_info(remote_ref, fetch_parent_uid = fetch_parent_uid))
+            doc_pair.update_remote(remote_client.get_info(remote_ref))
             doc_pair.update_state('synchronized', 'synchronized')
 
         elif doc_pair.pair_state == 'remotely_created':
@@ -931,7 +934,7 @@ class Synchronizer(object):
             except Exception, e:
                 log.warning("Failed to remove stalled pid file: %s"
                             " for stopped process %d: %r", pid_filepath, pid, e)
-            self._controller.save_storage(session=session)
+
             # stop the thread providing file status for icon overlays
             self._controller.stop_status_thread()
             # Notify UI frontend to take synchronization stop into account and
@@ -1628,7 +1631,7 @@ class Synchronizer(object):
         
         # persist server event in the database
         if schedule is not None:
-            creation_date = datetime.strptime(schedule['CreationDate'], '%Y-%m-%dT%H:%M:%S.%f')
+            creation_date = datetime.strptime(schedule['CreationDate'], '%Y-%m-%dT%H:%M:%S.%fZ')
         else:
             # uses current utc time
             creation_date = None
