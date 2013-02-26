@@ -41,7 +41,6 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.IterableQueryResult;
-import org.nuxeo.ecm.core.api.VersioningOption;
 import org.nuxeo.ecm.core.api.event.CoreEventConstants;
 import org.nuxeo.ecm.core.api.model.PropertyException;
 import org.nuxeo.ecm.core.api.repository.Repository;
@@ -57,7 +56,6 @@ import org.nuxeo.runtime.model.DefaultComponent;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-
 
 /**
  * Manage list of NuxeoDrive synchronization roots and devices for a given nuxeo
@@ -80,14 +78,6 @@ public class NuxeoDriveManagerImpl extends DefaultComponent implements
 
     // TODO: make this overridable with an extension point
     protected FileSystemChangeFinder changeFinder = new AuditChangeFinder();
-
-    // Versioning delay in seconds
-    // TODO: make this configurable with an extension point
-    protected long versioningDelay = 3600;
-
-    // Versioning option
-    // TODO: make this configurable with an extension point
-    protected VersioningOption versioningOption = VersioningOption.MINOR;
 
     public NuxeoDriveManagerImpl() {
         clearCache();
@@ -300,6 +290,14 @@ public class NuxeoDriveManagerImpl extends DefaultComponent implements
         return syncRoots;
     }
 
+    public boolean isSynchronizationRoot(Principal principal, DocumentModel doc)
+            throws ClientException {
+        String repoName = doc.getRepositoryName();
+        SynchronizationRoots syncRoots = getSynchronizationRoots(principal).get(
+                repoName);
+        return syncRoots.refs.contains(doc.getRef());
+    }
+
     protected Map<String, SynchronizationRoots> computeSynchronizationRoots(
             String query, Principal principal) throws ClientException {
         Map<String, SynchronizationRoots> syncRoots = new HashMap<String, SynchronizationRoots>();
@@ -335,26 +333,6 @@ public class NuxeoDriveManagerImpl extends DefaultComponent implements
     // remove setter
     public void setChangeFinder(FileSystemChangeFinder changeFinder) {
         this.changeFinder = changeFinder;
-    }
-
-    public long getVersioningDelay() {
-        return versioningDelay;
-    }
-
-    // TODO: make versioningDelay configurable with an extension point and
-    // remove setter
-    public void setVersioningDelay(long versioningDelay) {
-        this.versioningDelay = versioningDelay;
-    }
-
-    public VersioningOption getVersioningOption() {
-        return versioningOption;
-    }
-
-    // TODO: make versioningOption configurable with an extension point and
-    // remove setter
-    public void setVersioningOption(VersioningOption versioningOption) {
-        this.versioningOption = versioningOption;
     }
 
 }

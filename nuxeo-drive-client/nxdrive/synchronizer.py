@@ -8,7 +8,7 @@ import urllib2
 import socket
 import httplib
 
-from sqlalchemy import not_
+from sqlalchemy import not_, or_
 import psutil
 
 from nxdrive.client import DEDUPED_BASENAME_PATTERN
@@ -392,7 +392,7 @@ class Synchronizer(object):
 
         # Previous attempt has failed: relax the digest constraint
         possible_pairs = session.query(LastKnownState).filter_by(
-            local_folder=parent_pair.local_folder,                                         
+            local_folder=parent_pair.local_folder,
             remote_ref=None,
             local_parent_path=parent_pair.local_path,
             folderish=child_info.folderish,
@@ -410,9 +410,8 @@ class Synchronizer(object):
         return child_pair, True
 
     def synchronize_one(self, doc_pair, session=None):
-        """Refresh state a perform network transfer for a pair of documents."""
-        if session is None:
-            session = self.get_session()
+        """Refresh state and perform network transfer for a pair of documents."""
+        session = self.get_session() if session is None else session
         # Find a cached remote client for the server binding of the file to
         # synchronize
         remote_client = self.get_remote_fs_client(doc_pair.server_binding)
@@ -422,8 +421,9 @@ class Synchronizer(object):
         # Update the status the collected info of this file to make sure
         # we won't perfom inconsistent operations
 
+        local_info = remote_info = None
         if doc_pair.local_path is not None:
-            doc_pair.refresh_local(local_client)
+            local_info = doc_pair.refresh_local(local_client)
         if doc_pair.remote_ref is not None:
             remote_info = doc_pair.refresh_remote(remote_client)
 
@@ -445,145 +445,296 @@ class Synchronizer(object):
         # TODO: refactor blob access API to avoid loading content in memory
         # as python strings
 
-        if doc_pair.pair_state == 'locally_modified':
-            # TODO: handle smart versionning policy here (or maybe delegate to
-            # a dedicated server-side operation)
-            if doc_pair.remote_digest != doc_pair.local_digest:
-                log.debug("Updating remote document '%s'.",
-                          doc_pair.remote_name)
-                remote_client.update_content(
-                    doc_pair.remote_ref,
-                    local_client.get_content(doc_pair.local_path),
-                    name=doc_pair.remote_name,
-                )
-                doc_pair.refresh_remote(remote_client)
-            doc_pair.update_state('synchronized', 'synchronized')
+        handler_name = '_synchronize_' + doc_pair.pair_state
+        sync_handler = getattr(self, handler_name, None)
 
-        elif doc_pair.pair_state == 'remotely_modified':
-            if doc_pair.remote_digest != doc_pair.local_digest != None:
-                log.debug("Updating local file '%s'.",
-                          doc_pair.get_local_abspath())
-                content = remote_client.get_content(doc_pair.remote_ref)
-                try:
-                    local_client.update_content(doc_pair.local_path, content)
-                    doc_pair.refresh_local(local_client)
-                    doc_pair.update_state('synchronized', 'synchronized')
-                except (IOError, WindowsError):
-                    log.debug("Delaying update for remotely modified "
-                              "content %r due to concurrent file access.",
-                              doc_pair)
-            else:
-                # digest agree, no need to transfer additional bytes over the
-                # network
-                doc_pair.update_state('synchronized', 'synchronized')
-
-        elif doc_pair.pair_state == 'locally_created':
-            name = os.path.basename(doc_pair.local_path)
-            # Find the parent pair to find the ref of the remote folder to
-            # create the document
-            parent_pair = session.query(LastKnownState).filter_by(
-                local_folder=doc_pair.local_folder,
-                local_path=doc_pair.local_parent_path
-            ).first()
-            if parent_pair is None or parent_pair.remote_ref is None:
-                # Illegal state: report the error and let's wait for the
-                # parent folder issue to get resolved first
-                session.commit()
-                raise ValueError(
-                    "Parent folder of %r%r is not bound to a remote folder",
-                    doc_pair.local_folder, doc_pair.local_path)
-            parent_ref = parent_pair.remote_ref
-            if doc_pair.folderish:
-                log.debug("Creating remote folder '%s' in folder '%s'",
-                          name, parent_pair.remote_name)
-                remote_ref = remote_client.make_folder(parent_ref, name)
-            else:
-                remote_ref = remote_client.make_file(
-                    parent_ref, name,
-                    content=local_client.get_content(doc_pair.local_path))
-                log.debug("Creating remote document '%s' in folder '%s'",
-                          name, parent_pair.remote_name)
-            doc_pair.update_remote(remote_client.get_info(remote_ref))
-            doc_pair.update_state('synchronized', 'synchronized')
-
-        elif doc_pair.pair_state == 'remotely_created':
-            name = remote_info.name
-            # Find the parent pair to find the path of the local folder to
-            # create the document into
-            parent_pair = session.query(LastKnownState).filter_by(
-                local_folder=doc_pair.local_folder,
-                remote_ref=remote_info.parent_uid,
-            ).first()
-            if parent_pair is None or parent_pair.local_path is None:
-                # Illegal state: report the error and let's wait for the
-                # parent folder issue to get resolved first
-                raise ValueError(
-                    "Parent folder of doc %r (%r) is not bound to a local"
-                    " folder", name, doc_pair.remote_ref)
-            local_parent_path = parent_pair.local_path
-            if doc_pair.folderish:
-                path = local_client.make_folder(local_parent_path, name)
-                log.debug("Creating local folder '%s' in '%s'", name,
-                          parent_pair.get_local_abspath())
-            else:
-                path = local_client.make_file(
-                    local_parent_path, name,
-                    content=remote_client.get_content(doc_pair.remote_ref))
-                log.debug("Creating local document '%s' in '%s'", name,
-                          parent_pair.get_local_abspath())
-            doc_pair.update_local(local_client.get_info(path))
-            doc_pair.update_state('synchronized', 'synchronized')
-
-        elif doc_pair.pair_state == 'locally_deleted':
-            if doc_pair.remote_ref is not None:
-                log.debug("Deleting remote doc '%s' (%s)",
-                          doc_pair.remote_name, doc_pair.remote_ref)
-                remote_client.delete(doc_pair.remote_ref)
-            self._delete_with_descendant_states(session, doc_pair)
-
-        elif doc_pair.pair_state == 'remotely_deleted':
-            if doc_pair.local_path is not None:
-                try:
-                    # TODO: handle OS-specific trash management?
-                    log.debug("Deleting local doc '%s'",
-                              doc_pair.get_local_abspath())
-                    local_client.delete(doc_pair.local_path)
-                    self._delete_with_descendant_states(session, doc_pair)
-                    # XXX: shall we also delete all the subcontent / folder at
-                    # once in the medata table?
-                except (IOError, WindowsError):
-                    # Under Windows deletion can be impossible while another
-                    # process is accessing the same file (e.g. word processor)
-                    # TODO: be more specific as detecting this case:
-                    # shall we restrict to the case e.errno == 13 ?
-                    log.debug(
-                        "Deletion of '%s' delayed due to concurrent"
-                        "editing of this file by another process.",
-                        doc_pair.get_local_abspath())
-            else:
-                self._delete_with_descendant_states(session, doc_pair)
-
-        elif doc_pair.pair_state == 'deleted':
-            # No need to store this information any further
-            log.debug('Deleting doc pair %s deleted on both sides',
-                doc_pair.local_path)
-            self._delete_with_descendant_states(session, doc_pair)
-
-        elif doc_pair.pair_state == 'conflicted':
-            if doc_pair.local_digest == doc_pair.remote_digest != None:
-                # Automated conflict resolution based on digest content:
-                doc_pair.update_state('synchronized', 'synchronized')
-            log.debug('Conflict detected for %s', doc_pair.local_path)
+        if sync_handler is None:
+            raise RuntimeError("Unhandled pair_state: %r for %r",
+                               doc_pair.pair_state, doc_pair)
         else:
-            log.warning("Unhandled pair_state: %r for %r",
-                          doc_pair.pair_state, doc_pair)
-
-        # TODO: handle other cases such as moves and lock updates
+            sync_handler(doc_pair, session, local_client, remote_client,
+                         local_info, remote_info)
 
         # Ensure that concurrent process can monitor the synchronization
         # progress
         if len(session.dirty) != 0 or len(session.deleted) != 0:
             session.commit()
+
+    def _synchronize_locally_modified(self, doc_pair, session,
+        local_client, remote_client, local_info, remote_info):
+        if doc_pair.remote_digest != doc_pair.local_digest:
+            log.debug("Updating remote document '%s'.",
+                      doc_pair.remote_name)
+            remote_client.update_content(
+                doc_pair.remote_ref,
+                local_client.get_content(doc_pair.local_path),
+                name=doc_pair.remote_name,
+            )
+            doc_pair.refresh_remote(remote_client)
+        doc_pair.update_state('synchronized', 'synchronized')
+
+    def _synchronize_remotely_modified(self, doc_pair, session,
+        local_client, remote_client, local_info, remote_info):
+        if doc_pair.remote_digest != doc_pair.local_digest != None:
+            log.debug("Updating local file '%s'.",
+                      doc_pair.get_local_abspath())
+            content = remote_client.get_content(doc_pair.remote_ref)
+            try:
+                local_client.update_content(doc_pair.local_path, content)
+                doc_pair.refresh_local(local_client)
+                doc_pair.update_state('synchronized', 'synchronized')
+            except (IOError, WindowsError):
+                log.debug("Delaying update for remotely modified "
+                          "content %r due to concurrent file access.",
+                          doc_pair)
+        else:
+            # digest agree, no need to transfer additional bytes over the
+            # network
+            doc_pair.update_state('synchronized', 'synchronized')
+
+    def _synchronize_locally_created(self, doc_pair, session,
+        local_client, remote_client, local_info, remote_info):
+        if self._detect_resolve_local_move(doc_pair, session,
+            local_client, remote_client, local_info, remote_info):
+            return
+        name = os.path.basename(doc_pair.local_path)
+        # Find the parent pair to find the ref of the remote folder to
+        # create the document
+        parent_pair = session.query(LastKnownState).filter_by(
+            local_folder=doc_pair.local_folder,
+            local_path=doc_pair.local_parent_path
+        ).first()
+        if parent_pair is None or parent_pair.remote_ref is None:
+            # Illegal state: report the error and let's wait for the
+            # parent folder issue to get resolved first
+            session.commit()
+            raise ValueError(
+                "Parent folder of %s is not bound to a remote folder"
+                % doc_pair.get_local_abspath())
+        parent_ref = parent_pair.remote_ref
+        if doc_pair.folderish:
+            log.debug("Creating remote folder '%s' in folder '%s'",
+                      name, parent_pair.remote_name)
+            remote_ref = remote_client.make_folder(parent_ref, name)
+        else:
+            remote_ref = remote_client.make_file(
+                parent_ref, name,
+                content=local_client.get_content(doc_pair.local_path))
+            log.debug("Creating remote document '%s' in folder '%s'",
+                      name, parent_pair.remote_name)
+        doc_pair.update_remote(remote_client.get_info(remote_ref))
+        doc_pair.update_state('synchronized', 'synchronized')
+
+    def _synchronize_remotely_created(self, doc_pair, session,
+        local_client, remote_client, local_info, remote_info):
+        name = remote_info.name
+        # Find the parent pair to find the path of the local folder to
+        # create the document into
+        parent_pair = session.query(LastKnownState).filter_by(
+            local_folder=doc_pair.local_folder,
+            remote_ref=remote_info.parent_uid,
+        ).first()
+        if parent_pair is None:
+            # Illegal state: report the error and let's wait for the
+            # parent folder issue to get resolved first
+            raise ValueError(
+                "Could not find parent folder of doc %r (%r)"
+                " folder" % (name, doc_pair.remote_ref))
+        if parent_pair.local_path is None:
+            # Illegal state: report the error and let's wait for the
+            # parent folder issue to get resolved first
+            raise ValueError(
+                "Parent folder of doc %r (%r) is not bound to a local"
+                " folder" % (name, doc_pair.remote_ref))
+        local_parent_path = parent_pair.local_path
+        if doc_pair.folderish:
+            path = local_client.make_folder(local_parent_path, name)
+            log.debug("Creating local folder '%s' in '%s'", name,
+                      parent_pair.get_local_abspath())
+        else:
+            path = local_client.make_file(
+                local_parent_path, name,
+                content=remote_client.get_content(doc_pair.remote_ref))
+            log.debug("Creating local document '%s' in '%s'", name,
+                      parent_pair.get_local_abspath())
+        doc_pair.update_local(local_client.get_info(path))
+        doc_pair.update_state('synchronized', 'synchronized')
+
+    def _synchronize_locally_deleted(self, doc_pair, session,
+        local_client, remote_client, local_info, remote_info):
+        if self._detect_resolve_local_move(doc_pair, session,
+            local_client, remote_client, local_info, remote_info):
+            return
+        if doc_pair.remote_ref is not None:
+            log.debug("Deleting remote doc '%s' (%s)",
+                      doc_pair.remote_name, doc_pair.remote_ref)
+            remote_client.delete(doc_pair.remote_ref)
+        self._delete_with_descendant_states(session, doc_pair)
+
+    def _synchronize_remotely_deleted(self, doc_pair, session,
+        local_client, remote_client, local_info, remote_info):
+        if doc_pair.local_path is not None:
+            try:
+                # TODO: handle OS-specific trash management?
+                log.debug("Deleting local doc '%s'",
+                          doc_pair.get_local_abspath())
+                local_client.delete(doc_pair.local_path)
+                self._delete_with_descendant_states(session, doc_pair)
+                # XXX: shall we also delete all the subcontent / folder at
+                # once in the medata table?
+            except (IOError, WindowsError):
+                # Under Windows deletion can be impossible while another
+                # process is accessing the same file (e.g. word processor)
+                # TODO: be more specific as detecting this case:
+                # shall we restrict to the case e.errno == 13 ?
+                log.debug(
+                    "Deletion of '%s' delayed due to concurrent"
+                    "editing of this file by another process.",
+                    doc_pair.get_local_abspath())
+        else:
+            self._delete_with_descendant_states(session, doc_pair)
+
+    def _synchronize_deleted(self, doc_pair, session,
+        local_client, remote_client, local_info, remote_info):
+        # No need to store this information any further
+        log.debug('Deleting doc pair %s deleted on both sides' %
+                  doc_pair.get_local_abspath())
+        self._delete_with_descendant_states(session, doc_pair)
+
+    def _synchronize_conflicted(self, doc_pair, session,
+        local_client, remote_client, local_info, remote_info):
+        if doc_pair.local_digest == doc_pair.remote_digest != None:
+            log.debug('Automated conflict resolution using digest for %s',
+                doc_pair.get_local_abspath())
+            doc_pair.update_state('synchronized', 'synchronized')
+        else:
+            raise RuntimeError('Conflict detected for %s' %
+                               doc_pair.local_path)
+
+    def _detect_resolve_local_move(self, doc_pair, session,
+        local_client, remote_client, local_info, remote_info):
+        """Handle local move / renaming if doc_pair is detected as involved
+
+        Detection is based on digest for files and content for folders.
+        Resolution perform the matching remote action and update the local
+        state DB.
+
+        If the doc_pair is not detected as being involved in a rename
+        / move operation
+        """
+        # Detection step
+
+        if doc_pair.pair_state == 'locally_deleted':
+            source_doc_pair = doc_pair
+            target_doc_pair = None
+            wanted_local_state = 'created'
+            if doc_pair.folderish:
+                # TODO: implement me!
+                return False
+            else:
+                # The creation detection might not have occurred yet for the
+                # other pair state
+                candidates = session.query(LastKnownState).filter_by(
+                    local_folder=doc_pair.local_folder,
+                    folderish=0,
+                    local_digest=doc_pair.local_digest,
+                    remote_ref=None).filter(
+                    or_(LastKnownState.local_state == 'created',
+                        LastKnownState.local_state == 'unknown')).all()
+        elif doc_pair.pair_state == 'locally_created':
+            source_doc_pair = None
+            target_doc_pair = doc_pair
+            wanted_local_state = 'deleted'
+            if doc_pair.folderish:
+                # TODO: implement me!
+                return False
+            else:
+                candidates = session.query(LastKnownState).filter_by(
+                    local_folder=doc_pair.local_folder,
+                    folderish=0,
+                    local_digest=doc_pair.local_digest,
+                    local_state='deleted').all()
+        else:
+            # Nothing to do
+            return False
+
+        if doc_pair.folderish:
+            # TODO: implement me!
+            return False
+        else:
+            # Find a locally_created document with matching digest
+            if len(candidates) == 0:
+                # Shall we try to detect move + update sequences based
+                # on same name in another folder?
+                return False
+            if len(candidates) > 1:
+                # TODO: rerank the candidates according to some closeness scores:
+                # name unchanged + very code score
+                # parent id unchanged + good score
+                log.debug("Found %d renaming / move candidates for %s",
+                          len(candidates), doc_pair)
+            if doc_pair.pair_state == 'locally_deleted':
+                target_doc_pair = candidates[0]
+            else:
+                source_doc_pair = candidates[0]
+
+        if source_doc_pair is None or target_doc_pair is None:
+            # No candidate found
+            return False
+
+        # Resolution step
+
+        moved_or_renamed = False
+        remote_ref = source_doc_pair.remote_ref
+
+        # check that the target still exists
+        if not remote_client.exists(remote_ref):
+            # Nothing to do: the regular deleted / created handling will
+            # work in this case.
+            return False
+
+        if (target_doc_pair.local_parent_path
+            != source_doc_pair.local_parent_path):
+            # This is (at least?) a move operation
+
+            # Find the matching target parent folder, assuming it has already
+            # been refreshed and matched in the past
+            parent_doc_pair = session.query(LastKnownState).filter_by(
+                local_folder=doc_pair.local_folder,
+                local_path=target_doc_pair.local_parent_path,
+            ).first()
+
+            if (parent_doc_pair is not None  and
+                parent_doc_pair.remote_ref is not None):
+                # Detect any concurrent deletion of the target remote folder
+                # that would prevent the move
+                parent_doc_pair.refresh_remote(remote_client)
+            if (parent_doc_pair is not None and
+                parent_doc_pair.remote_ref is not None):
+                # Target has not be concurrently deleted, let's perform the
+                # move
+                moved_or_renamed = True
+                log.debug("Detected and resolving local move event on %s to %s",
+                    source_doc_pair, parent_doc_pair)
+                remote_info = remote_client.move(remote_ref,
+                    parent_doc_pair.remote_ref)
+                target_doc_pair.update_remote(remote_info)
+
+        if target_doc_pair.local_name != source_doc_pair.local_name:
+            # This is a (also?) a rename operation
+            moved_or_renamed = True
+            new_name = target_doc_pair.local_name
+            log.debug("Detected and resolving local rename event on %s to %s",
+                      source_doc_pair, new_name)
+            remote_info = remote_client.rename(remote_ref, new_name)
+            target_doc_pair.update_remote(remote_info)
+
+        if moved_or_renamed:
+            target_doc_pair.update_state('synchronized', 'synchronized')
+            session.delete(source_doc_pair)
+            session.commit()
+
+        return moved_or_renamed
 
     def synchronize(self, local_folder=None, limit=None):
         """Synchronize one file at a time from the pending list."""
@@ -614,7 +765,7 @@ class Synchronizer(object):
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # This is expected and should interrupt the sync process for
                 # this local_folder and should be dealt with in the main loop
-                if e.code == 500:
+                if getattr(e, 'code', None) == 500:
                     log.error("Failed to sync %r", pair_state, exc_info=True)
                     pair_state.last_sync_error_date = datetime.utcnow()
                     session.commit()

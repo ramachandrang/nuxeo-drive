@@ -14,6 +14,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import scoped_session
+from sqlalchemy.pool import SingletonThreadPool
 
 from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import LocalClient
@@ -223,7 +224,6 @@ class LastKnownState(Base):
                                     'synchronized'):
                 # the file use to exist, it has been deleted
                 self.update_state(local_state='deleted')
-                self.local_digest = None
             return
 
         local_state = None
@@ -296,7 +296,6 @@ class LastKnownState(Base):
             if self.remote_state in ('unknown', 'created', 'modified',
                                      'synchronized'):
                 self.update_state(remote_state='deleted')
-                self.remote_digest = None
             return
 
         remote_state = None
@@ -358,6 +357,10 @@ def init_db(nxdrive_home, echo=False, scoped_sessions=True, poolclass=None):
     """
     # We store the DB as SQLite files in the nxdrive_home folder
     dbfile = os.path.join(normalized_path(nxdrive_home), 'nxdrive.db')
+
+    # SQLite cannot share connections across threads hence it's safer to
+    # enforce this at the connection pool level
+    poolclass = SingletonThreadPool if poolclass is None else poolclass
     engine = create_engine('sqlite:///' + dbfile, echo=echo,
                            poolclass=poolclass)
 

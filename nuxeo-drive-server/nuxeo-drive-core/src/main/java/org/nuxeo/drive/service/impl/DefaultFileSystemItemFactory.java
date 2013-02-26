@@ -17,24 +17,23 @@
 package org.nuxeo.drive.service.impl;
 
 import java.security.Principal;
+import java.util.Calendar;
+import java.util.Map;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.drive.adapter.FileSystemItem;
-import org.nuxeo.drive.adapter.impl.AbstractFileSystemItem;
 import org.nuxeo.drive.adapter.impl.DocumentBackedFileItem;
 import org.nuxeo.drive.adapter.impl.DocumentBackedFolderItem;
 import org.nuxeo.drive.service.FileSystemItemFactory;
-import org.nuxeo.drive.service.FileSystemItemManager;
+import org.nuxeo.drive.service.VersioningFileSystemItemFactory;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.ClientException;
-import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
-import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.LifeCycleConstants;
+import org.nuxeo.ecm.core.api.VersioningOption;
 import org.nuxeo.ecm.core.api.blobholder.BlobHolder;
-import org.nuxeo.ecm.core.model.NoSuchDocumentException;
-import org.nuxeo.runtime.api.Framework;
 
 /**
  * Default implementation of a {@link FileSystemItemFactory}. It is
@@ -42,129 +41,93 @@ import org.nuxeo.runtime.api.Framework;
  *
  * @author Antoine Taillefer
  */
-public class DefaultFileSystemItemFactory implements FileSystemItemFactory {
+public class DefaultFileSystemItemFactory extends AbstractFileSystemItemFactory
+        implements VersioningFileSystemItemFactory {
 
     private static final Log log = LogFactory.getLog(DefaultFileSystemItemFactory.class);
 
-    protected String name;
+    protected static final String VERSIONING_DELAY_PARAM = "versioningDelay";
+
+    protected static final String VERSIONING_OPTION_PARAM = "versioningOption";
+
+    // Versioning delay in seconds, default value: 1 hour
+    protected double versioningDelay = 3600;
+
+    // Versioning option, default value: MINOR
+    protected VersioningOption versioningOption = VersioningOption.MINOR;
+
+    /*--------------------------- AbstractFileSystemItemFactory -------------------------*/
+    @Override
+    public void handleParameters(Map<String, String> parameters)
+            throws ClientException {
+        String versioningDelayParam = parameters.get(VERSIONING_DELAY_PARAM);
+        if (!StringUtils.isEmpty(versioningDelayParam)) {
+            versioningDelay = Double.parseDouble(versioningDelayParam);
+        }
+        String versioningOptionParam = parameters.get(DefaultFileSystemItemFactory.VERSIONING_OPTION_PARAM);
+        if (!StringUtils.isEmpty(versioningOptionParam)) {
+            versioningOption = VersioningOption.valueOf(versioningOptionParam);
+        }
+    }
 
     /**
-     * Prevent from instantiating class as it should only be done by
-     * {@link FileSystemItemFactoryDescriptor#getFactory()}.
+     * The default factory considers that a {@link DocumentModel} is adaptable
+     * as a {@link FileSystemItem} if:
+     * <ul>
+     * <li>It is not a version nor a proxy</li>
+     * <li>AND it is not HiddenInNavigation</li>
+     * <li>AND it is not in the "deleted" life cycle state, unless
+     * {@code includeDeleted} is true</li>
+     * <li>AND it is Folderish or it can be adapted as a {@link BlobHolder} with
+     * a blob</li>
+     * </ul>
      */
-    protected DefaultFileSystemItemFactory() {
-    }
-
-    /*--------------------------- FileSystemItemFactory ---------------------------------*/
     @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItem(DocumentModel doc)
+    public boolean isFileSystemItem(DocumentModel doc, boolean includeDeleted)
             throws ClientException {
-        return getFileSystemItem(doc, false, null, false);
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItem(DocumentModel doc,
-            boolean includeDeleted) throws ClientException {
-        return getFileSystemItem(doc, false, null, includeDeleted);
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItem(DocumentModel doc, String parentId)
-            throws ClientException {
-        return getFileSystemItem(doc, true, parentId, false);
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItem(DocumentModel doc, String parentId,
-            boolean inlcudeDeleted) throws ClientException {
-        return getFileSystemItem(doc, true, parentId, inlcudeDeleted);
-    }
-
-    @Override
-    public boolean canHandleFileSystemItemId(String id) {
-        try {
-            parseFileSystemId(id);
-        } catch (ClientException e) {
-            log.debug(e.getMessage());
+        // Check version
+        if (doc.isVersion()) {
+            log.debug(String.format(
+                    "Document %s is a version, it cannot be adapted as a FileSystemItem.",
+                    doc.getId()));
+            return false;
+        }
+        // Check proxy
+        if (doc.isProxy()) {
+            log.debug(String.format(
+                    "Document %s is a proxy, it cannot be adapted as a FileSystemItem.",
+                    doc.getId()));
+            return false;
+        }
+        // Check HiddenInNavigation
+        if (doc.hasFacet("HiddenInNavigation")) {
+            log.debug(String.format(
+                    "Document %s is HiddenInNavigation, it cannot be adapted as a FileSystemItem.",
+                    doc.getId()));
+            return false;
+        }
+        // Check "deleted" life cycle state
+        if (!includeDeleted
+                && LifeCycleConstants.DELETED_STATE.equals(doc.getCurrentLifeCycleState())) {
+            log.debug(String.format(
+                    "Document %s is in the '%s' life cycle state, it cannot be adapted as a FileSystemItem.",
+                    doc.getId(), LifeCycleConstants.DELETED_STATE));
+            return false;
+        }
+        // Check Folderish or BlobHolder with a blob
+        if (!doc.isFolder() && !hasBlob(doc)) {
+            log.debug(String.format(
+                    "Document %s is not Folderish nor a BlobHolder with a blob, it cannot be adapted as a FileSystemItem.",
+                    doc.getId()));
             return false;
         }
         return true;
     }
 
-    /**
-     * The default factory considers that a {@link FileSystemItem} with the
-     * given id exists if:
-     * <ul>
-     * <li>The backing {@link DocumentModel} can be fetched</li>
-     * <li>It is not in the 'deleted' life cycle state</li>
-     * <li>It is folderish or it can be adapted as a {@link BlobHolder} with a
-     * blob</li>
-     * </ul>
-     *
-     * @see #isFileSystemItem(DocumentModel)
-     */
     @Override
-    public boolean exists(String id, Principal principal)
-            throws ClientException {
-        try {
-            DocumentModel doc = getDocumentByFileSystemId(id, principal);
-            boolean exists = isFileSystemItem(doc);
-            if (!exists) {
-                log.debug(String.format(
-                        "Document %s cannot be adapted as a FileSystemItem => returning false.",
-                        doc.getId()));
-            }
-            return exists;
-        } catch (ClientException e) {
-            if (e.getCause() instanceof NoSuchDocumentException) {
-                log.debug(String.format(
-                        "No doc related to id %s, returning false.", id));
-                return false;
-            } else {
-                throw e;
-            }
-        }
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItemById(String id, Principal principal)
-            throws ClientException {
-        try {
-            DocumentModel doc = getDocumentByFileSystemId(id, principal);
-            return getFileSystemItem(doc);
-        } catch (ClientException e) {
-            if (e.getCause() instanceof NoSuchDocumentException) {
-                log.debug(String.format(
-                        "No doc related to id %s, returning null.", id));
-                return null;
-            } else {
-                throw e;
-            }
-        }
-
-    }
-
-    /*--------------------------- Protected ---------------------------------*/
-    protected FileSystemItem getFileSystemItem(DocumentModel doc,
-            boolean forceParentId, String parentId, boolean includeDeleted)
-            throws ClientException {
-        if (!includeDeleted
-                && LifeCycleConstants.DELETED_STATE.equals(doc.getCurrentLifeCycleState())) {
-            log.debug(String.format(
-                    "Document %s is in the '%s' life cycle state, it cannot be adapted as a FileSystemItem => returning null.",
-                    doc.getId(), LifeCycleConstants.DELETED_STATE));
-            return null;
-        }
+    protected FileSystemItem adaptDocument(DocumentModel doc,
+            boolean forceParentId, String parentId) throws ClientException {
+        // Doc is either Folderish
         if (doc.isFolder()) {
             if (forceParentId) {
                 return new DocumentBackedFolderItem(name, parentId, doc);
@@ -172,19 +135,76 @@ public class DefaultFileSystemItemFactory implements FileSystemItemFactory {
                 return new DocumentBackedFolderItem(name, doc);
             }
         }
-        if (hasBlob(doc)) {
+        // or a BlobHolder with a blob
+        else {
             if (forceParentId) {
-                return new DocumentBackedFileItem(name, parentId, doc);
+                return new DocumentBackedFileItem(this, parentId, doc);
             } else {
-                return new DocumentBackedFileItem(name, doc);
+                return new DocumentBackedFileItem(this, doc);
             }
         }
-        log.debug(String.format(
-                "Document %s is not Folderish nor a BlobHolder with a blob, it cannot be adapted as a FileSystemItem => returning null.",
-                doc.getId()));
-        return null;
     }
 
+    /*--------------------------- FileSystemItemVersioning -------------------------*/
+    /**
+     * Need to version the doc if the current contributor is different from the
+     * last contributor or if the last modification was done more than
+     * {@link #versioningDelay} seconds ago.
+     */
+    @Override
+    public boolean needsVersioning(DocumentModel doc) throws ClientException {
+
+        String lastContributor = (String) doc.getPropertyValue("dc:lastContributor");
+        Principal principal = doc.getCoreSession().getPrincipal();
+        boolean contributorChanged = !principal.getName().equals(
+                lastContributor);
+        if (contributorChanged) {
+            log.debug(String.format(
+                    "Contributor %s is different from the last contributor %s => will create a version of the document.",
+                    principal.getName(), lastContributor));
+            return true;
+        }
+        Calendar lastModificationDate = (Calendar) doc.getPropertyValue("dc:modified");
+        if (lastModificationDate == null) {
+            log.debug("Last modification date is null => will not create a version of the document.");
+            return true;
+        }
+        long lastModified = System.currentTimeMillis()
+                - lastModificationDate.getTimeInMillis();
+        long versioningDelayMillis = (long) getVersioningDelay() * 1000;
+        if (lastModified > versioningDelayMillis) {
+            log.debug(String.format(
+                    "Last modification was done %d milliseconds ago, this is more than the versioning delay %d milliseconds => will create a version of the document.",
+                    lastModified, versioningDelayMillis));
+            return true;
+        }
+        log.debug(String.format(
+                "Contributor %s is the last contributor and last modification was done %d milliseconds ago, this is less than the versioning delay %d milliseconds => will not create a version of the document.",
+                principal.getName(), lastModified, versioningDelayMillis));
+        return false;
+    }
+
+    @Override
+    public double getVersioningDelay() {
+        return versioningDelay;
+    }
+
+    @Override
+    public void setVersioningDelay(double versioningDelay) {
+        this.versioningDelay = versioningDelay;
+    }
+
+    @Override
+    public VersioningOption getVersioningOption() {
+        return versioningOption;
+    }
+
+    @Override
+    public void setVersioningOption(VersioningOption versioningOption) {
+        this.versioningOption = versioningOption;
+    }
+
+    /*--------------------------- Protected ---------------------------------*/
     protected boolean hasBlob(DocumentModel doc) throws ClientException {
         BlobHolder bh = doc.getAdapter(BlobHolder.class);
         if (bh == null) {
@@ -196,64 +216,6 @@ public class DefaultFileSystemItemFactory implements FileSystemItemFactory {
         if (blob == null) {
             log.debug(String.format(
                     "Document %s is a BlobHolder without a blob.", doc.getId()));
-            return false;
-        }
-        return true;
-    }
-
-    protected String[] parseFileSystemId(String id) throws ClientException {
-
-        // Parse id, expecting pattern:
-        // fileSystemItemFactoryName#repositoryName#docId
-        String[] idFragments = id.split(AbstractFileSystemItem.FILE_SYSTEM_ITEM_ID_SEPARATOR);
-        if (idFragments.length != 3) {
-            throw new ClientException(
-                    String.format(
-                            "FileSystemItem id %s cannot be handled by factory named %s. Should match the 'fileSystemItemFactoryName#repositoryName#docId' pattern.",
-                            id, name));
-        }
-
-        // Check if factory name matches
-        String factoryName = idFragments[0];
-        if (!name.equals(factoryName)) {
-            throw new ClientException(
-                    String.format(
-                            "Factoy name [%s] parsed from id %s does not match the actual factory name [%s].",
-                            factoryName, id, name));
-        }
-        return idFragments;
-    }
-
-    protected DocumentModel getDocumentByFileSystemId(String id,
-            Principal principal) throws ClientException {
-        // Parse id, expecting
-        // pattern:fileSystemItemFactoryName#repositoryName#docId
-        String[] idFragments = parseFileSystemId(id);
-        String repositoryName = idFragments[1];
-        String docId = idFragments[2];
-        CoreSession session = Framework.getLocalService(
-                FileSystemItemManager.class).getSession(repositoryName,
-                principal);
-        return getDocumentById(docId, session);
-    }
-
-    protected DocumentModel getDocumentById(String docId, CoreSession session)
-            throws ClientException {
-        return session.getDocument(new IdRef(docId));
-    }
-
-    protected boolean isFileSystemItem(DocumentModel doc)
-            throws ClientException {
-        if (LifeCycleConstants.DELETED_STATE.equals(doc.getCurrentLifeCycleState())) {
-            log.debug(String.format(
-                    "Document %s is in the '%s' life cycle state.",
-                    doc.getId(), LifeCycleConstants.DELETED_STATE));
-            return false;
-        }
-        if (!doc.isFolder() && !hasBlob(doc)) {
-            log.debug(String.format(
-                    "Document %s is not Folderish nor a BlobHolder with a blob.",
-                    doc.getId()));
             return false;
         }
         return true;

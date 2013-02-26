@@ -18,103 +18,31 @@ package org.nuxeo.drive.service.impl;
 
 import java.security.Principal;
 
-import org.nuxeo.drive.adapter.FileSystemItem;
 import org.nuxeo.drive.adapter.FolderItem;
-import org.nuxeo.drive.adapter.impl.AbstractFileSystemItem;
 import org.nuxeo.drive.adapter.impl.DefaultTopLevelFolderItem;
 import org.nuxeo.drive.service.TopLevelFolderItemFactory;
 import org.nuxeo.ecm.core.api.ClientException;
-import org.nuxeo.ecm.core.api.DocumentModel;
 
 /**
  * Default implementation of a {@link TopLevelFolderItemFactory}.
  *
  * @author Antoine Taillefer
  */
-public class DefaultTopLevelFolderItemFactory implements
-        TopLevelFolderItemFactory {
+public class DefaultTopLevelFolderItemFactory extends
+        AbstractVirtualFolderItemFactory implements TopLevelFolderItemFactory {
 
-    /**
-     * Prevent from instantiating class as it should only be done by
-     * {@link TopLevelFolderItemFactoryDescriptor#getFactory()}.
-     */
-    protected DefaultTopLevelFolderItemFactory() {
-    }
-
-    /*--------------------------- TopLevelFolderItemFactory ----------------------------*/
-    @Override
-    public FolderItem getTopLevelFolderItem(String userName)
+    /*---------------------- VirtualFolderItemFactory ---------------*/
+    public FolderItem getVirtualFolderItem(Principal principal)
             throws ClientException {
-        return new DefaultTopLevelFolderItem(getName(), userName);
+        return getTopLevelFolderItem(principal);
     }
 
+    /*----------------------- TopLevelFolderItemFactory ---------------------*/
     @Override
-    public String getSyncRootParentFolderItemId(String userName)
+    public FolderItem getTopLevelFolderItem(Principal principal)
             throws ClientException {
-        return getTopLevelFolderItem(userName).getId();
-    }
-
-    /*--------------------------- FileSystemItemFactory --------------------------------*/
-    @Override
-    public void setName(String name) {
-        throw new UnsupportedOperationException(
-                "Cannot set the name of a TopLevelFolderItemFactory.");
-    }
-
-    @Override
-    public String getName() {
-        return getClass().getName();
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItem(DocumentModel doc)
-            throws ClientException {
-        return getFileSystemItem(doc, false);
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItem(DocumentModel doc,
-            boolean includeDeleted) throws ClientException {
-        throw new UnsupportedOperationException(
-                "Cannot get the file system item for a given document from a TopLevelFolderItemFactory.");
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItem(DocumentModel doc, String parentId)
-            throws ClientException {
-        return getFileSystemItem(doc, parentId, false);
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItem(DocumentModel doc, String parentId,
-            boolean includeDeleted) throws ClientException {
-        throw new UnsupportedOperationException(
-                "Cannot get the file system item for a given document from a TopLevelFolderItemFactory.");
-    }
-
-    @Override
-    public boolean canHandleFileSystemItemId(String id) {
-        return (getName() + AbstractFileSystemItem.FILE_SYSTEM_ITEM_ID_SEPARATOR).equals(id);
-    }
-
-    @Override
-    public boolean exists(String id, Principal principal)
-            throws ClientException {
-        if (!canHandleFileSystemItemId(id)) {
-            throw new UnsupportedOperationException(
-                    "Cannot check if a file system item with a given id exists for an id different than the top level folder item one from a TopLevelFolderItemFactory.");
-        }
-        return true;
-    }
-
-    @Override
-    public FileSystemItem getFileSystemItemById(String id, Principal principal)
-            throws ClientException {
-        if (!canHandleFileSystemItemId(id)) {
-            throw new UnsupportedOperationException(
-                    "Cannot get the file system item for an id different than the top level folder item one from a TopLevelFolderItemFactory.");
-        }
-        return getTopLevelFolderItem(principal.getName());
+        return new DefaultTopLevelFolderItem(getName(), principal,
+                getFolderName());
     }
 
 }
