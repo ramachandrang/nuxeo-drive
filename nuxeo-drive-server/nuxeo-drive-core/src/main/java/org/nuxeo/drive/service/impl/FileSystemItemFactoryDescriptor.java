@@ -17,11 +17,15 @@
 package org.nuxeo.drive.service.impl;
 
 import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.nuxeo.common.xmap.annotation.XNode;
+import org.nuxeo.common.xmap.annotation.XNodeMap;
 import org.nuxeo.common.xmap.annotation.XObject;
 import org.nuxeo.drive.service.FileSystemItemAdapterService;
 import org.nuxeo.drive.service.FileSystemItemFactory;
+import org.nuxeo.ecm.core.api.ClientException;
 
 /**
  * XMap descriptor for factories contributed to the
@@ -54,6 +58,9 @@ public class FileSystemItemFactoryDescriptor implements Serializable,
     @XNode("@class")
     protected Class<? extends FileSystemItemFactory> factoryClass;
 
+    @XNodeMap(value = "parameters/parameter", key = "@name", type = HashMap.class, componentType = String.class)
+    protected Map<String, String> parameters = new HashMap<String, String>();
+
     public String getName() {
         return name;
     }
@@ -75,10 +82,15 @@ public class FileSystemItemFactoryDescriptor implements Serializable,
     }
 
     public FileSystemItemFactory getFactory() throws InstantiationException,
-            IllegalAccessException {
+            IllegalAccessException, ClientException {
         FileSystemItemFactory factory = factoryClass.newInstance();
         factory.setName(name);
+        factory.handleParameters(parameters);
         return factory;
+    }
+
+    public Map<String, String> getParameters() {
+        return parameters;
     }
 
     @Override

@@ -26,7 +26,6 @@ import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.IdRef;
-import org.nuxeo.ecm.core.api.VersioningOption;
 import org.nuxeo.ecm.core.security.SecurityException;
 
 /**
@@ -85,6 +84,13 @@ public interface NuxeoDriveManager {
             Principal principal) throws ClientException;
 
     /**
+     * Checks if the given {@link DocumentModel} is a synchronization root for
+     * the given user.
+     */
+    public boolean isSynchronizationRoot(Principal principal, DocumentModel doc)
+            throws ClientException;
+
+    /**
      * Method to be called by a CoreEvent listener monitoring documents
      * deletions to cleanup references to recently deleted documents and
      * invalidate the caches.
@@ -125,8 +131,8 @@ public interface NuxeoDriveManager {
      *            initialization.
      * @return the summary of document changes
      */
-    public FileSystemChangeSummary getChangeSummary(
-            Principal principal, Map<String, Set<IdRef>> lastSyncRootRefs, long lastSuccessfulSync)
+    public FileSystemChangeSummary getChangeSummary(Principal principal,
+            Map<String, Set<IdRef>> lastSyncRootRefs, long lastSuccessfulSync)
             throws ClientException;
 
     /**
@@ -135,29 +141,5 @@ public interface NuxeoDriveManager {
      * TODO: make it overridable with an extension point and remove setter.
      */
     public void setChangeFinder(FileSystemChangeFinder changeFinder);
-
-    /**
-     * Gets the versioning delay for a file item update.
-     */
-    public long getVersioningDelay();
-
-    /**
-     * Sets the versioning delay for a file item update.
-     * <p>
-     * TODO: make it configurable with an extension point and remove setter.
-     */
-    public void setVersioningDelay(long versioningDelay);
-
-    /**
-     * Gets the versioning option for a file item update.
-     */
-    public VersioningOption getVersioningOption();
-
-    /**
-     * Sets the versioning option for a file item update.
-     * <p>
-     * TODO: make it configurable with an extension point and remove setter.
-     */
-    public void setVersioningOption(VersioningOption versioningOption);
 
 }

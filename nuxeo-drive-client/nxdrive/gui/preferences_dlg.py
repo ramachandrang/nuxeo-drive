@@ -14,7 +14,7 @@ from PySide.QtGui import QApplication, QDialog, QMessageBox, QDialogButtonBox, Q
 from PySide.QtCore import Qt, QSettings
 
 from nxdrive import Constants
-from nxdrive.model import ServerBinding, RootBinding, RecentFiles, LastKnownState
+from nxdrive.model import ServerBinding, RecentFiles, LastKnownState
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import create_settings
@@ -185,19 +185,19 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         app = QApplication.instance()
         process_filter = EventFilter(self)
 
-        app.setOverrideCursor(Qt.WaitCursor)
-        self.installEventFilter(process_filter)
-        try:
-            # retrieve folders
-            self.controller.synchronizer.get_folders()
-            self.controller.synchronizer.update_roots(self.server_binding)
-
-        except Exception as e:
-            log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
-
-        finally:
-            app.restoreOverrideCursor()
-            self.removeEventFilter(process_filter)
+#        app.setOverrideCursor(Qt.WaitCursor)
+#        self.installEventFilter(process_filter)
+#        try:
+#            # retrieve folders
+#            self.controller.synchronizer.get_folders()
+#            self.controller.synchronizer.update_roots(self.server_binding)
+#
+#        except Exception as e:
+#            log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
+#
+#        finally:
+#            app.restoreOverrideCursor()
+#            self.removeEventFilter(process_filter)
 
         dlg = SyncFoldersDlg(frontend = self.frontend)
         if dlg.exec_() == QDialog.Rejected:
@@ -361,8 +361,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                         self.server_binding.remote_user,
                         self.server_binding.remote_password)
 
-                    self.controller.synchronizer.get_folders()
-                    self.controller.synchronizer.update_roots(self.server_binding)
+#                    self.controller.synchronizer.get_folders()
+#                    self.controller.synchronizer.update_roots(self.server_binding)
 
             except Exception as ex:
                 log.debug("failed to bind or unbind: %s", str(ex))
@@ -415,11 +415,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             # Update the database
             if self.frontend is not None:
                 session = self.frontend.controller.get_session()
-
-                root_bindings = session.query(RootBinding).filter(RootBinding.local_folder == self.local_folder).all()
-                for rb in root_bindings:
-                    rb.local_root = rb.local_root.replace(self.local_folder, self.move_to_folder)
-
                 recent_files = session.query(RecentFiles).all()
                 for rf in recent_files:
                     rf.local_root = rf.local_root.replace(self.local_folder, self.move_to_folder)

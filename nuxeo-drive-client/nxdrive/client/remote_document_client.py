@@ -1,5 +1,6 @@
 """API to access remote Nuxeo documents for synchronization."""
 
+import unicodedata
 from collections import namedtuple
 from datetime import datetime
 import hashlib
@@ -69,10 +70,11 @@ class RemoteDocumentClient(BaseAutomationClient):
     def __init__(self, server_url, user_id, device_id,
                  password=None, token=None, repository="default",
                  ignored_prefixes=None, ignored_suffixes=None,
-                base_folder=None, timeout=20):
+                 base_folder=None, timeout=60, blob_timeout=None):
         super(RemoteDocumentClient, self).__init__(
             server_url, user_id, device_id, password, token, repository,
-            ignored_prefixes, ignored_suffixes, timeout=timeout)
+            ignored_prefixes, ignored_suffixes, timeout=timeout,
+            blob_timeout=blob_timeout)
 
         # fetch the root folder ref
         self.base_folder = base_folder
@@ -213,8 +215,13 @@ class RemoteDocumentClient(BaseAutomationClient):
         
         if parent_uid is None and fetch_parent_uid:
             parent_uid = self.fetch(os.path.dirname(doc['path']))['uid']
+
+        # Normalize using NFKC to make the tests more intuitive
+        name = props['dc:title']
+        if name is not None:
+            name = unicodedata.normalize('NFKC', name)
         return NuxeoDocumentInfo(
-            self._base_folder_ref, props['dc:title'], doc['uid'], parent_uid,
+            self._base_folder_ref, name, doc['uid'], parent_uid,
             doc['path'], folderish, last_update, digest, self.repository,
             doc['type'])
     
@@ -298,7 +305,8 @@ class RemoteDocumentClient(BaseAutomationClient):
     # Blob category
 
     def get_blob(self, ref):
-        return self.execute("Blob.Get", input="doc:" + ref)
+        return self.execute("Blob.Get", input="doc:" + ref,
+                            timeout=self.blob_timeout)
 
     def attach_blob(self, ref, blob, filename, **params):
         return self.execute_with_blob("Blob.Attach",

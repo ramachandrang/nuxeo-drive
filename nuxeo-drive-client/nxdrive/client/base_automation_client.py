@@ -4,12 +4,13 @@ import sys
 import platform
 import base64
 import json
-import urllib2
 import urlparse
 import mimetypes
 import random
 import time
 from datetime import datetime
+import urllib
+import urllib2
 from urllib import urlencode
 from urllib2 import HTTPHandler, HTTPSHandler
 from urllib2 import HTTPRedirectHandler
@@ -176,7 +177,15 @@ class NoSIICARedirectHandler(HTTPRedirectHandler):
             return None
     
 class BaseAutomationClient(object):
-    """Client for the Nuxeo Content Automation HTTP API"""
+    """Client for the Nuxeo Content Automation HTTP API
+
+    timeout is a short timeout to avoid having calls to fast JSON operations
+    to block and freeze the application in case of network issues.
+
+    blob_timeout is long (or infinite) timeout dedicated to long HTTP
+    requests involving a blob transfer.
+
+    """
 
     # Used for testing network errors
     _error = None
@@ -226,8 +235,9 @@ class BaseAutomationClient(object):
     def __init__(self, server_url, user_id, device_id,
                  password=None, token=None, repository="default",
                  ignored_prefixes=None, ignored_suffixes=None,
-                 timeout=20):
+                 timeout=60, blob_timeout=None):
         self.timeout = timeout
+        self.blob_timeout = blob_timeout
         if ignored_prefixes is not None:
             self.ignored_prefixes = ignored_prefixes
         else:
@@ -364,7 +374,7 @@ class BaseAutomationClient(object):
         for operation in response["operations"]:
             self.operations[operation['id']] = operation
 
-    def execute(self, command, input = None, **params):
+    def execute(self, command, input=None, timeout=-1, **params):
         if self._error is not None:
             # Simulate a configurable (e.g. network or server) error for the
             # tests
@@ -401,12 +411,13 @@ class BaseAutomationClient(object):
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
 
         req = urllib2.Request(url, data, headers)
+        timeout = self.timeout if timeout == -1 else timeout
         BaseAutomationClient.cookiejar.add_cookie_header(req)
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
         try:
-            resp = self.opener.open(req, timeout=self.timeout)
+            resp = self.opener.open(req, timeout=timeout)
             # --- BEGIN DEBUG ----
 #            from StringIO import StringIO
 #            msg = '{"Status": "maintenance", "ScheduleItems": [\
@@ -483,22 +494,17 @@ class BaseAutomationClient(object):
         if ctype:
             maintype, subtype = ctype.split('/', 1)
         else:
-            maintype, subtype = "application", "binary"
+            maintype, subtype = "application", "octet-stream"
         blob_part = MIMEBase(maintype, subtype)
         blob_part.add_header("Content-ID", "input")
         blob_part.add_header("Content-Transfer-Encoding", "binary")
-        ascii_filename = filename.encode('ascii', 'ignore')
-        # content_disposition = "attachment; filename=" + ascii_filename
-        # quoted_filename = urllib.quote(filename.encode('utf-8'))
-        # content_disposition += "; filename filename*=UTF-8''" \
-        #    + quoted_filename
-        # print content_disposition
-        # blob_part.add_header("Content-Disposition:", content_disposition)
 
-        # XXX: Use ASCCI safe version of the filename for now
-        blob_part.add_header('Content-Disposition', 'attachment',
-                             filename = ascii_filename)
-
+        # Quote UTF-8 filenames eventhough JAX-RS does not seem to be able
+        # to retrieve them as per: https://tools.ietf.org/html/rfc5987
+        quoted_filename = urllib.quote(filename.encode('utf-8'))
+        content_disposition = ("attachment; filename*=UTF-8''%s"
+                                % quoted_filename)
+        blob_part.add_header("Content-Disposition", content_disposition)
         blob_part.set_payload(blob_content)
         container.attach(blob_part)
 
@@ -513,6 +519,13 @@ class BaseAutomationClient(object):
             % boundary,
         }
         headers.update(self._get_common_headers())
+
+        # TODO: find a way to stream the parts without loading them all in
+        # memory as a byte string
+
+        # The code http://atlee.ca/software/poster/ might provide some
+        # guidance to implement this although it cannot be reused directly
+        # as we need tighter control on the headers of the multipart
         data = (
             "--%s\r\n"
             "%s\r\n"
@@ -523,8 +536,6 @@ class BaseAutomationClient(object):
             boundary,
             json_part.as_string(),
             boundary,
-            # TODO: we should find a way to stream the content of the blob
-            # to avoid loading it in memory
             blob_part.as_string(),
             boundary,
         )
@@ -540,7 +551,7 @@ class BaseAutomationClient(object):
         self.log_request(req)
         # ---- END DEBUG -----
         try:
-            resp = self.opener.open(req, timeout=self.timeout)
+            resp = self.opener.open(req, timeout=self.blob_timeout)
             # --- BEGIN DEBUG ----
 #            from StringIO import StringIO
 #            msg = '{ "entity-type": "exception",\

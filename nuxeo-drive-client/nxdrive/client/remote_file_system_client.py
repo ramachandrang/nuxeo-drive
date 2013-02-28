@@ -1,5 +1,6 @@
 """API to access a remote file system for synchronization."""
 
+import unicodedata
 from collections import namedtuple
 from datetime import datetime
 import urllib2
@@ -25,6 +26,10 @@ BaseRemoteFileInfo = namedtuple('RemoteFileInfo', [
     'digest',  # digest of the file
     'digest_algorithm',  # digest algorithm of the file
     'download_url', # download URL of the file
+    'can_rename', # True is can rename
+    'can_delete', # True is can delete
+    'can_update', # True is can update content
+    'can_create_child', # True is can create child
 ])
 
 
@@ -80,12 +85,12 @@ class RemoteFileSystemClient(BaseAutomationClient):
 
     def make_folder(self, parent_id, name):
         fs_item = self.execute("NuxeoDrive.CreateFolder",
-            id=parent_id, name=name)
+            parentId=parent_id, name=name)
         return fs_item['id']
 
     def make_file(self, parent_id, name, content):
         fs_item = self.execute_with_blob("NuxeoDrive.CreateFile",
-            content, name, id=parent_id)
+            content, name, parentId=parent_id, name=name)
         return fs_item['id']
 
     def update_content(self, fs_item_id, content, name=None):
@@ -101,11 +106,18 @@ class RemoteFileSystemClient(BaseAutomationClient):
     def exists(self, fs_item_id):
         return self.execute("NuxeoDrive.FileSystemItemExists", id=fs_item_id)
 
-    # TODO: probably to be replaced by
-    # can_rename, can_update, can_delete, can_create_child
+    # TODO
     def check_writable(self, fs_item_id):
-        # TODO
         pass
+
+    def rename(self, fs_item_id, new_name):
+        self.execute("NuxeoDrive.Rename", id=fs_item_id, name=new_name)
+        return self.get_info(fs_item_id)
+
+    def move(self, fs_item_id, new_parent_id):
+        self.execute("NuxeoDrive.Move", srcId=fs_item_id,
+            destId=new_parent_id)
+        return self.get_info(fs_item_id)
 
     def _file_to_info(self, fs_item):
         """Convert Automation file system item description to RemoteFileInfo"""
@@ -117,15 +129,24 @@ class RemoteFileSystemClient(BaseAutomationClient):
             digest = None
             digest_algorithm = None
             download_url = None
+            can_update = False
+            can_create_child = fs_item['canCreateChild']
         else:
             digest = fs_item['digest']
             digest_algorithm = fs_item['digestAlgorithm']
             download_url = fs_item['downloadURL']
+            can_update = fs_item['canUpdate']
+            can_create_child = False
 
+        # Normalize using NFKC to make the tests more intuitive
+        name = fs_item['name']
+        if name is not None:
+            name = unicodedata.normalize('NFKC', name)
         return RemoteFileInfo(
-            fs_item['name'], fs_item['id'], fs_item['parentId'],
+            name, fs_item['id'], fs_item['parentId'],
             fs_item['path'], folderish, last_update, digest, digest_algorithm,
-            download_url)
+            download_url, fs_item['canRename'], fs_item['canDelete'],
+            can_update, can_create_child)
 
     def _do_get(self, url, file_out=None):
         if self._error is not None:
@@ -140,7 +161,7 @@ class RemoteFileSystemClient(BaseAutomationClient):
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers=headers)
-            response = self.opener.open(req)
+            response = self.opener.open(req, timeout=self.blob_timeout)
             if hasattr(file_out, "write"):
                 while True:
                     buffer_ = response.read(BUFFER_SIZE)

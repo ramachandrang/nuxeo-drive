@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import synonym
 from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.pool import SingletonThreadPool
 
 from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import LocalClient
@@ -107,7 +108,7 @@ class ServerBinding(Base):
     used_storage = Column(Integer)
     # passive_updates=False *only* needed if the database
     # does not implement ON UPDATE CASCADE
-    roots = relationship("RootBinding", passive_updates = False, passive_deletes = True, cascade = "all, delete, delete-orphan")
+#    roots = relationship("RootBinding", passive_updates = False, passive_deletes = True, cascade = "all, delete, delete-orphan")
     folders = relationship("SyncFolders", passive_updates = False, passive_deletes = True, cascade = "all, delete, delete-orphan")
 
     def __init__(self, local_folder, server_url, remote_user,
@@ -229,63 +230,64 @@ class ServerBinding(Base):
         self.total_storage = total
         self.used_storage = used
 
-class RootBinding(Base):
-    __tablename__ = 'root_bindings'
-
-    local_root = Column(String, primary_key = True)
-    remote_repo = Column(String)
-    remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
-    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
-    server_binding = relationship('ServerBinding')
-
-    def __init__(self, local_root, remote_repo, remote_root, local_folder = None):
-        local_root = normalized_path(local_root)
-        self.local_root = local_root
-        self.remote_repo = remote_repo
-        self.remote_root = remote_root
-
-        # expected local folder should be the direct parent of the local root
-        # MC That's not always the case, example:
-        # - roots under "Others' Docs" in CloudDesk are under "Others Docs" locally
-        if local_folder is None:
-            local_folder = normalized_path(os.path.join(local_root, '..'))
-        self.local_folder = local_folder
-
-    def __repr__(self):
-        return ("RootBinding<local_root=%r, local_folder=%r, remote_repo=%r,"
-                "remote_root=%r>" % (self.local_root, self.local_folder,
-                                     self.remote_repo, self.remote_root))
+#class RootBinding(Base):
+#    __tablename__ = 'root_bindings'
+#
+#    local_root = Column(String, primary_key = True)
+#    remote_repo = Column(String)
+#    remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
+#    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
+#    server_binding = relationship('ServerBinding')
+#
+#    def __init__(self, local_root, remote_repo, remote_root, local_folder = None):
+#        local_root = normalized_path(local_root)
+#        self.local_root = local_root
+#        self.remote_repo = remote_repo
+#        self.remote_root = remote_root
+#
+#        # expected local folder should be the direct parent of the local root
+#        # MC That's not always the case, example:
+#        # - roots under "Others' Docs" in CloudDesk are under "Others Docs" locally
+#        if local_folder is None:
+#            local_folder = normalized_path(os.path.join(local_root, '..'))
+#        self.local_folder = local_folder
+#
+#    def __repr__(self):
+#        return ("RootBinding<local_root=%r, local_folder=%r, remote_repo=%r,"
+#                "remote_root=%r>" % (self.local_root, self.local_folder,
+#                                     self.remote_repo, self.remote_root))
 
 class SyncFolders(Base):
     __tablename__ = 'sync_folders'
 
     remote_id = Column(String, primary_key = True)
-    remote_repo = Column(String)
     remote_name = Column(String)
     remote_root = Column(Integer)
     remote_parent = Column(String, ForeignKey('sync_folders.remote_id'))
-    state = Column(Boolean)
+    check_state = Column(Boolean) # indicates whether the checkbox in the selection UI us checked (True)
+    bind_state = Column(Boolean) # indicates whether it is a registered sync root (True)
     local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
-    checked = relationship('RootBinding', uselist = False, backref = 'folder')
+# TO BE DELETED
+#    checked = relationship('RootBinding', uselist = False, backref = 'folder')
 
 #    server_binding = relationship(
 #                    'ServerBinding', backref=backref("folders", cascade="all, delete-orphan"))
     server_binding = relationship('ServerBinding')
     children = relationship("SyncFolders")
 
-    def __init__(self, remote_id, remote_name, remote_parent, remote_repo, local_folder, remote_root = Constants.ROOT_CLOUDDESK, checked = False):
+    def __init__(self, remote_id, remote_name, remote_parent, local_folder, remote_root = Constants.ROOT_CLOUDDESK, check_state = False):
         self.remote_id = remote_id
         self.remote_name = remote_name
         self.remote_parent = remote_parent
-        self.remote_repo = remote_repo
         self.remote_root = remote_root
         self.local_folder = local_folder
-        self.checked2 = checked
+        self.check_state = check_state
+        self.bind_state = False
 
     def __str__(self):
-        return ("SyncFolders<remote_name=%r, remote_id=%r, remote_parent=%r, remote_repo=%r, "
+        return ("SyncFolders<remote_name=%r, remote_id=%r, remote_parent=%r, "
                 "local_folder=%r, %checked>" % (self.remote_name, self.remote_id, self.remote_parent,
-                                      self.remote_repo, self.local_folder, '' if self.checked2 else 'not '))
+                                      self.local_folder, '' if self.checked2 else 'not '))
 
 class RecentFiles(Base):
     __tablename__ = 'recent_files'
@@ -416,8 +418,7 @@ class LastKnownState(Base):
             if self.local_state in ('unknown', 'created', 'modified',
                                     'synchronized'):
                 # the file use to exist, it has been deleted
-                self.update_state(local_state = 'deleted')
-                self.local_digest = None
+                self.update_state(local_state='deleted')
             return
 
         local_state = None
@@ -489,8 +490,7 @@ class LastKnownState(Base):
         if remote_info is None:
             if self.remote_state in ('unknown', 'created', 'modified',
                                      'synchronized'):
-                self.update_state(remote_state = 'deleted')
-                self.remote_digest = None
+                self.update_state(remote_state='deleted')
             return
 
         remote_state = None
@@ -572,12 +572,16 @@ def init_db(nxdrive_home, echo = False, scoped_sessions = True, poolclass = None
     """
     # We store the DB as SQLite files in the nxdrive_home folder
     dbfile = os.path.join(normalized_path(nxdrive_home), 'nxdrive.db')
-    engine = create_engine('sqlite:///' + dbfile, echo = echo,
-                           poolclass = poolclass)
+
+    # SQLite cannot share connections across threads hence it's safer to
+    # enforce this at the connection pool level
+    poolclass = SingletonThreadPool if poolclass is None else poolclass
+    engine = create_engine('sqlite:///' + dbfile, echo=echo,
+                           poolclass=poolclass)
 
     # Ensure that the tables are properly initialized
     Base.metadata.create_all(engine)
-    maker = sessionmaker(bind = engine)
+    maker = sessionmaker(bind=engine)
     if scoped_sessions:
         maker = scoped_session(maker)
     return engine, maker

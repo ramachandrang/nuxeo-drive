@@ -61,27 +61,15 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
     def set_checked_state(self, parent):
         """Initialize the state of all checkboxes based on the model."""
 
-        session = self.frontend.controller.get_session()
-        # If there are no bindings at all, set all checkboxes.
-        # This is used as default when first installing the app (e.g. thru using the wizard).
-        # Update: checking all folders is misleading: user may think all folders are synced
-        # and press cancel
-        
-#        if no_bindings(session):
-#            self.set_all(parent)
-#            return
-        
         for i in range(parent.rowCount()):
             item = parent.child(i)
             check_state = item.data(CHECKED_ROLE)
             if item.isCheckable() and check_state == Qt.Checked and item.checkState() != Qt.Checked:
                 # NOT EMITTING THE SIGNAL!!!
                 self.treeView.clicked[QModelIndex].emit(item.index())
-                # DEBUG
-#                item_name = item.data(ID_ROLE)
-#                log.debug('check item %s', item_name)
+                # set state for this item and all its descendants
                 self.set_descendant_state(item, Qt.Checked)
-#                self.set_ascendant_state(item)
+
             self.set_checked_state(item)
         
     def clear_all(self, parent):
@@ -168,9 +156,6 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
     def set_descendant_state(self, item, state):
         if state == Qt.PartiallyChecked:
             return
-        # DEBUG
-#        item_name = item.data(ID_ROLE)
-#        log.debug('setCheckState() for item %s, %s', item_name, state)
         item.setCheckState(state)
         for i in range(item.rowCount()):
             self.set_descendant_state(item.child(i), state)

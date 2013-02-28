@@ -35,7 +35,7 @@ def get_model(session, controller=None):
             log.warn("root does not exist.")
             if controller is None:
                 raise RuntimeError(tr("An internal error occurred: Please restart the program"))
-            controller.get_folders()
+#            controller.get_folders()
             attempts += 1
         except MultipleResultsFound:
             log.error("multiple roots exist.")
@@ -74,8 +74,9 @@ def add_subfolders(session, root, data):
         
 def update_model(session, parent):
     """Walk the model and inform the view if there are any changes.
-    Only process added and deleted folders.
-    Should it process renamed folders?"""
+    Only process added and deleted folders."""
+    
+    # TODO Should it process renamed folders?
     
     parentId = parent.data(ID_ROLE)
     subfolders = session.query(SyncFolders).\
@@ -96,7 +97,7 @@ def update_model(session, parent):
             new_item = QStandardItem(subfolders_dict[itemId].remote_name)
             new_item.setData(itemId, ID_ROLE)
             new_item.setCheckable(True)
-            check_state = Qt.Checked if subfolders_dict[itemId].checked is not None else Qt.Unchecked
+            check_state = Qt.Checked if subfolders_dict[itemId].bind_state else Qt.Unchecked
             if parent.data(CHECKED_ROLE) == Qt.Checked:
                 check_state = Qt.Checked
             # TODO new child is not checked if parent is
@@ -129,6 +130,6 @@ def update_model(session, parent):
 
 def no_bindings(session):
     count = session.query(SyncFolders).\
-                       filter(SyncFolders.checked != None).count()
+                       filter(not SyncFolders.bind_state).count()
     return count == 0
     

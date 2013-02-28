@@ -192,9 +192,9 @@ class CpoWizard(QWizard):
 #                subprocess.Popen([python, script, 'gui'])
             if ext == '.py':
                 python = sys.executable
-                subprocess.Popen([python, exe_path])
+                subprocess.Popen([python, exe_path, '--start'])
             else:
-                subprocess.Popen([exe_path])
+                subprocess.Popen([exe_path, '--start'])
 
         return super(CpoWizard, self).accept()
 
@@ -422,8 +422,8 @@ class InstallOptionsPage(QWizardPage):
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
             # retrieve folders
-            self.wizard().controller.synchronizer.get_folders()
-            self.wizard().controller.synchronizer.update_roots()
+#            self.wizard().controller.synchronizer.get_folders()
+#            self.wizard().controller.synchronizer.update_roots()
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
         except Exception as e:
@@ -461,7 +461,7 @@ class InstallOptionsPage(QWizardPage):
             # if no root binding  exists, bind everything
             session = self.wizard().session
             count = session.query(SyncFolders).\
-                   filter(SyncFolders.checked != None).count()
+                   filter(SyncFolders.bind_state).count()
             if count == 0:
                 # check top-level folders as sync roots
                 self.check_toplevel_folders(session=session)
@@ -773,8 +773,8 @@ class AdvancedPage(QWizardPage):
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
             # retrieve folders
-            self.wizard().controller.synchronizer.get_folders()
-            self.wizard().controller.synchronizer.update_roots()
+#            self.wizard().controller.synchronizer.get_folders()
+#            self.wizard().controller.synchronizer.update_roots()
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
 

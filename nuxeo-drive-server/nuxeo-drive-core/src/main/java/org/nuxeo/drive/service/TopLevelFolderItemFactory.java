@@ -16,6 +16,8 @@
  */
 package org.nuxeo.drive.service;
 
+import java.security.Principal;
+
 import org.nuxeo.drive.adapter.FolderItem;
 import org.nuxeo.drive.service.impl.DefaultTopLevelFolderItemFactory;
 import org.nuxeo.ecm.core.api.ClientException;
@@ -25,17 +27,14 @@ import org.nuxeo.ecm.core.api.ClientException;
  * {@code topLevelFolderItemFactory} extension point of the
  * {@link FileSystemItemAdapterService}.
  * <p>
- * Allows to get the top level {@link FolderItem} and the id of the
- * synchronization root parent {@link FolderItem} for a given user.
+ * Allows to get the top level {@link FolderItem} for a given user.
  *
  * @author Antoine Taillefer
  * @see DefaultTopLevelFolderItemFactory
  */
-public interface TopLevelFolderItemFactory extends FileSystemItemFactory {
+public interface TopLevelFolderItemFactory extends VirtualFolderItemFactory {
 
-    FolderItem getTopLevelFolderItem(String userName) throws ClientException;
-
-    String getSyncRootParentFolderItemId(String userName)
+    FolderItem getTopLevelFolderItem(Principal principal)
             throws ClientException;
 
 }

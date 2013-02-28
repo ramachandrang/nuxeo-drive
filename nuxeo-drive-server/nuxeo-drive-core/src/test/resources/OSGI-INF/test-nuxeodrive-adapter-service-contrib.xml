@@ -10,10 +10,23 @@
 
     <fileSystemItemFactory name="dummyDocTypeFactory"
       order="20" docType="File"
-      class="org.nuxeo.drive.service.adapter.DummyFileItemFactory" />
+      class="org.nuxeo.drive.service.adapter.DummyFileItemFactory">
+      <parameters>
+        <parameter name="versioningDelay">2</parameter>
+        <parameter name="versioningOption">MINOR</parameter>
+      </parameters>
+    </fileSystemItemFactory>
     <fileSystemItemFactory name="dummyFacetFactory"
       order="30" facet="Folderish"
       class="org.nuxeo.drive.service.adapter.DummyFolderItemFactory" />
+    <fileSystemItemFactory name="dummyVirtualFolderItemFactory"
+      order="100"
+      class="org.nuxeo.drive.service.adapter.DummyVirtualFolderItemFactory">
+      <parameters>
+        <parameter name="folderName">Dummy Folder</parameter>
+      </parameters>
+    </fileSystemItemFactory>
+
 
   </extension>
 

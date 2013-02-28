@@ -30,7 +30,6 @@ from nxdrive.model import DeviceConfig
 from nxdrive.model import ServerBinding
 from nxdrive.model import LastKnownState
 from nxdrive.model import SyncFolders
-from nxdrive.model import RootBinding
 from nxdrive.synchronizer import Synchronizer
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
@@ -449,16 +448,14 @@ class Controller(object):
                                    remote_state='synchronized')
             session.add(state)
             session.commit()
+            return server_binding
         except Exception as e:
-            log.debug("Failed to bind serverL: %s", str(e))
+            log.debug("Failed to bind server: %s", str(e))
             session.rollback()
-
-        # Create the local folder to host the synchronized files: this
-        # is useless as long as bind_root is not called
-        if not os.path.exists(local_folder):
-            os.makedirs(local_folder)
+            return None
 
         session.commit()
+        return server_binding
 
     def unbind_server(self, local_folder):
         """Remove the binding to a Nuxeo server
@@ -494,11 +491,6 @@ class Controller(object):
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
 
-        # delete all binding roots for this server
-        root_bindings = session.query(RootBinding).filter(RootBinding.local_folder == binding.local_folder).all()
-        for rb in root_bindings:
-            session.delete(rb)
-
         # delete all sync folders
         sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == binding.local_folder).all()
         for sf in sync_folders:
@@ -515,26 +507,6 @@ class Controller(object):
         session = self.get_session()
         for sb in session.query(ServerBinding).all():
             self.unbind_server(sb.local_folder)
-
-    def get_root_binding(self, local_root, raise_if_missing = False,
-                         session = None):
-        """Find the RootBinding instance for a given local_root
-
-        It is the responsability of the caller to commit any change in
-        the same thread if needed.
-        """
-        local_root = normalized_path(local_root)
-        if session is None:
-            session = self.get_session()
-        try:
-            return session.query(RootBinding).filter(
-                RootBinding.local_root == local_root).one()
-        except NoResultFound:
-            if raise_if_missing:
-                raise RuntimeError(
-                    "Folder '%s' is not bound as a root."
-                    % local_root)
-            return None
 
     def validate_credentials(self, server_url, username, password):
         # check the connection to the server by issuing an authenticated 'fetch API' request
@@ -751,8 +723,10 @@ class Controller(object):
     def get_remote_doc_client(self, server_binding, repository='default',
                               base_folder=None):
         """Return an instance of Nuxeo Document Client"""
-        if base_folder is None:
-            base_folder = self._get_mydocs_folder(server_binding)
+        # NOTE: this fails against standard Nuxeo server
+        # It was added to workaround permission error (http 401) against CloudDesk
+#        if base_folder is None:
+#            base_folder = self._get_mydocs_folder(server_binding)
         sb = server_binding
         return self.remote_doc_client_factory(
             sb.server_url, sb.remote_user, self.device_id,
@@ -855,12 +829,11 @@ class Controller(object):
     def launch_file_editor(self, server_url, remote_ref):
         """Find the local file if any and start OS editor on it."""
 
-        state = self.get_state(server_url, remote_ref, remote_ref)
+        state = self.get_state(server_url, remote_ref)
         if state is None:
             # TODO: synchronize to a dedicated special root for one time edit
-            log.warning('Could not find local file for '
-                        'server_url=%s and remote_ref=%s',
-                        server_url, remote_ref, remote_ref)
+            log.warning('Could not find local file for server_url=%s '
+                        'and remote_ref=%s', server_url, remote_ref)
             return
 
         # TODO: check synchronization of this state first
@@ -960,7 +933,8 @@ class Controller(object):
             self.status_thread.start()
             
     def stop_status_thread(self):
-        self.http_server.stop()
+        if self.http_server:
+            self.http_server.stop()
         
     def sync_status_app(self, environ, start_response):
         import json

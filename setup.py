@@ -71,7 +71,7 @@ def default_nuxeo_drive_folder():
 version = get_version()
 script = 'nuxeo-drive-client/scripts/ndrive.py'
 scriptwzd = 'nuxeo-drive-client/scripts/ndrivewzd.py'
-scripts = [script, scriptwzd]
+scripts = [script]
 
 freeze_options = {}
 
@@ -160,6 +160,13 @@ includes = [
     "atexit",  # implicitly required by PySide
     "sqlalchemy.dialects.sqlite",
 ]
+excludes = [
+    "ipdb",
+    "clf",
+    "IronPython",
+    "pydoc",
+    "tkinter",
+]
 
 
 if '--freeze' in sys.argv:
@@ -170,35 +177,12 @@ if '--freeze' in sys.argv:
     # build_exe does not seem to take the package_dir info into account
     sys.path.append('nuxeo-drive-client')
 
-#    executables = [Executable(script, base=None)]
-    executables = []
+    executables = [Executable(script, base=None)]
     # special handling for data files
     packages.remove('nxdrive.data')
     packages.remove('nxdrive.data.icons')
     package_data = {}
 
-    include_files = [
-                    icons_home + "/CP_Red_Office_%d.png" % i
-                        for i in [16, 32, 48, 64]
-    ]
-
-    includes = [
-                "PySide",
-                "PySide.QtCore",
-                "PySide.QtNetwork",
-                "PySide.QtGui",
-                "atexit",  # implicitly required by PySide
-                "sqlalchemy.dialects.sqlite",
-                ]
-    
-    excludes = [
-                "ipdb",
-                "clf",
-                "IronPython",
-                "pydoc",
-                "tkinter",
-                ]
-    
     if sys.platform == "win32":
         # Windows GUI program that can be launched without a cmd console
         executables.append(
@@ -206,6 +190,15 @@ if '--freeze' in sys.argv:
                        icon = icon, shortcutDir = "ProgramMenuFolder",
                        shortcutName = APP_NAME))
     
+	    scripts = []
+    	# special handling for data files
+    	packages.remove('nxdrive.data')
+    	packages.remove('nxdrive.data.icons')
+    	package_data = {}
+    	icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
+    	include_files = [(os.path.join(icons_home, f), "icons/%s" % f)
+                     	for f in os.listdir(icons_home)]
+
         freeze_options = dict(
             executables = executables,
             data_files = [('icons', icons_files),
@@ -221,6 +214,7 @@ if '--freeze' in sys.argv:
                         "nose",
                         "icemac.truncatetext",
                     ],
+					"excludes": excludes,
                     "include_files": include_files,
                 },
                 "bdist_msi": {
@@ -238,16 +232,7 @@ elif sys.platform == 'darwin':
     # - argv_emulation=True for nxdrive:// URL scheme handling
     # - easy Info.plit customization
     import py2app  # install the py2app command
-    
-    excludes = [
-                "ipdb",
-                "clf",
-                "IronPython",
-                "pydoc",
-                "tkinter",
-                ]
-                
-    osx_icon = os.path.join(icons_home, 'CP_Red_Office_64.png')
+
     freeze_options = dict(
         app = [script],
         data_files = [('icons', icons_files),
@@ -268,8 +253,8 @@ elif sys.platform == 'darwin':
                         )
                     ]
                 ),
-                includes = includes,
-                excludes = excludes,
+                includes=includes,
+                excludes=excludes,
             )
         )
     )
