@@ -422,8 +422,8 @@ class InstallOptionsPage(QWizardPage):
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
             # retrieve folders
-#            self.wizard().controller.synchronizer.get_folders()
-#            self.wizard().controller.synchronizer.update_roots()
+            self.wizard().controller.synchronizer.get_folders()
+            self.wizard().controller.synchronizer.update_roots()
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
         except Exception as e:
@@ -461,10 +461,10 @@ class InstallOptionsPage(QWizardPage):
             # if no root binding  exists, bind everything
             session = self.wizard().session
             count = session.query(SyncFolders).\
-                   filter(SyncFolders.bind_state).count()
+                   filter(SyncFolders.bind_state == True).count()
             if count == 0:
                 # check top-level folders as sync roots
-                self.check_toplevel_folders(session=session)
+                self.wizard().controller.synchronizer.check_toplevel_folders(session=session)
                 
                 # set the synchronized roots
                 app = QApplication.instance()
@@ -482,22 +482,6 @@ class InstallOptionsPage(QWizardPage):
                     self.removeEventFilter(process_filter)
                 
         return True
-    
-    def check_toplevel_folders(self, session=None):
-        if session is None:
-            session = self.wizard().session
-        # clear all
-        all_folders = session.query(SyncFolders).all()
-        for fld in all_folders:
-            fld.state = False
-            
-        mydocs = session.query(SyncFolders).filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
-        mydocs.state = True
-        others_folders = session.query(SyncFolders).\
-                                filter(SyncFolders.remote_parent == Constants.OTHERS_DOCS_UID).all()
-        for fld in others_folders:
-            fld.state = True
-        session.commit()
 
     def change_option(self, state):
         if state:

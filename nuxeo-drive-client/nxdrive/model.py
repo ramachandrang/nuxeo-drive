@@ -275,19 +275,19 @@ class SyncFolders(Base):
     server_binding = relationship('ServerBinding')
     children = relationship("SyncFolders")
 
-    def __init__(self, remote_id, remote_name, remote_parent, local_folder, remote_root = Constants.ROOT_CLOUDDESK, check_state = False):
+    def __init__(self, remote_id, remote_name, remote_parent, local_folder, remote_root = None, check_state = False, bind_state = False):
         self.remote_id = remote_id
         self.remote_name = remote_name
         self.remote_parent = remote_parent
         self.remote_root = remote_root
         self.local_folder = local_folder
         self.check_state = check_state
-        self.bind_state = False
+        self.bind_state = bind_state
 
     def __str__(self):
         return ("SyncFolders<remote_name=%r, remote_id=%r, remote_parent=%r, "
-                "local_folder=%r, %checked>" % (self.remote_name, self.remote_id, self.remote_parent,
-                                      self.local_folder, '' if self.checked2 else 'not '))
+                "local_folder=%r, %checked, %synced>" % (self.remote_name, self.remote_id, self.remote_parent,
+                                      self.local_folder, '' if self.check_state else 'not ', '' if self.bind_state else 'not '))
 
 class RecentFiles(Base):
     __tablename__ = 'recent_files'

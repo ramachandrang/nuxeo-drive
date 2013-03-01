@@ -26,24 +26,33 @@ def get_model(session, controller=None):
     rootItem = model.invisibleRootItem()
     
     # get the root CloudDesk item
-    attempts = 0
-    while attempts < 2:
-        try:
-            sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).one()
-            break
-        except NoResultFound:
-            log.warn("root does not exist.")
-            if controller is None:
-                raise RuntimeError(tr("An internal error occurred: Please restart the program"))
+#    attempts = 0
+#    while attempts < 2:
+#        try:
+#            sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).one()
+#            break
+#        except NoResultFound:
+#            log.warn("root does not exist.")
+#            if controller is None:
+#                raise RuntimeError(tr("An internal error occurred: Please restart the program"))
 #            controller.get_folders()
-            attempts += 1
-        except MultipleResultsFound:
-            log.error("multiple roots exist.")
-            config_folder = os.path.expanduser(r'~\.nuxeo_drive')
-            if controller is not None:
-                config_folder = controller.config_folder
-            raise ValueError(tr('An internal error occurred: Please delete %s' % os.path.join(config_folder, 'nxdrive.db')))
+#            controller.synchronizer.update_roots(controller.get_server_binding())
+#            attempts += 1
+#        except MultipleResultsFound:
+#            log.error("multiple roots exist.")
+#            config_folder = os.path.expanduser(r'~\.nuxeo_drive')
+#            if controller is not None:
+#                config_folder = controller.config_folder
+#            raise ValueError(tr('An internal error occurred: Please delete %s' % os.path.join(config_folder, 'nxdrive.db')))
         
+    try:
+        server_binding = controller.get_server_binding()
+        controller.synchronizer.get_folders(server_binding)
+        controller.synchronizer.update_roots(server_binding)
+    except Exception, e:
+        log.debug("failed to retrieve folders or sync roots (%s)", str(e))
+        
+    sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).one()
     item = QStandardItem(sync_folder.remote_name)
     item.setCheckable(False)
     item.setEnabled(False)
@@ -67,7 +76,7 @@ def add_subfolders(session, root, data):
         item = QStandardItem(fld.remote_name)
         item.setCheckable(True)
         item.setData(fld.remote_id, ID_ROLE)
-        check_state = Qt.Checked if fld.checked is not None else Qt.Unchecked
+        check_state = Qt.Checked if fld.check_state else Qt.Unchecked
         item.setData(check_state, CHECKED_ROLE)
         root.appendRow(item)
         add_subfolders(session, item, fld.remote_id)
@@ -130,6 +139,6 @@ def update_model(session, parent):
 
 def no_bindings(session):
     count = session.query(SyncFolders).\
-                       filter(not SyncFolders.bind_state).count()
+                       filter(not SyncFolders.bind_state == True).count()
     return count == 0
     

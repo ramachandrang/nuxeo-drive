@@ -1006,7 +1006,21 @@ class Synchronizer(object):
         self.loop_count = 0
 
         try:
-#            self.get_folders()
+            self.get_folders()
+            
+            count = session.query(SyncFolders).\
+                   filter(SyncFolders.bind_state == True).count()
+            # top level folders would have been set as sync roots by wizard
+            if count == 0:
+                # user skipped the wizard
+                # set top-level folders as sync roots
+                self.check_toplevel_folders(session=session)               
+                try:
+                    self.set_roots(session=session)
+                except Exception as e:
+                    log.error("Unable to set roots on '%s' for user '%s' (%s)", 
+                                        server_binding.server_url, server_binding.remote_user, str(e))        
+         
             # start status thread used to provide file status for icon overlays
             self._controller.start_status_thread()
             
@@ -1270,7 +1284,7 @@ class Synchronizer(object):
                       remote_refresh_duration,
                       synchronization_duration)
             
-            self._update_sync_folders(server_binding, session=session)
+#            self._update_sync_folders(server_binding, session=session)
        
             if self._frontend is not None and n_pending > 0:
                 self._frontend.notify_stop_transfer()   
@@ -1437,7 +1451,7 @@ class Synchronizer(object):
                     repositories = nxclient.get_repository_names()
                 for repo in repositories:
                     nxclient = self.get_remote_client(sb, repository = repo)
-                    self._update_clouddesk_root(repo, sb.local_folder)
+                    self._update_clouddesk_root(sb.local_folder, session=session)
                     mydocs_folder = nxclient.get_mydocs()
                     mydocs_folder[u'title'] = Constants.MY_DOCS
 
@@ -1473,7 +1487,23 @@ class Synchronizer(object):
             except KeyError:
                 pass
 
-    def _update_clouddesk_root(self, repo, local_folder, session = None):
+    def check_toplevel_folders(self, session=None):
+        if session is None:
+            session = self.wizard().session
+        # clear all checked folders
+        all_folders = session.query(SyncFolders).all()
+        for fld in all_folders:
+            fld.check_state = False
+            
+        mydocs = session.query(SyncFolders).filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
+        mydocs.check_state = True
+        others_folders = session.query(SyncFolders).\
+                                filter(SyncFolders.remote_parent == Constants.OTHERS_DOCS_UID).all()
+        for fld in others_folders:
+            fld.check_state = True
+        session.commit()
+        
+    def _update_clouddesk_root(self, local_folder, session = None):
         if session is None:
             session = self.get_session()
         try:
@@ -1485,7 +1515,6 @@ class Synchronizer(object):
             folder = SyncFolders(Constants.CLOUDDESK_UID,
                                  Constants.DEFAULT_NXDRIVE_FOLDER,
                                  None,
-                                 repo,
                                  local_folder
                                  )
             session.add(folder)
@@ -1510,7 +1539,6 @@ class Synchronizer(object):
             folder = SyncFolders(docId,
                                  docs[u'title'],
                                  Constants.CLOUDDESK_UID,
-                                 repo,
                                  local_folder
                                  )
 
@@ -1532,7 +1560,7 @@ class Synchronizer(object):
     def _add_folder(self, folder_info, repo, local_folder, root_folder, session = None, dirty = None):
         if session is None:
             session = self.get_session()
-        folder = SyncFolders(folder_info.docId, folder_info.title, folder_info.parentId, repo, local_folder, remote_root = root_folder)
+        folder = SyncFolders(folder_info.docId, folder_info.title, folder_info.parentId, local_folder, remote_root = root_folder)
 
         try:
             sync_folder = session.query(SyncFolders).filter_by(remote_id = folder_info.docId).one()
@@ -1559,21 +1587,21 @@ class Synchronizer(object):
             session = self.get_session()
 
         roots_to_register = session.query(SyncFolders, ServerBinding).\
-                            filter(SyncFolders.check_state).\
-                            filter(not SyncFolders.bind_state).\
+                            filter(SyncFolders.check_state == True).\
+                            filter(SyncFolders.bind_state == False).\
                             filter(ServerBinding.local_folder == SyncFolders.local_folder).\
                             all()
 
         roots_to_unregister = session.query(SyncFolders, ServerBinding).\
-                            filter(not SyncFolders.check_state).\
-                            filter(SyncFolders.bind_state).\
+                            filter(SyncFolders.check_state == False).\
+                            filter(SyncFolders.bind_state == True).\
                             filter(ServerBinding.local_folder == SyncFolders.local_folder).\
                             all()
 
         for root_tuple in roots_to_register:
             try:
                 sync_folder, server_binding = root_tuple
-                remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id, repository = sync_folder.remote_repo)
+                remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id)
                 remote_client.register_as_root(sync_folder.remote_id)
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 server_binding = tuple[1]
@@ -1583,7 +1611,7 @@ class Synchronizer(object):
         for root_tuple in roots_to_unregister:
             try:
                 sync_folder, server_binding = root_tuple
-                remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id, repository = sync_folder.remote_repo)
+                remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id)
                 remote_client.unregister_as_root(sync_folder.remote_id)
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 server_binding = tuple[1]
@@ -1751,35 +1779,37 @@ class Synchronizer(object):
         """The maintenance service may report different conditions:
         - currently in maintenance: status is 'maintenance'
         - available but provide future maintenance schedules"""      
-        if schedules is None:
-            return
-        
-        status = schedules['Status']
-        if len(schedules['ScheduleItems']) == 1:
-            schedule = schedules['ScheduleItems'][0]
-        else:
-            schedule = None
+        try:
+            if schedules is None:
+                return
             
-        msg, detail = get_maintenance_message(status, schedule=schedule)
-        # nothing to notify or persist
-        if msg is None:
-            return
-        
-        # persist server event in the database
-        if schedule is not None:
-            creation_date = datetime.strptime(schedule['CreationDate'], '%Y-%m-%dT%H:%M:%S.%fZ')
-        else:
-            # uses current utc time
-            creation_date = None
-        self.persist_server_event(sb, '%s. %s' % (msg, detail), message_type='maintenance', 
-                                          utc_time=creation_date, session=session)
-        if self._frontend is not None:
-            if status == 'available' and sb.nag_maintenance_schedule():
-                self._frontend.notify_maintenance_schedule(msg, detail)
-                sb.update_server_maintenance_schedule()
-            elif status == 'maintenance':
-                self._frontend.notify_maintenance_mode(msg, detail)
+            status = schedules['Status']
+            if len(schedules['ScheduleItems']) == 1:
+                schedule = schedules['ScheduleItems'][0]
+            else:
+                schedule = None
                 
+            msg, detail = get_maintenance_message(status, schedule=schedule)
+            # nothing to notify or persist
+            if msg is None:
+                return
+            
+            # persist server event in the database
+            if schedule is not None:
+                creation_date = datetime.strptime(schedule['CreationDate'], '%Y-%m-%dT%H:%M:%S.%fZ')
+            else:
+                # uses current utc time
+                creation_date = None
+            self.persist_server_event(sb, '%s. %s' % (msg, detail), message_type='maintenance', 
+                                              utc_time=creation_date, session=session)
+            if self._frontend is not None:
+                if status == 'available' and sb.nag_maintenance_schedule():
+                    self._frontend.notify_maintenance_schedule(msg, detail)
+                elif status == 'maintenance':
+                    self._frontend.notify_maintenance_mode(msg, detail)
+        finally:
+            sb.update_server_maintenance_schedule()
+            
     def persist_server_event(self, server_binding, message, message_type, utc_time=None, session=None):
         if session is None:
             session = self._controller.get_session()
@@ -1800,41 +1830,29 @@ class Synchronizer(object):
         except NoResultFound:
             pass
         
-    def _update_sync_folders(self, server_binding, session=None):
-        """update SyncFolders table based on the LastKnownState table"""
-        if session is None:
-            session = self._controller.get_session()
-        sync_folders = session.query(SyncFolders).all()
-        # clear all
-        map(session.delete, sync_folders)
-        
-#        root_folder = session.query(LastKnownState).filter(and_(LastKnownState.remote_parent_ref == None,\
-#                                                         LastKnownState.local_folder == server_binding.local_folder)).one()
-#        
-#        session.add(SyncFolders(root_folder.remote_ref, root_folder.remote_name, root_folder.remote_parent_ref,
-#                                server_binding.local_folder))
-    
-#        toplevel_folders = session(LastKnownState).query(_and(LastKnownState.remote_parent_ref == root_folder.remote_ref,
-#                                                              LastKnownState.local_folder == server_binding.local_folder)).all()
-#        for tlf in toplevel_folders:
-#            session.add(SyncFolders(tlf.remote_ref, tlf.remote_name, tlf.remote_parent_ref,
+#    def _update_sync_folders(self, server_binding, session=None):
+#        """update SyncFolders table based on the LastKnownState table"""
+#        if session is None:
+#            session = self._controller.get_session()
+#        sync_folders = session.query(SyncFolders).all()
+#        # clear all
+#        map(session.delete, sync_folders)
+#            
+#        folders = session.query(LastKnownState).filter(and_(LastKnownState.local_folder == server_binding.local_folder,
+#                                                            LastKnownState.folderish == 1)).all()
+#        sync_folders = []                                                    
+#        for tlf in folders:
+#            sync_folders.append(SyncFolders(tlf.remote_ref, tlf.remote_name, tlf.remote_parent_ref,
 #                                    server_binding.local_folder))
-            
-        folders = session.query(LastKnownState).filter(and_(LastKnownState.local_folder == server_binding.local_folder,
-                                                            LastKnownState.folderish == 1)).all()
-        sync_folders = []                                                    
-        for tlf in folders:
-            sync_folders.append(SyncFolders(tlf.remote_ref, tlf.remote_name, tlf.remote_parent_ref,
-                                    server_binding.local_folder))
-            
-        # set binding roots
-        remote_client = self.get_remote_client(server_binding)
-        remote_roots = remote_client.get_roots()
-        remote_root_ids = [r.uid for r in remote_roots]
-        for fld in sync_folders:
-            uid = fld.remote_id.rsplit('#', 1)
-            if uid[1] in remote_root_ids:
-                fld.bind_state = True
-            session.add(fld)
-        session.commit()
+#            
+#        # set binding roots
+#        remote_client = self.get_remote_client(server_binding)
+#        remote_roots = remote_client.get_roots()
+#        remote_root_ids = [r.uid for r in remote_roots]
+#        for fld in sync_folders:
+#            uid = fld.remote_id.rsplit('#', 1)
+#            if uid[1] in remote_root_ids:
+#                fld.bind_state = True
+#            session.add(fld)
+#        session.commit()
                 

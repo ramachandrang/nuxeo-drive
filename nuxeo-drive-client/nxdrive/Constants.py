@@ -24,8 +24,10 @@ APP_SUBSTATE_MAINTENANCE = 'maintenance'
 
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 # TODO replace with CloudDesk url and admin(?) account
-DEFAULT_CLOUDDESK_URL = r'https://devdm.sharpb2bcloud.com/app1'
-DEFAULT_ACCOUNT = "user1@dt1.com"
+#DEFAULT_CLOUDDESK_URL = r'https://devdm.sharpb2bcloud.com/app1'
+#DEFAULT_ACCOUNT = "user1@dt1.com"
+DEFAULT_CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
+DEFAULT_ACCOUNT = "user@shiro.com"
 SERVICE_NAME = 'Cloud Portal Office'
 MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
 INTERNAL_HTTP_PORT = 63111
@@ -42,8 +44,7 @@ RECENT_FILES_COUNT = 5
 ICON_ANIMATION_DELAY = 200
 ICON_ANIMATION_START_DELAY = 100
 NOTIFICATION_MESSAGE_DELAY = 3  # in seconds
-#SERVICE_NOTIFICATION_INTERVAL = 6 * 3600  # six hours
-SERVICE_NOTIFICATION_INTERVAL = 30
+SERVICE_NOTIFICATION_INTERVAL = 6 * 3600  # six hours
 FDTOKEN_DURATION = 15 * 60
 SYNC_STATUS_STOP = 1
 SYNC_STATUS_START = 2

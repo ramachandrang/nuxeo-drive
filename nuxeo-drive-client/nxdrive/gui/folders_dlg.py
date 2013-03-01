@@ -197,9 +197,9 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
                             
         if parent.rowCount() == 0:
             if clear:
-                sync_folder.state = False
+                sync_folder.check_state = False
             else:
-                sync_folder.state = True if parent.checkState() == Qt.Checked else False
+                sync_folder.check_state = True if parent.checkState() == Qt.Checked else False
             session.commit()
             return
             
@@ -208,16 +208,16 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
 #            first_state = states[0]
 #            other_states = filter(lambda state: state != first_state, states[1:])    
             if clear:
-                sync_folder.state = False
+                sync_folder.check_state = False
             else:    
                 # get status of all children
                 children_state = self._get_states(parent)
                 checked = self._get_count(children_state, Qt.Checked)
                 unchecked = self._get_count(children_state, Qt.Unchecked)
                 if checked > 0 and unchecked > 0:
-                    sync_folder.state = False
+                    sync_folder.check_state = False
                 else:
-                    sync_folder.state = True if checked > 0 else False
+                    sync_folder.check_state = True if checked > 0 else False
                     clear = True
             session.commit()
             
