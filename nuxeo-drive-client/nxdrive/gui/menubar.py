@@ -738,7 +738,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionQuit.setEnabled(self.state != Constants.APP_STATE_QUITTING)
 
         self.menuViewRecentFiles.clear()
-        recent_files = session.query(RecentFiles).all()
+        recent_files = session.query(RecentFiles).filter(RecentFiles.local_root == self.local_folder).all()
         for recent_file in recent_files:
             open_folder = lambda: self.controller.open_local_file(recent_file.local_root)
             file_msg = recent_file.local_name

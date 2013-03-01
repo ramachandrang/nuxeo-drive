@@ -522,7 +522,7 @@ class Synchronizer(object):
                                doc_pair.pair_state, doc_pair)
         else:
             sync_handler(doc_pair, session, local_client, remote_client,
-                         local_info, remote_info)
+                         local_info, remote_info, status=status)
 
         # Ensure that concurrent process can monitor the synchronization
         # progress
@@ -543,7 +543,7 @@ class Synchronizer(object):
         doc_pair.update_state('synchronized', 'synchronized')
 
     def _synchronize_remotely_modified(self, doc_pair, session,
-        local_client, remote_client, local_info, remote_info):
+        local_client, remote_client, local_info, remote_info, status=None):
         if doc_pair.remote_digest != doc_pair.local_digest != None:
             log.debug("Updating local file '%s'.",
                       doc_pair.get_local_abspath())
@@ -551,6 +551,7 @@ class Synchronizer(object):
             try:
                 local_client.update_content(doc_pair.local_path, content)
                 doc_pair.refresh_local(local_client)
+                self.update_recent_files(doc_pair, status=status, session=session)
                 doc_pair.update_state('synchronized', 'synchronized')
             except (IOError, WindowsError):
                 log.debug("Delaying update for remotely modified "
@@ -595,7 +596,7 @@ class Synchronizer(object):
         doc_pair.update_state('synchronized', 'synchronized')
 
     def _synchronize_remotely_created(self, doc_pair, session,
-        local_client, remote_client, local_info, remote_info):
+        local_client, remote_client, local_info, remote_info, status=None):
         name = remote_info.name
         # Find the parent pair to find the path of the local folder to
         # create the document into
@@ -627,6 +628,7 @@ class Synchronizer(object):
             log.debug("Creating local document '%s' in '%s'", name,
                       parent_pair.get_local_abspath())
         doc_pair.update_local(local_client.get_info(path))
+        self.update_recent_files(doc_pair, status=status, session=session)
         doc_pair.update_state('synchronized', 'synchronized')
 
     def _synchronize_locally_deleted(self, doc_pair, session,
@@ -641,12 +643,13 @@ class Synchronizer(object):
         self._delete_with_descendant_states(session, doc_pair)
 
     def _synchronize_remotely_deleted(self, doc_pair, session,
-        local_client, remote_client, local_info, remote_info):
+        local_client, remote_client, local_info, remote_info, status=None):
         if doc_pair.local_path is not None:
             try:
                 # TODO: handle OS-specific trash management?
                 log.debug("Deleting local doc '%s'",
                           doc_pair.get_local_abspath())
+                self.update_recent_files(doc_pair, status=status, session=session)
                 local_client.delete(doc_pair.local_path)
                 self._delete_with_descendant_states(session, doc_pair)
                 # XXX: shall we also delete all the subcontent / folder at
@@ -664,10 +667,11 @@ class Synchronizer(object):
             self._delete_with_descendant_states(session, doc_pair)
 
     def _synchronize_deleted(self, doc_pair, session,
-        local_client, remote_client, local_info, remote_info):
+        local_client, remote_client, local_info, remote_info, status=None):
         # No need to store this information any further
         log.debug('Deleting doc pair %s deleted on both sides' %
                   doc_pair.get_local_abspath())
+        self.update_recent_files(doc_pair, status=status, session=session)
         self._delete_with_descendant_states(session, doc_pair)
 
     def _synchronize_conflicted(self, doc_pair, session,
@@ -1564,6 +1568,13 @@ class Synchronizer(object):
 
         try:
             sync_folder = session.query(SyncFolders).filter_by(remote_id = folder_info.docId).one()
+            # check if anything needs to be updated
+            # TODO check whether a remote folder can be renamed?
+            if sync_folder.remote_name != folder.remote_name:
+                sync_folder.remote_name = folder.remote_name
+            # TODO check whether a remote folder can be moved?
+            if sync_folder.remote_parent != folder.remote_parent:
+                sync_folder.remote_parent = folder.remote_parent
         except NoResultFound:
             session.add(folder)
             if dirty is not None:
@@ -1601,8 +1612,10 @@ class Synchronizer(object):
         for root_tuple in roots_to_register:
             try:
                 sync_folder, server_binding = root_tuple
-                remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id)
+                remote_client = self.get_remote_client(server_binding)
                 remote_client.register_as_root(sync_folder.remote_id)
+                sync_folder.bind_state = True
+                session.commit()
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 server_binding = tuple[1]
                 if not self._handle_network_error(server_binding, e, session = session):
@@ -1611,8 +1624,10 @@ class Synchronizer(object):
         for root_tuple in roots_to_unregister:
             try:
                 sync_folder, server_binding = root_tuple
-                remote_client = self.get_remote_client(server_binding, base_folder = sync_folder.remote_id)
+                remote_client = self.get_remote_client(server_binding)
                 remote_client.unregister_as_root(sync_folder.remote_id)
+                sync_folder.bind_state = False
+                session.commit()
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 server_binding = tuple[1]
                 if not self._handle_network_error(server_binding, e, session = session):
