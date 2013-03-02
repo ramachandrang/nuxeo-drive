@@ -70,7 +70,6 @@ def default_nuxeo_drive_folder():
 
 version = get_version()
 script = 'nuxeo-drive-client/scripts/ndrive.py'
-scriptwzd = 'nuxeo-drive-client/scripts/ndrivewzd.py'
 scripts = [script]
 
 freeze_options = {}
@@ -78,7 +77,6 @@ freeze_options = {}
 packages = [
     'nxdrive',
     'nxdrive.client',
-    'nxdrive.tests',
     'nxdrive.gui',
     'nxdrive.protocol_handler',
     'nxdrive.data',
@@ -95,23 +93,17 @@ package_data = {
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
 images_home = 'nuxeo-drive-client/nxdrive/data/images'
 
-#win_icon = os.path.join('icons', 'CP_Red_Office_64.ico')
-#png_icon = os.path.join('icons', 'CP_Red_Office_64.png')
-#osx_icon = os.path.join('icons', 'CP_Red_Office_64.icns')
+win_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.ico')
+png_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.png')
+osx_icon = os.path.join(icons_home, 'nuxeo_drive_app_icon_128.icns')
 
-#if sys.platform == 'win32':
-#    icon = win_icon
-#elif sys.platform == 'darwin':
-#    icon = osx_icon
-#else:
-#    icon = png_icon
-#if sys.platform == 'win32':
-#    icon = png_gicon
-#elif sys.platform == 'darwin':
-#    icon = png_icon
-#else:
-#    icon = png_icon
-    
+if sys.platform == 'win32':
+    icon = win_icon
+elif sys.platform == 'darwin':
+    icon = png_icon
+else:
+    icon = png_icon
+
 icons_files = []
 for filename in os.listdir(icons_home):
     filepath = os.path.join(icons_home, filename)
@@ -152,22 +144,23 @@ if '--dev' in sys.argv:
     timestamp = timestamp.replace("-", "")
     version += "b" + timestamp
 
-includes = [
-    "PySide",
-    "PySide.QtCore",
-    "PySide.QtNetwork",
-    "PySide.QtGui",
-    "atexit",  # implicitly required by PySide
-    "sqlalchemy.dialects.sqlite",
-]
-excludes = [
-    "ipdb",
-    "clf",
-    "IronPython",
-    "pydoc",
-    "tkinter",
-]
 
+includes = [
+            "PySide",
+            "PySide.QtCore",
+            "PySide.QtNetwork",
+            "PySide.QtGui",
+            "atexit",  # implicitly required by PySide
+            "sqlalchemy.dialects.sqlite",
+            ]
+
+excludes = [
+            "ipdb",
+            "clf",
+            "IronPython",
+            "pydoc",
+            "tkinter",
+            ]
 
 if '--freeze' in sys.argv:
     print "Building standalone executable..."
@@ -177,11 +170,17 @@ if '--freeze' in sys.argv:
     # build_exe does not seem to take the package_dir info into account
     sys.path.append('nuxeo-drive-client')
 
-    executables = [Executable(script, base=None)]
+#    executables = [Executable(script, base=None)]
+    executables = []
     # special handling for data files
     packages.remove('nxdrive.data')
     packages.remove('nxdrive.data.icons')
     package_data = {}
+
+    include_files = [
+                    icons_home + "/nuxeo_drive_icon_%d.png" % i
+                        for i in [16, 32, 48, 64]
+    ]
 
     if sys.platform == "win32":
         # Windows GUI program that can be launched without a cmd console
@@ -189,15 +188,6 @@ if '--freeze' in sys.argv:
             Executable(script, targetName = SHORT_APP_NAME + '.exe', base = "Win32GUI",
                        icon = icon, shortcutDir = "ProgramMenuFolder",
                        shortcutName = APP_NAME))
-    
-	    scripts = []
-    	# special handling for data files
-    	packages.remove('nxdrive.data')
-    	packages.remove('nxdrive.data.icons')
-    	package_data = {}
-    	icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
-    	include_files = [(os.path.join(icons_home, f), "icons/%s" % f)
-                     	for f in os.listdir(icons_home)]
 
         freeze_options = dict(
             executables = executables,
@@ -214,7 +204,6 @@ if '--freeze' in sys.argv:
                         "nose",
                         "icemac.truncatetext",
                     ],
-					"excludes": excludes,
                     "include_files": include_files,
                 },
                 "bdist_msi": {
@@ -223,7 +212,7 @@ if '--freeze' in sys.argv:
                 },
             },
         )
-    
+
 # TODO: investigate with esky to get an auto-updateable version but
 # then make sure that we can still have .msi and .dmg packages
 # instead of simple zip files.
@@ -233,13 +222,21 @@ elif sys.platform == 'darwin':
     # - easy Info.plit customization
     import py2app  # install the py2app command
 
+    excludes = [
+                "ipdb",
+                "clf",
+                "IronPython",
+                "pydoc",
+                "tkinter",
+                ]
+
     freeze_options = dict(
         app = [script],
         data_files = [('icons', icons_files),
                     ('nxdrive/data', others_files)],
         options = dict(
             py2app = dict(
-                iconfile = osx_icon,
+                iconfile = icon,
                 argv_emulation = False,  # We use QT for URL scheme handling
                 plist = dict(
                     CFBundleDisplayName = APP_NAME,
@@ -253,8 +250,8 @@ elif sys.platform == 'darwin':
                         )
                     ]
                 ),
-                includes=includes,
-                excludes=excludes,
+                includes = includes,
+                excludes = excludes,
             )
         )
     )
