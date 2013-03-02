@@ -5,7 +5,7 @@
 // Configurable values
 var checkboxChecked = true;                     		// Is the checkbox on the finished dialog checked by default?
 var checkboxText = "Launch [ProductName] Wizard";		// Text for the checkbox on the finished dialog
-var filename = "CpoWizard.exe";       					// The name of the executable to launch - change this to match the file you want to launch at the end of your setup
+var filename = "CpoDesktop.exe";       					// The name of the executable to launch - change this to match the file you want to launch at the end of your setup
 var dllFilename = "CpoIconOverlaySynced.dll"			// The name of the shell extension DLL
 
 // Constant values from Windows Installer

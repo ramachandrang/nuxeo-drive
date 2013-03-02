@@ -4,21 +4,13 @@ import hashlib
 import time
 
 
-class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
+FS_ITEM_ID_PREFIX = 'defaultFileSystemItemFactory#default#'
 
+class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
 
     def setUp(self):
         super(TestIntegrationRemoteFileSystemClient, self).setUp()
-        # Bind the test workspace as sync root for user 1
-        ctl = self.controller_1
-        remote_document_client = self.remote_document_client_1
-        remote_fs_client = self.remote_file_system_client_1
-        remote_document_client.register_as_root(self.workspace)
-
-        # Fetch the id of the workspace folder item
-        toplevel_folder_info = remote_fs_client.get_filesystem_root_info()
-        self.workspace_id = remote_fs_client.get_children_info(
-            toplevel_folder_info.uid)[0].uid
+        self.workspace_id = FS_ITEM_ID_PREFIX + self.workspace
 
     #
     # Test the API common with the local client API
@@ -60,7 +52,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         self.assertIsNone(info.download_url)
 
         # Check non existing file info
-        fs_item_id = self.FS_ITEM_ID_PREFIX + 'fakeId'
+        fs_item_id = FS_ITEM_ID_PREFIX + 'fakeId'
         self.assertRaises(NotFound,
             remote_client.get_info, fs_item_id)
         self.assertIsNone(
@@ -82,7 +74,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         # Wait to be sure that the file creation has been committed
         # See https://jira.nuxeo.com/browse/NXP-10964
         time.sleep(1.0)
-        fs_item_id = self.FS_ITEM_ID_PREFIX + doc_uid
+        fs_item_id = FS_ITEM_ID_PREFIX + doc_uid
         self.assertRaises(NotFound,
             remote_client.get_content, fs_item_id)
 
@@ -110,9 +102,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         self.assertEquals(workspace_children[1].name, 'Folder 2')
         self.assertTrue(workspace_children[1].folderish)
         self.assertEquals(workspace_children[2].uid, file_1_id)
-        # the .txt name is added by the server to the title of Note
-        # documents
-        self.assertEquals(workspace_children[2].name, 'File 1.txt')
+        self.assertEquals(workspace_children[2].name, 'File 1')
         self.assertFalse(workspace_children[2].folderish)
 
         # Check folder_1 children
@@ -120,7 +110,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         self.assertIsNotNone(folder_1_children)
         self.assertEquals(len(folder_1_children), 1)
         self.assertEquals(folder_1_children[0].uid, file_2_id)
-        self.assertEquals(folder_1_children[0].name, 'File 2.txt')
+        self.assertEquals(folder_1_children[0].name, 'File 2')
 
     def test_make_folder(self):
         remote_client = self.remote_file_system_client_1
@@ -175,9 +165,10 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         cp1252_encoded = unicode_content.encode('cp1252')
 
         # Make files with this content
-        utf8_fs_id = remote_client.make_file(self.workspace_id,
+        workspace_id = FS_ITEM_ID_PREFIX + self.workspace
+        utf8_fs_id = remote_client.make_file(workspace_id,
             'My utf-8 file.txt', utf8_encoded)
-        cp1252_fs_id = remote_client.make_file(self.workspace_id,
+        cp1252_fs_id = remote_client.make_file(workspace_id,
             'My cp1252 file.txt', cp1252_encoded)
 
         # Check content
@@ -227,7 +218,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         self.assertTrue(remote_client.exists(fs_item_id))
 
         # Check non existing file system item (non existing document)
-        fs_item_id = self.FS_ITEM_ID_PREFIX + 'fakeId'
+        fs_item_id = FS_ITEM_ID_PREFIX + 'fakeId'
         self.assertFalse(remote_client.exists(fs_item_id))
 
         # Check non existing file system item (document without content)
@@ -236,11 +227,13 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         # Wait to be sure that the file creation has been committed
         # See https://jira.nuxeo.com/browse/NXP-10964
         time.sleep(1.0)
-        fs_item_id = self.FS_ITEM_ID_PREFIX + doc_uid
+        fs_item_id = FS_ITEM_ID_PREFIX + doc_uid
         self.assertFalse(remote_client.exists(fs_item_id))
 
-    # TODO
+    # TODO: probably to be replaced by test_can_rename, test_can_update,
+    # test_can_delete, test_can_create_child
     def test_check_writable(self):
+        # TODO
         pass
 
     #
@@ -269,32 +262,24 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         self.assertTrue(fs_item['folder'])
 
         # Check non existing file system item
-        fs_item_id = self.FS_ITEM_ID_PREFIX + 'fakeId'
+        fs_item_id = FS_ITEM_ID_PREFIX + 'fakeId'
         self.assertIsNone(remote_client.get_fs_item(fs_item_id))
 
     def test_get_top_level_children(self):
         remote_document_client = self.remote_document_client_1
         remote_file_system_client = self.remote_file_system_client_1
 
-        # The workspace is registered as a sync root in the setup
+        # No sync roots at first
         children = remote_file_system_client.get_top_level_children()
-        self.assertEquals(len(children), 1)
-        self.assertEquals(children[0]['name'], self.workspace_title)
+        self.assertEquals(len(children), 0)
 
-        # Create 2 remote folders inside the workspace sync root
+        # Create 2 folders and register them as sync roots
         fs_item_1_id = remote_file_system_client.make_folder(
             self.workspace_id, 'Folder 1')
         fs_item_2_id = remote_file_system_client.make_folder(
             self.workspace_id, 'Folder 2')
         folder_1_uid = fs_item_1_id.rsplit("#", 1)[1]
         folder_2_uid = fs_item_2_id.rsplit("#", 1)[1]
-
-        # Unregister the workspace
-        remote_document_client.unregister_as_root(self.workspace)
-        children = remote_file_system_client.get_top_level_children()
-        self.assertEquals(len(children), 0)
-
-        # Register the sub folders as new roots
         remote_document_client.register_as_root(folder_1_uid)
         remote_document_client.register_as_root(folder_2_uid)
         children = remote_file_system_client.get_top_level_children()

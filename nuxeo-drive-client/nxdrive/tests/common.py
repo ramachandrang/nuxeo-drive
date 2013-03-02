@@ -14,21 +14,10 @@ from nxdrive.controller import Controller
 class IntegrationTestCase(unittest.TestCase):
 
     TEST_WORKSPACE_PATH = '/default-domain/workspaces/nuxeo-drive-test-workspace'
-    FS_ITEM_ID_PREFIX = 'defaultFileSystemItemFactory#default#'
 
     EMPTY_DIGEST = hashlib.md5().hexdigest()
     SOME_TEXT_CONTENT = "Some text content."
     SOME_TEXT_DIGEST = hashlib.md5(SOME_TEXT_CONTENT).hexdigest()
-
-    # 1s time resolution because of the datetime resolution of MYSQL
-    AUDIT_CHANGE_FINDER_TIME_RESOLUTION = 1.0
-
-    # 1s resolution on HFS+ on OSX
-    # 2s resolution on FAT but can be ignored as no Jenkins is running the test
-    # suite under windows on FAT partitions
-    # ~0.01s resolution for NTFS
-    # 0.001s for EXT4FS
-    OS_STAT_MTIME_RESOLUTION = 1.0
 
     def setUp(self):
         # Check the Nuxeo server test environment
