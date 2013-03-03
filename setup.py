@@ -95,22 +95,19 @@ package_data = {
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
 images_home = 'nuxeo-drive-client/nxdrive/data/images'
 
-#win_icon = os.path.join('icons', 'CP_Red_Office_64.ico')
-#png_icon = os.path.join('icons', 'CP_Red_Office_64.png')
+win_icon = os.path.join('icons', 'CP_Red_Office_64.ico')
+png_icon = os.path.join('icons', 'CP_Red_Office_64.png')
 #osx_icon = os.path.join('icons', 'CP_Red_Office_64.icns')
 
-#if sys.platform == 'win32':
-#    icon = win_icon
-#elif sys.platform == 'darwin':
+if sys.platform == 'win32':
+    icon = win_icon
+elif sys.platform == 'darwin':
+    #icns icon does not exist yet
 #    icon = osx_icon
-#else:
-#    icon = png_icon
-#if sys.platform == 'win32':
-#    icon = png_gicon
-#elif sys.platform == 'darwin':
-#    icon = png_icon
-#else:
-#    icon = png_icon
+    icon = png_icon
+else:
+    icon = png_icon
+
     
 icons_files = []
 for filename in os.listdir(icons_home):
@@ -190,7 +187,7 @@ if '--freeze' in sys.argv:
                        icon = icon, shortcutDir = "ProgramMenuFolder",
                        shortcutName = APP_NAME))
     
-	    scripts = []
+        scripts = []
     	# special handling for data files
     	packages.remove('nxdrive.data')
     	packages.remove('nxdrive.data.icons')
@@ -239,7 +236,7 @@ elif sys.platform == 'darwin':
                     ('nxdrive/data', others_files)],
         options = dict(
             py2app = dict(
-                iconfile = osx_icon,
+                iconfile = icon,
                 argv_emulation = False,  # We use QT for URL scheme handling
                 plist = dict(
                     CFBundleDisplayName = APP_NAME,
