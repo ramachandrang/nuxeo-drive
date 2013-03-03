@@ -293,11 +293,6 @@ class IntroPage(QWizardPage):
 
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
-            # no server binding yet, which is required to retrieve storage for the binding server
-#            self.wizard().controller.update_storage_used()
-#            storage_text = self.wizard().controller.get_storage(Constants.DEFAULT_CLOUDDESK_URL, self.txtUsername.text())
-#            if storage_text is None:
-#                storage_text = self.tr("Connected")
             msg = self.tr("Connected")
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: green }")
             self.auth_ok = True

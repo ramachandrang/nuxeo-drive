@@ -152,7 +152,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             if self.server_binding is None:
                 storage_text = None
             else:
-                storage_text = self.controller.get_storage(self.server_binding.server_url, self.server_binding.remote_user)
+                storage_text = self.controller.get_storage(self.server_binding)
             if storage_text is None:
                 self.lblStorage.setText(self.tr('not available'))
             else:

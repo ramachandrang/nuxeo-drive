@@ -365,10 +365,6 @@ class Controller(object):
                 local_folder = normalized_path(local_folder)
                 server_binding = session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
-                
-            if server_binding is not None:
-                self.storage[(server_binding.server_url, server_binding.remote_user)] = \
-                    (server_binding.used_storage, server_binding.total_storage)
             return server_binding
         
         except NoResultFound:
@@ -817,17 +813,6 @@ class Controller(object):
         else:
             return False
 
-    def get_storage(self, url, user_id):
-        try:
-            storage_key = (url, user_id)
-            used, total = self.storage[storage_key]
-            if total == 0:
-                return None
-            else:
-                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
-        except KeyError:
-            return None
-
     def launch_file_editor(self, server_url, remote_ref):
         """Find the local file if any and start OS editor on it."""
 
@@ -889,8 +874,7 @@ class Controller(object):
             remote_client = self.get_remote_client(sb)
             if remote_client is not None:
                 try:
-                    storage_key = (sb.server_url, sb.remote_user)
-                    self.storage[storage_key] = remote_client.get_storage_used()
+                    sb.used_storage, sb.total_storage = remote_client.get_storage_used()
                 except ValueError:
                     # operation not implemented
                     pass
@@ -903,26 +887,24 @@ class Controller(object):
                 remote_client = self.get_remote_client(sb)
                 if remote_client is not None:
                     try:
-                        storage_key = (sb.server_url, sb.remote_user)
-                        self.storage[storage_key] = remote_client.get_storage_used()
-                        return self.storage[storage_key]
+                        sb.used_storage, sb.total_storage = remote_client.get_storage_used()
+                        return sb.used_storage, sb.total_storage
                     except ValueError:
                         # operation not implemented
                         pass
                 break
 
         return (0, 0)
-    
-    def save_storage(self, session=None):
-        if session is None:
-            session = self.get_session()
-            
-        for sb in session.query(ServerBinding).all():
-            used, total = self.storage[(sb.server_url, sb.remote_user)]
-            sb.used_storage = used
-            sb.total_storage = total
         
-        session.commit()
+    def get_storage(self, server_binding):
+        try:
+            used, total = server_binding.used_storage, server_binding.total_storage
+            if total == 0:
+                return None
+            else:
+                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
+        except KeyError:
+            return None
         
     def enable_trace(self, state):
         BaseAutomationClient._enable_trace = state

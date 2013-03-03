@@ -705,9 +705,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.communicator.icon.emit('stopping')
 
         if self.worker is not None and self.worker.isAlive():
-            # Note: this cannot be called from the worker thread:
-            # SQLite objects created in a thread can only be used in that same thread.
-            self.controller.save_storage()
             # Ask the controller to stop: the synchronization loop will in turn
             # call notify_sync_stopped and finally handle_stop
             self.controller.stop()
@@ -722,7 +719,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if self.server_binding is None:
             storage_text = None
         else:
-            storage_text = self.controller.get_storage(self.server_binding.server_url, self.server_binding.remote_user)
+            storage_text = self.controller.get_storage(self.server_binding)
         if storage_text is None:
             self.actionUsedStorage.setVisible(False)
         else:
