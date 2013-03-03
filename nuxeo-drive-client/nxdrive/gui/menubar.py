@@ -532,13 +532,16 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             code = getattr(exception, 'code', None)
         else:
             code = None
+            
+        if code is not None:  
+            reason = "Server returned HTTP code %r" % code  
+        else:
+            reason = str(exception)            
+            
         if info.online:
             # Mark binding as offline and update UI
-            detail = ''
-            if code is not None:
-                detail = ' (code = %r)' % code
-            log.debug('Switching to offline mode%s for: %s',
-                      detail, local_folder)
+            log.debug('Switching to offline mode (reason: %s) for: %s',
+                      reason, local_folder)
             info.online = False
             self.update_running_icon()
             self.communicator.menu.emit()
