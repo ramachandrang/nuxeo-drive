@@ -18,6 +18,7 @@ PRODUCT_NAME = 'Cloud Portal Office'
 APP_NAME = PRODUCT_NAME + ' Desktop'
 SHORT_APP_NAME = 'CpoDesktop'
 DEFAULT_ROOT_FOLDER = PRODUCT_NAME
+SETUP_SCRIPT = r"CPODesktop-setup-script.iss"
 
 def get_version():
     VERSIONPATH = os.path.join(os.path.dirname(__file__), VERSIONFILE)
@@ -175,14 +176,20 @@ if '--freeze' in sys.argv:
     packages.remove('nxdrive.data.icons')
     package_data = {}
 
-    include_files = [(os.path.join(icons_home, f), "icons/%s" % f)
-                     for f in os.listdir(icons_home)]
+    include_icon_files = [(os.path.normpath(os.path.join(icons_home, f)), "icons/%s" % f)
+                     for f in os.listdir(icons_home) if os.path.splitext(f)[1] in ['.png', '.gif', '.ico', '.icns']]
+
     if sys.platform == "win32":
         # Windows GUI program that can be launched without a cmd console
         executables.append(
             Executable(script, targetName = SHORT_APP_NAME + '.exe', base = "Win32GUI",
                        icon = icon, shortcutDir = "ProgramMenuFolder",
                        shortcutName = APP_NAME))
+
+        include_bin_files = [(os.path.normpath(f), "bin/%s" % os.path.basename(f))
+                             for f in bin_files]
+
+        include_setup_files = [(SETUP_SCRIPT, SETUP_SCRIPT)]
 
         freeze_options = dict(
             executables = executables,
@@ -199,7 +206,7 @@ if '--freeze' in sys.argv:
                         "nose",
                         "icemac.truncatetext",
                     ],
-                    "include_files": include_files,
+                    "include_files": include_icon_files + include_bin_files + include_setup_files,
                 },
                 "bdist_msi": {
                     "add_to_path": True,
