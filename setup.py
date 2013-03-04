@@ -93,14 +93,14 @@ package_data = {
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
 images_home = 'nuxeo-drive-client/nxdrive/data/images'
 
-win_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.ico')
-png_icon = os.path.join(icons_home, 'nuxeo_drive_icon_64.png')
-osx_icon = os.path.join(icons_home, 'nuxeo_drive_app_icon_128.icns')
+win_icon = os.path.join(icons_home, 'CP_Red_Office_64.ico')
+png_icon = os.path.join(icons_home, 'CP_Red_Office_64.png')
+osx_icon = os.path.join(icons_home, 'CP_Red_Office_64.icns')
 
 if sys.platform == 'win32':
     icon = win_icon
 elif sys.platform == 'darwin':
-    icon = png_icon
+    icon = osx_icon
 else:
     icon = png_icon
 
@@ -169,19 +169,14 @@ if '--freeze' in sys.argv:
 
     # build_exe does not seem to take the package_dir info into account
     sys.path.append('nuxeo-drive-client')
-
-#    executables = [Executable(script, base=None)]
     executables = []
     # special handling for data files
     packages.remove('nxdrive.data')
     packages.remove('nxdrive.data.icons')
     package_data = {}
 
-    include_files = [
-                    icons_home + "/nuxeo_drive_icon_%d.png" % i
-                        for i in [16, 32, 48, 64]
-    ]
-
+    include_files = [(os.path.join(icons_home, f), "icons/%s" % f)
+                     for f in os.listdir(icons_home)]
     if sys.platform == "win32":
         # Windows GUI program that can be launched without a cmd console
         executables.append(
