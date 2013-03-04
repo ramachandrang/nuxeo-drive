@@ -16,7 +16,7 @@ DefaultDirName={pf}\Cloud Portal Office Desktop
 DefaultGroupName=Cloud Portal Office Desktop
 OutputDir=dist
 OutputBaseFilename=CPODesktop-0.1.8-Win32-setup
-SetupIconFile=build\exe.win32-2.7\icons\CP_Red_Office_64.ico
+SetupIconFile=icons\CP_Red_Office_64.ico
 Compression=lzma
 SolidCompression=yes
 
@@ -35,9 +35,9 @@ Type: files; Name: "{sd}\Users\{username}\Links\Cloud Portal Office.lnk";
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "build\exe.win32-2.7\CpoDesktop.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "CpoDesktop.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "build\exe.win32-2.7\bin\cpoiconoverlaysynced.dll"; DestDir: "{sys}"; Flags: restartreplace 
+Source: "bin\cpoiconoverlaysynced.dll"; DestDir: "{sys}"; Flags: restartreplace 
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

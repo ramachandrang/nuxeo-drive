@@ -209,7 +209,7 @@ class CpoWizard(QWizard):
         if ret == QMessageBox.No:
             settings = create_settings()
             settings.setValue('wizard', False)
-                
+
         return super(CpoWizard, self).reject()
 
 
@@ -316,7 +316,7 @@ class IntroPage(QWizardPage):
             elif useProxy == ProxyInfo.PROXY_AUTODETECT:
                 settings.setValue('preferences/useProxy', ProxyInfo.PROXY_SERVER)
                 msg = self.tr("""Unable to connect to %s.
-If a proxy server is required, please configure it here by selecting the Proxy... button""") %\
+If a proxy server is required, please configure it here by selecting the Proxy... button""") % \
                         Constants.DEFAULT_CLOUDDESK_URL
 
                 self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: gray }")
@@ -338,8 +338,8 @@ If a proxy server is required, please configure it here by selecting the Proxy..
 
     def showProxy(self):
         dlg = ProxyDlg(frontend = self.wizard())
-        self.result = dlg.exec_()  
-    
+        self.result = dlg.exec_()
+
     def isComplete(self):
         return self.auth_ok
 
@@ -409,7 +409,7 @@ class InstallOptionsPage(QWizardPage):
     def initializePage(self):
         self.rdButtonTypical.setChecked(True)
         self.wizard().add_skip_tour(True)
-        
+
         app = QApplication.instance()
         process_filter = EventFilter(self)
         # Note retrieve folders hierarchy and the sync roots
@@ -458,9 +458,11 @@ class InstallOptionsPage(QWizardPage):
             count = session.query(SyncFolders).\
                    filter(SyncFolders.bind_state == True).count()
             if count == 0:
+                # get alll folders
+                self.wizard().controller.synchronizer.get_folders(session = session)
                 # check top-level folders as sync roots
-                self.wizard().controller.synchronizer.check_toplevel_folders(session=session)
-                
+                self.wizard().controller.synchronizer.check_toplevel_folders(session = session)
+
                 # set the synchronized roots
                 app = QApplication.instance()
                 process_filter = EventFilter(self)
@@ -470,12 +472,12 @@ class InstallOptionsPage(QWizardPage):
                     self.wizard().controller.synchronizer.set_roots()
                 except Exception as e:
                     username = self.field('username')
-                    log.error(self.tr("Unable to set roots on '%s' for user '%s' (%s)"), 
-                                        Constants.DEFAULT_CLOUDDESK_URL, username, str(e))        
+                    log.error(self.tr("Unable to set roots on '%s' for user '%s' (%s)"),
+                                        Constants.DEFAULT_CLOUDDESK_URL, username, str(e))
                 finally:
                     app.restoreOverrideCursor()
                     self.removeEventFilter(process_filter)
-                
+
         return True
 
     def change_option(self, state):

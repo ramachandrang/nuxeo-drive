@@ -209,12 +209,12 @@ def make_cli_parser(add_subparsers = True):
 
     status_parser = subparsers.add_parser(
         'status',
-        help='Fetch the status info of the children of a given folder.',
-        parents=[common_parser],
+        help = 'Fetch the status info of the children of a given folder.',
+        parents = [common_parser],
     )
-    status_parser.set_defaults(command='status')
+    status_parser.set_defaults(command = 'status')
     status_parser.add_argument(
-        "folder", help="Path to a local Nuxeo Drive folder.")
+        "folder", help = "Path to a local Nuxeo Drive folder.")
 
     gui_parser = subparsers.add_parser(
         'gui',
@@ -249,7 +249,7 @@ def make_cli_parser(add_subparsers = True):
         parents = [common_parser],
     )
     wizard_parser.set_defaults(command = 'wizard')
-    
+
     switch_parser = subparsers.add_parser(
         'switch',
         help = 'Switch between wizard and normal mode, when launching the app with no command')
@@ -349,7 +349,7 @@ class CliHandler(object):
         self._configure_logger(options)
 
         # Initialize a controller for this process
-        self.controller = Controller(options.nxdrive_home, poolclass=SingletonThreadPool)
+        self.controller = Controller(options.nxdrive_home, poolclass = SingletonThreadPool)
 
         # Find the command to execute based on the
         handler = getattr(self, command, None)
@@ -374,9 +374,9 @@ class CliHandler(object):
                 raise
             else:
                 self.log.error("Error executing '%s': %s", command, e,
-                          exc_info=True)
+                          exc_info = True)
 
-    def launch(self, options=None):
+    def launch(self, options = None):
         """Launch the QT app in the main thread and sync in another thread."""
         # check is in wizard mode
         wizard_mode = settings.value('wizard', 'true')
@@ -387,10 +387,11 @@ class CliHandler(object):
                 wizard_mode = False
             else:
                 wizard_mode = True
-                
+
         if wizard_mode:
             self.wizard(options)
         else:
+            options.start = True
             self.gui(options)
 
     def gui(self, options = None):
@@ -407,8 +408,8 @@ class CliHandler(object):
             settings.setValue('wizard', True)
         elif options.normal:
             settings.setValue('wizard', False)
-        
-    def start(self, options=None):
+
+    def start(self, options = None):
         """Launch the synchronization in a daemonized process (under POSIX)"""
         # Close DB connections before Daemonization
         self.controller.dispose()
@@ -418,15 +419,15 @@ class CliHandler(object):
         self._configure_logger(options)
         self.log.debug("Synchronization daemon started.")
         self.controller.synchronizer.loop(
-            delay=getattr(options, 'delay', DEFAULT_DELAY))
+            delay = getattr(options, 'delay', DEFAULT_DELAY))
         return 0
 
     def console(self, options):
         fault_tolerant = not getattr(options, 'stop_on_error', True)
-        self.controller.synchronizer.loop(delay=getattr(options, 'delay', DEFAULT_DELAY))
+        self.controller.synchronizer.loop(delay = getattr(options, 'delay', DEFAULT_DELAY))
         return 0
 
-    def stop(self, options=None):
+    def stop(self, options = None):
         self.controller.stop()
         return 0
 
