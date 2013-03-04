@@ -868,7 +868,7 @@ class Synchronizer(object):
             except KeyError:
                 status[doc_pair.pair_state] = [doc_pair.local_name]
 
-        session.add(RecentFiles(doc_pair.local_name, doc_pair.local_folder, doc_pair.pair_state))
+        session.add(RecentFiles(doc_pair.local_name, doc_pair.local_parent_path, doc_pair.local_folder, doc_pair.pair_state))
         to_be_deleted = session.query(RecentFiles).\
                                 order_by(RecentFiles.local_update.desc()).\
                                 offset(Constants.RECENT_FILES_COUNT).all()

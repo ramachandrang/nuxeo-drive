@@ -8,6 +8,7 @@ from __future__ import division
 import sys
 import os
 import platform
+from functools import partial
 from datetime import datetime
 import itertools
 import webbrowser
@@ -716,6 +717,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def rebuild_menu(self):
         """update when menu is activated"""
+        
         if self.server_binding is None:
             storage_text = None
         else:
@@ -738,15 +740,19 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionQuit.setEnabled(self.state != Constants.APP_STATE_QUITTING)
 
         self.menuViewRecentFiles.clear()
-        recent_files = session.query(RecentFiles).filter(RecentFiles.local_root == self.local_folder).all()
+        recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == self.local_folder).all()
         for recent_file in recent_files:
-            open_folder = lambda: self.controller.open_local_file(recent_file.local_root)
+            path = recent_file.local_root[1:] if recent_file.local_root.startswith('/') else recent_file.local_root
+            open_folder = partial(self.controller.open_local_file, os.path.join(recent_file.local_folder, path))
             file_msg = recent_file.local_name
             open_folder_action = QtGui.QAction(
                 file_msg, self.menuViewRecentFiles, triggered = open_folder)
-            # TODO setEnabled(False) does not work!!
+
             if recent_file.pair_state == 'remotely_deleted' or recent_file.pair_state == 'deleted':
+                # TODO setEnabled(False) does not work!!
+#                open_folder_action.setEnabled(False)
                 open_folder_action.setVisible(False)
+            
             self.menuViewRecentFiles.addAction(open_folder_action)
             
         if self.substate == Constants.APP_SUBSTATE_MAINTENANCE:

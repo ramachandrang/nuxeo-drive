@@ -295,12 +295,14 @@ class RecentFiles(Base):
     id = Column(Integer, Sequence('file_id_seq'), primary_key = True)
     local_name = Column(String)
     local_root = Column(String)
+    local_folder = Column(String)
     local_update = Column(DateTime, index = True)
     pair_state = Column(String)
 
-    def __init__(self, local_name, local_root, pair_state):
+    def __init__(self, local_name, local_root, local_folder, pair_state):
         self.local_name = local_name
         self.local_root = local_root
+        self.local_folder = local_folder
         self.pair_state = pair_state
         self.local_update = datetime.now()
 

@@ -19,8 +19,11 @@ def http_server_loop(server, **kwargs):
 
 class HttpServer(object):
     def __init__(self, port, app):
-        self.httpd = make_server('', port, app)
-        
+        try:
+            self.httpd = make_server('', port, app)
+        except Exception, e:
+            log.debug("failed to start HTTP server on port %d: %s", port, e, exc_info=True)
+            
     def loop(self):
         self.httpd.serve_forever()
         

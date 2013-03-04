@@ -70,7 +70,6 @@ def default_nuxeo_drive_folder():
 
 version = get_version()
 script = 'nuxeo-drive-client/scripts/ndrive.py'
-scriptwzd = 'nuxeo-drive-client/scripts/ndrivewzd.py'
 scripts = [script]
 
 freeze_options = {}
@@ -95,16 +94,14 @@ package_data = {
 icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
 images_home = 'nuxeo-drive-client/nxdrive/data/images'
 
-win_icon = os.path.join('icons', 'CP_Red_Office_64.ico')
-png_icon = os.path.join('icons', 'CP_Red_Office_64.png')
-#osx_icon = os.path.join('icons', 'CP_Red_Office_64.icns')
+win_icon = os.path.join(icons_home, 'CP_Red_Office_64.ico')
+png_icon = os.path.join(icons_home, 'CP_Red_Office_64.png')
+osx_icon = os.path.join(icons_home, 'CP_Red_Office_64.icns')
 
 if sys.platform == 'win32':
     icon = win_icon
 elif sys.platform == 'darwin':
-    #icns icon does not exist yet
-#    icon = osx_icon
-    icon = png_icon
+    icon = osx_icon
 else:
     icon = png_icon
 
@@ -191,7 +188,6 @@ if '--freeze' in sys.argv:
     	# special handling for data files
     	packages.remove('nxdrive.data')
     	packages.remove('nxdrive.data.icons')
-    	package_data = {}
     	icons_home = 'nuxeo-drive-client/nxdrive/data/icons'
     	include_files = [(os.path.join(icons_home, f), "icons/%s" % f)
                      	for f in os.listdir(icons_home)]
@@ -211,7 +207,6 @@ if '--freeze' in sys.argv:
                         "nose",
                         "icemac.truncatetext",
                     ],
-					"excludes": excludes,
                     "include_files": include_files,
                 },
                 "bdist_msi": {
@@ -268,7 +263,7 @@ setup(
     package_dir = {'nxdrive': 'nuxeo-drive-client/nxdrive'},
     package_data = package_data,
     scripts = scripts,
-    long_description = open('README.rst').read(),
+    long_description = open('README.rtf').read(),
     **freeze_options
 )
 
