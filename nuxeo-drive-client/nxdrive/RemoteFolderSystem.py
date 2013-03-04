@@ -47,8 +47,8 @@ def get_model(session, controller=None):
         
     try:
         server_binding = controller.get_server_binding()
-        controller.synchronizer.get_folders(server_binding)
-        controller.synchronizer.update_roots(server_binding)
+        controller.synchronizer.get_folders(server_binding=server_binding, session=session)
+        controller.synchronizer.update_roots(server_binding=server_binding, session=session)
     except Exception, e:
         log.debug("failed to retrieve folders or sync roots (%s)", str(e))
         

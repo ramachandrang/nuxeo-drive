@@ -8,6 +8,7 @@ from __future__ import division
 import sys
 import os
 import platform
+from functools import partial
 from datetime import datetime
 import itertools
 import webbrowser
@@ -532,13 +533,16 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             code = getattr(exception, 'code', None)
         else:
             code = None
+            
+        if code is not None:  
+            reason = "Server returned HTTP code %r" % code  
+        else:
+            reason = str(exception)            
+            
         if info.online:
             # Mark binding as offline and update UI
-            detail = ''
-            if code is not None:
-                detail = ' (code = %r)' % code
-            log.debug('Switching to offline mode%s for: %s',
-                      detail, local_folder)
+            log.debug('Switching to offline mode (reason: %s) for: %s',
+                      reason, local_folder)
             info.online = False
             self.update_running_icon()
             self.communicator.menu.emit()
@@ -702,9 +706,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.communicator.icon.emit('stopping')
 
         if self.worker is not None and self.worker.isAlive():
-            # Note: this cannot be called from the worker thread:
-            # SQLite objects created in a thread can only be used in that same thread.
-            self.controller.save_storage()
             # Ask the controller to stop: the synchronization loop will in turn
             # call notify_sync_stopped and finally handle_stop
             self.controller.stop()
@@ -716,10 +717,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def rebuild_menu(self):
         """update when menu is activated"""
+        
         if self.server_binding is None:
             storage_text = None
         else:
-            storage_text = self.controller.get_storage(self.server_binding.server_url, self.server_binding.remote_user)
+            storage_text = self.controller.get_storage(self.server_binding)
         if storage_text is None:
             self.actionUsedStorage.setVisible(False)
         else:
@@ -738,15 +740,19 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionQuit.setEnabled(self.state != Constants.APP_STATE_QUITTING)
 
         self.menuViewRecentFiles.clear()
-        recent_files = session.query(RecentFiles).filter(RecentFiles.local_root == self.local_folder).all()
+        recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == self.local_folder).all()
         for recent_file in recent_files:
-            open_folder = lambda: self.controller.open_local_file(recent_file.local_root)
+            path = recent_file.local_root[1:] if recent_file.local_root.startswith('/') else recent_file.local_root
+            open_folder = partial(self.controller.open_local_file, os.path.join(recent_file.local_folder, path))
             file_msg = recent_file.local_name
             open_folder_action = QtGui.QAction(
                 file_msg, self.menuViewRecentFiles, triggered = open_folder)
-            # TODO setEnabled(False) does not work!!
+
             if recent_file.pair_state == 'remotely_deleted' or recent_file.pair_state == 'deleted':
+                # TODO setEnabled(False) does not work!!
+#                open_folder_action.setEnabled(False)
                 open_folder_action.setVisible(False)
+            
             self.menuViewRecentFiles.addAction(open_folder_action)
             
         if self.substate == Constants.APP_SUBSTATE_MAINTENANCE:

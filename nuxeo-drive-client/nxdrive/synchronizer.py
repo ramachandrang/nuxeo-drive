@@ -468,15 +468,17 @@ class Synchronizer(object):
             for repo in repositories:
                 nxclient = self.get_remote_client(sb, repository=repo)
                 remote_roots = nxclient.get_roots()
-                local_roots = [r for r in sb.roots
-                                if r.remote_repo == repo]
-                self.update_server_roots(
-                    sb, session, local_roots, remote_roots, repo)
-    
-        # XXX: we should probably move that elsewhere
-        if self._frontend is not None:
-            local_folders = [sb.local_folder for sb in server_bindings]
-            self._frontend.notify_local_folders(local_folders)
+                remote_roots_ids = [rr.uid for rr in remote_roots]
+                for folder in session.query(SyncFolders).all():
+                    folder.bind_state = False
+                folders = session.query(SyncFolders).\
+                                filter(SyncFolders.remote_id.in_(remote_roots_ids)).\
+                                all()
+                for folder in folders:
+                    folder.check_state = folder.bind_state = True
+                    
+        session.commit()
+
 
     def synchronize_one(self, doc_pair, session = None, status = None):
         """Refresh state and perform network transfer for a pair of documents."""
@@ -530,7 +532,7 @@ class Synchronizer(object):
             session.commit()
 
     def _synchronize_locally_modified(self, doc_pair, session,
-        local_client, remote_client, local_info, remote_info):
+        local_client, remote_client, local_info, remote_info, status=None):
         if doc_pair.remote_digest != doc_pair.local_digest:
             log.debug("Updating remote document '%s'.",
                       doc_pair.remote_name)
@@ -563,7 +565,7 @@ class Synchronizer(object):
             doc_pair.update_state('synchronized', 'synchronized')
 
     def _synchronize_locally_created(self, doc_pair, session,
-        local_client, remote_client, local_info, remote_info):
+        local_client, remote_client, local_info, remote_info, status=None):
         if self._detect_resolve_local_move(doc_pair, session,
             local_client, remote_client, local_info, remote_info):
             return
@@ -587,11 +589,11 @@ class Synchronizer(object):
                       name, parent_pair.remote_name)
             remote_ref = remote_client.make_folder(parent_ref, name)
         else:
+            log.debug("Creating remote document '%s' in folder '%s'",
+                      name, parent_pair.remote_name)
             remote_ref = remote_client.make_file(
                 parent_ref, name,
                 content=local_client.get_content(doc_pair.local_path))
-            log.debug("Creating remote document '%s' in folder '%s'",
-                      name, parent_pair.remote_name)
         doc_pair.update_remote(remote_client.get_info(remote_ref))
         doc_pair.update_state('synchronized', 'synchronized')
 
@@ -618,21 +620,21 @@ class Synchronizer(object):
                 " folder" % (name, doc_pair.remote_ref))
         local_parent_path = parent_pair.local_path
         if doc_pair.folderish:
-            path = local_client.make_folder(local_parent_path, name)
             log.debug("Creating local folder '%s' in '%s'", name,
                       parent_pair.get_local_abspath())
+            path = local_client.make_folder(local_parent_path, name)
         else:
+            log.debug("Creating local document '%s' in '%s'", name,
+                      parent_pair.get_local_abspath())
             path = local_client.make_file(
                 local_parent_path, name,
                 content=remote_client.get_content(doc_pair.remote_ref))
-            log.debug("Creating local document '%s' in '%s'", name,
-                      parent_pair.get_local_abspath())
         doc_pair.update_local(local_client.get_info(path))
         self.update_recent_files(doc_pair, status=status, session=session)
         doc_pair.update_state('synchronized', 'synchronized')
 
     def _synchronize_locally_deleted(self, doc_pair, session,
-        local_client, remote_client, local_info, remote_info):
+        local_client, remote_client, local_info, remote_info, status=None):
         if self._detect_resolve_local_move(doc_pair, session,
             local_client, remote_client, local_info, remote_info):
             return
@@ -675,7 +677,7 @@ class Synchronizer(object):
         self._delete_with_descendant_states(session, doc_pair)
 
     def _synchronize_conflicted(self, doc_pair, session,
-        local_client, remote_client, local_info, remote_info):
+        local_client, remote_client, local_info, remote_info, status=None):
         if doc_pair.local_digest == doc_pair.remote_digest != None:
             log.debug('Automated conflict resolution using digest for %s',
                 doc_pair.get_local_abspath())
@@ -809,7 +811,7 @@ class Synchronizer(object):
 
         return moved_or_renamed
 
-    def synchronize(self, local_folder=None, limit=None):
+    def synchronize(self, local_folder=None, limit=None, status=None):
         """Synchronize one file at a time from the pending list."""
         synchronized = 0
         session = self.get_session()
@@ -833,19 +835,21 @@ class Synchronizer(object):
             # using a TTL for the blacklist token in the state DB
             pair_state = pending[0]
             try:
-                self.synchronize_one(pair_state, session=session)
+                self.synchronize_one(pair_state, session=session, status=status)
                 synchronized += 1
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
-                # This is expected and should interrupt the sync process for
-                # this local_folder and should be dealt with in the main loop
                 if getattr(e, 'code', None) == 500:
+                    # This is an unexpected: blacklist doc_pair for
+                    # a cooldown period
                     log.error("Failed to sync %r", pair_state, exc_info=True)
                     pair_state.last_sync_error_date = datetime.utcnow()
                     session.commit()
                 else:
+                    # This is expected and should interrupt the sync process for
+                    # this local_folder and should be dealt with in the main loop
                     raise e
             except Exception as e:
-                # Unexpected exception
+                # Unexpected exception: blacklist for a cooldown period
                 log.error("Failed to sync %r", pair_state, exc_info=True)
                 pair_state.last_sync_error_date = datetime.utcnow()
                 session.commit()
@@ -864,7 +868,7 @@ class Synchronizer(object):
             except KeyError:
                 status[doc_pair.pair_state] = [doc_pair.local_name]
 
-        session.add(RecentFiles(doc_pair.local_name, doc_pair.local_root, doc_pair.pair_state))
+        session.add(RecentFiles(doc_pair.local_name, doc_pair.local_parent_path, doc_pair.local_folder, doc_pair.pair_state))
         to_be_deleted = session.query(RecentFiles).\
                                 order_by(RecentFiles.local_update.desc()).\
                                 offset(Constants.RECENT_FILES_COUNT).all()
@@ -1010,17 +1014,19 @@ class Synchronizer(object):
         self.loop_count = 0
 
         try:
-            self.get_folders()
+            self.get_folders(server_binding=server_binding, session=session)
             
             count = session.query(SyncFolders).\
-                   filter(SyncFolders.bind_state == True).count()
+                   filter(and_(SyncFolders.bind_state == True,
+                               SyncFolders.local_folder == server_binding.local_folder)).\
+                               count()
             # top level folders would have been set as sync roots by wizard
             if count == 0:
                 # user skipped the wizard
                 # set top-level folders as sync roots
-                self.check_toplevel_folders(session=session)               
+                self.check_toplevel_folders(server_binding=server_binding, session=session)               
                 try:
-                    self.set_roots(session=session)
+                    self.set_roots(server_binding=server_binding, session=session)
                 except Exception as e:
                     log.error("Unable to set roots on '%s' for user '%s' (%s)", 
                                         server_binding.server_url, server_binding.remote_user, str(e))        
@@ -1276,7 +1282,7 @@ class Synchronizer(object):
                 self._frontend.notify_start_transfer()
 
             n_synchronized = self.synchronize(limit=self.max_sync_step,
-                local_folder=server_binding.local_folder)
+                local_folder=server_binding.local_folder, status=status)
             synchronization_duration = time() - tick
 
             log.debug("[%s] - [%s]: synchronized: %d, pending: %d, "
@@ -1294,8 +1300,9 @@ class Synchronizer(object):
                 self._frontend.notify_stop_transfer()   
 
             if n_synchronized > 0:
-                self._controller.update_storage_used(session = session)
-                self.update_last_access(server_binding)   
+                self.update_last_access(server_binding)  
+            if n_synchronized > 0 or self.loop_count == 0:                
+                self._controller.update_storage_used(session = session) 
 
             self.fire_notifications(session=session)
             return n_synchronized
@@ -1491,21 +1498,29 @@ class Synchronizer(object):
             except KeyError:
                 pass
 
-    def check_toplevel_folders(self, session=None):
+    def check_toplevel_folders(self, server_binding=None, session=None):
         if session is None:
             session = self.wizard().session
-        # clear all checked folders
-        all_folders = session.query(SyncFolders).all()
-        for fld in all_folders:
-            fld.check_state = False
             
-        mydocs = session.query(SyncFolders).filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
-        mydocs.check_state = True
-        others_folders = session.query(SyncFolders).\
-                                filter(SyncFolders.remote_parent == Constants.OTHERS_DOCS_UID).all()
-        for fld in others_folders:
-            fld.check_state = True
-        session.commit()
+        if server_binding is not None:
+            server_bindings = [server_binding]
+        else:
+            server_bindings = session.query(ServerBinding).all()
+        for sb in server_bindings:
+            # clear all checked folders
+            all_folders = session.query(SyncFolders).all()
+            for fld in all_folders:
+                fld.check_state = False
+                
+            mydocs = session.query(SyncFolders).filter(and_(SyncFolders.remote_name == Constants.MY_DOCS,
+                                                            SyncFolders.local_folder == sb.local_folder)).one()
+            mydocs.check_state = True
+            others_folders = session.query(SyncFolders).\
+                                    filter(and_(SyncFolders.remote_parent == Constants.OTHERS_DOCS_UID,
+                                                SyncFolders.local_folder == sb.local_folder)).all()
+            for fld in others_folders:
+                fld.check_state = True
+            session.commit()
         
     def _update_clouddesk_root(self, local_folder, session = None):
         if session is None:
@@ -1591,47 +1606,47 @@ class Synchronizer(object):
             else:
                 self._remove_folders(t[folder.remote_name], folder.remote_id, session, dirty)
 
-    def set_roots(self, session = None):
+    def set_roots(self, server_binding=None, session = None):
         """Update binding roots based on client folders selection"""
 
         if session is None:
             session = self.get_session()
 
-        roots_to_register = session.query(SyncFolders, ServerBinding).\
-                            filter(SyncFolders.check_state == True).\
-                            filter(SyncFolders.bind_state == False).\
-                            filter(ServerBinding.local_folder == SyncFolders.local_folder).\
-                            all()
-
-        roots_to_unregister = session.query(SyncFolders, ServerBinding).\
-                            filter(SyncFolders.check_state == False).\
-                            filter(SyncFolders.bind_state == True).\
-                            filter(ServerBinding.local_folder == SyncFolders.local_folder).\
-                            all()
-
-        for root_tuple in roots_to_register:
-            try:
-                sync_folder, server_binding = root_tuple
-                remote_client = self.get_remote_client(server_binding)
-                remote_client.register_as_root(sync_folder.remote_id)
-                sync_folder.bind_state = True
-                session.commit()
-            except POSSIBLE_NETWORK_ERROR_TYPES as e:
-                server_binding = tuple[1]
-                if not self._handle_network_error(server_binding, e, session = session):
-                    raise
-
-        for root_tuple in roots_to_unregister:
-            try:
-                sync_folder, server_binding = root_tuple
-                remote_client = self.get_remote_client(server_binding)
-                remote_client.unregister_as_root(sync_folder.remote_id)
-                sync_folder.bind_state = False
-                session.commit()
-            except POSSIBLE_NETWORK_ERROR_TYPES as e:
-                server_binding = tuple[1]
-                if not self._handle_network_error(server_binding, e, session = session):
-                    raise
+        if server_binding is not None:
+            server_bindings = [server_binding]
+        else:
+            server_bindings = session.query(ServerBinding).all()
+        for sb in server_bindings:
+            roots_to_register = session.query(SyncFolders).\
+                                filter(SyncFolders.check_state == True).\
+                                filter(SyncFolders.bind_state == False).\
+                                filter(sb.local_folder == SyncFolders.local_folder).\
+                                all()
+    
+            roots_to_unregister = session.query(SyncFolders).\
+                                filter(SyncFolders.check_state == False).\
+                                filter(SyncFolders.bind_state == True).\
+                                filter(sb.local_folder == SyncFolders.local_folder).\
+                                all()
+    
+            remote_client = self.get_remote_client(sb)
+            for sync_folder in roots_to_register:
+                try:
+                    remote_client.register_as_root(sync_folder.remote_id)
+                    sync_folder.bind_state = True
+                    session.commit()
+                except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                    if not self._handle_network_error(sb, e, session = session):
+                        raise
+    
+            for sync_folder in roots_to_unregister:
+                try:
+                    remote_client.unregister_as_root(sync_folder.remote_id)
+                    sync_folder.bind_state = False
+                    session.commit()
+                except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                    if not self._handle_network_error(sb, e, session = session):
+                        raise
 
     def update_server_roots(self, server_binding, session, local_roots,
             remote_roots, repository):
