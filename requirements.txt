@@ -2,4 +2,14 @@ SQLAlchemy >= 0.7.9
 psutil
 nose
 coverage
+cx-Freeze
 argparse
+PySide
+suds
+py2exe
+pywin32
+dateutils
+pycrypto
+icemac.truncatetext
+
+
