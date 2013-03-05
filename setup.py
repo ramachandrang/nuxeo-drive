@@ -204,7 +204,6 @@ if '--freeze' in sys.argv:
                     "excludes": excludes,
                     "packages": packages + [
                         "nose",
-                        "icemac.truncatetext",
                     ],
                     "include_files": include_icon_files + include_bin_files + include_setup_files,
                 },
@@ -223,14 +222,6 @@ elif sys.platform == 'darwin':
     # - argv_emulation=True for nxdrive:// URL scheme handling
     # - easy Info.plit customization
     import py2app  # install the py2app command
-
-    excludes = [
-                "ipdb",
-                "clf",
-                "IronPython",
-                "pydoc",
-                "tkinter",
-                ]
 
     freeze_options = dict(
         app = [script],
