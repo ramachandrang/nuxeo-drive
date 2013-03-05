@@ -18,6 +18,7 @@ from nxdrive.model import ServerBinding, RecentFiles, LastKnownState
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import create_settings
+from nxdrive.utils import register_startup_darwin
 from nxdrive.utils import EventFilter
 from nxdrive.utils import win32utils
 from nxdrive.client.base_automation_client import ProxyInfo
@@ -27,6 +28,7 @@ from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
 from folders_dlg import SyncFoldersDlg
 import nxdrive.gui.qrc_resources
+
 
 if sys.platform == 'win32':
     from nxdrive.protocol_handler import win32
@@ -49,10 +51,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
         self.setWindowTitle('%s Preferences' % Constants.APP_NAME)
-        s = self.tr('Start automatically when starting this computer')
-        self.cbAutostart.setText(s)
+        self.tabWidget.setCurrentIndex(1)
+        self.cbAutostart.setText(self.tr('Start automatically when starting this computer'))
         self.label_3.setText(self.tr('Site Url'))
         self.label_7.setText(self.tr('Folder location'))
+        self.groupboxSite.setTitle(self.tr('%s Site') % Constants.PRODUCT_NAME)
         self.frontend = frontend
         self.controller = frontend.controller
         self.result = ProgressDialog.OK_AND_NO_RESTART
@@ -498,22 +501,24 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 os.unlink(shortcut_path)
 
         elif sys.platform == 'darwin':
-            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/%s.%s.plist') % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME),
-                                       QSettings.NativeFormat)
-            if not plist_settings.contains('Label'):
-                # create the plist
-                plist_settings.setValue('Label', '%s.%s' % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME))
-                path = '/Applications/%s.app/Contents/MacOS/%s' % (Constants.OSX_APP_NAME, Constants.OSX_APP_NAME)
-                plist_settings.setValue('Program', path)
-                plist_settings.setValue('ProgramArguments', [path, 'gui'])
-
-            # start when it loads the agent
-            plist_settings.setValue('RunAtLoad', self.autostart)
-            # restart if app stops with a non-normal exit status, i.e. non-zero (crash?)
+#            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/%s.%s.plist') % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME),
+#                                       QSettings.NativeFormat)
+#            if not plist_settings.contains('Label'):
+#                # create the plist
+#                plist_settings.setValue('Label', '%s.%s' % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME))
+#                path = '/Applications/%s.app/Contents/MacOS/%s' % (Constants.OSX_APP_NAME, Constants.OSX_APP_NAME)
+#                plist_settings.setValue('Program', path)
+#                plist_settings.setValue('ProgramArguments', [path, 'gui'])
+#
+#            # start when it loads the agent
+#            plist_settings.setValue('RunAtLoad', self.autostart)
+#            # restart if app stops with a non-normal exit status, i.e. non-zero (crash?)
+#            if self.autostart:
+#                plist_settings.setValue('KeepAlive', {'SuccessfulExit': False})
+#            else:
+#                plist_settings.remove('KeepAlive')
             if self.autostart:
-                plist_settings.setValue('KeepAlive', {'SuccessfulExit': False})
-            else:
-                plist_settings.remove('KeepAlive')
+                register_startup_darwin()
 
         settings.sync()
 
@@ -525,3 +530,4 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
         if self.result == ProgressDialog.OK_AND_RESTART and self.frontend.state == Constants.APP_STATE_STOPPED:
             self.frontend._doSync()
+            

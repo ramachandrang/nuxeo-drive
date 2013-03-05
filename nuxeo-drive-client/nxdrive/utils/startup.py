@@ -39,14 +39,14 @@ else:
         pass
 
 
-NDRIVE_AGENT_FILENAME = "org.nuxeo.drive.plist"
+NDRIVE_AGENT_FILENAME = "com.sharp.cpodesktop.plist"
 NDRIVE_AGENT_TEMPLATE = """\
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>org.nuxeo.drive.agentlauncher</string>
+  <string>com.sharp.cpodesktop.agentlauncher</string>
   <key>KeepAlive</key>
   <dict>
     <key>NetworkState</key>
