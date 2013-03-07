@@ -728,6 +728,134 @@ class TestIntegrationSynchronization(IntegrationTestCase):
              u'synchronized', u'synchronized'),
         ])
 
+    def test_conflict_detection_and_renaming(self):
+        ctl = self.controller_1
+        ctl.bind_server(self.local_nxdrive_folder_1, self.nuxeo_url,
+                        self.user_1, self.password_1)
+        ctl.bind_root(self.local_nxdrive_folder_1, self.workspace)
+        syn = ctl.synchronizer
+        # Fetch the workspace sync root
+        syn.loop(delay=0, max_loops=1)
+        self.assertEquals(ctl.list_pending(), [])
+
+        # Let's create some document on the client and synchronize it.
+        local = LocalClient(self.local_nxdrive_folder_1)
+        local_path = local.make_file('/' + self.workspace_title,
+           'Some File.doc', content="Original content.")
+        syn.loop(delay=0, max_loops=1)
+
+        # Let's modify it concurrently but with the same content (digest)
+        time.sleep(self.OS_STAT_MTIME_RESOLUTION)
+        local.update_content(local_path, 'Same new content.')
+
+        remote_2 = self.remote_document_client_2
+        remote_2.update_content('/Some File.doc', 'Same new content.')
+
+        # Let's synchronize and check the conflict handling: automatic
+        # resolution will work for this case/
+        time.sleep(self.AUDIT_CHANGE_FINDER_TIME_RESOLUTION)
+        self.wait()
+        syn.loop(delay=0, max_loops=1)
+        item_infos = local.get_children_info('/' + self.workspace_title)
+        self.assertEquals(len(item_infos), 1)
+        self.assertEquals(item_infos[0].name, 'Some File.doc')
+        self.assertEquals(local.get_content(local_path), 'Same new content.')
+
+        # Let's trigger another conflict that cannot be resolved
+        # automatically:
+        time.sleep(self.OS_STAT_MTIME_RESOLUTION)
+        local.update_content(local_path, 'Local new content.')
+
+        remote_2 = self.remote_document_client_2
+        remote_2.update_content('/Some File.doc', 'Remote new content.')
+        time.sleep(self.AUDIT_CHANGE_FINDER_TIME_RESOLUTION)
+        self.wait()
+        # 2 loops are necessary for full conflict handling
+        syn.loop(delay=0, max_loops=2)
+        item_infos = local.get_children_info('/' + self.workspace_title)
+        self.assertEquals(len(item_infos), 2)
+
+        first, second = item_infos
+        if first.name == 'Some File.doc':
+            version_from_remote, version_from_local = first, second
+        else:
+            version_from_local, version_from_remote = first, second
+
+        self.assertEquals(version_from_remote.name, 'Some File.doc')
+        self.assertEquals(local.get_content(version_from_remote.path),
+            'Remote new content.')
+
+        self.assertTrue(version_from_local.name.startswith('Some File ('),
+            msg="'%s' was expected to start with 'Some File ('"
+                % version_from_local.name)
+        self.assertTrue(version_from_local.name.endswith(').doc'),
+            msg="'%s' was expected to end with ').doc'"
+                % version_from_local.name)
+        self.assertEquals(local.get_content(version_from_local.path),
+            'Local new content.')
+
+        # Everything is synchronized
+        all_states = self.get_all_states()
+
+        self.assertEquals(all_states[:2], [
+            (u'/',
+             u'synchronized', u'synchronized'),
+            (u'/Nuxeo Drive Test Workspace',
+             u'synchronized', u'synchronized'),
+        ])
+        # The filename changes with the date
+        self.assertEquals(all_states[2][1:],
+            (u'synchronized', u'synchronized'))
+        self.assertEquals(all_states[3],
+            (u'/Nuxeo Drive Test Workspace/Some File.doc',
+             u'synchronized', u'synchronized'))
+
+    def test_synchronize_deep_folders(self):
+        ctl = self.controller_1
+        ctl.bind_server(self.local_nxdrive_folder_1, self.nuxeo_url,
+                        self.user_1, self.password_1)
+        ctl.bind_root(self.local_nxdrive_folder_1, self.workspace)
+        syn = ctl.synchronizer
+
+        # Fetch the workspace sync root
+        syn.loop(delay=0, max_loops=1)
+        self.assertEquals(ctl.list_pending(), [])
+
+        # Create a file deep down in the hierarchy
+        remote = self.remote_document_client_1
+
+        folder = '/'
+        for i in range(10):
+            folder = remote.make_folder(folder, '0123456789' * 3)
+
+        remote.make_file(folder, "File.odt", content="Fake non-zero content.")
+
+        time.sleep(self.AUDIT_CHANGE_FINDER_TIME_RESOLUTION)
+        self.wait()
+        syn.loop(delay=0, max_loops=1)
+        self.assertEquals(ctl.list_pending(), [])
+
+        local = LocalClient(self.local_nxdrive_folder_1)
+        expected_folder_path = ('/' + self.workspace_title
+                                + ('/' + '0123456789' * 3) * 10)
+        expected_file_path = expected_folder_path + '/File.odt'
+        self.assertTrue(local.exists(expected_folder_path))
+        self.assertTrue(local.exists(expected_file_path))
+        self.assertEquals(local.get_content(expected_file_path),
+                          "Fake non-zero content.")
+
+        # Delete the nested folder structure on the remote server and synchronize
+        # again
+        remote.delete('/' + '0123456789' * 3)
+
+        time.sleep(self.AUDIT_CHANGE_FINDER_TIME_RESOLUTION)
+        self.wait()
+        syn.loop(delay=0, max_loops=1)
+        self.assertEquals(ctl.list_pending(), [])
+
+        self.assertFalse(local.exists(expected_folder_path))
+        self.assertFalse(local.exists(expected_file_path))
+
     def test_create_content_in_readonly_area(self):
         # XXX: implement permission checks on the client and leverage this
         # info in the synchronizer to not try to sync unsyncable stuff

@@ -10,6 +10,7 @@ from nxdrive.client.common import NotFound
 from nxdrive.client.common import DEFAULT_IGNORED_PREFIXES
 from nxdrive.client.common import DEFAULT_IGNORED_SUFFIXES
 from nxdrive.utils import normalized_path
+from nxdrive.utils import safe_long_path
 from nxdrive.client.common import BUFFER_SIZE
 
 
@@ -21,7 +22,7 @@ DEDUPED_BASENAME_PATTERN = r'^(.*)__(\d{1,3})$'
 
 def safe_filename(name, replacement='-'):
     """Replace invalid character in candidate filename"""
-    return re.sub(r'(/|\\|\*)', replacement, name)
+    return re.sub(r'(/|\\|\*|:)', replacement, name)
 
 
 # Data transfer objects
@@ -57,7 +58,7 @@ class FileInfo(object):
             raise ValueError('Unknow digest method: ' + self.digest_func)
 
         h = digester()
-        with open(self.filepath, 'rb') as f:
+        with open(safe_long_path(self.filepath), 'rb') as f:
             while True:
                 buffer = f.read(BUFFER_SIZE)
                 if buffer == '':
@@ -100,7 +101,7 @@ class LocalClient(object):
         folderish = os.path.isdir(os_path)
         stat_info = os.stat(os_path)
         mtime = datetime.fromtimestamp(stat_info.st_mtime)
-        path = '/' + os_path[len(self.base_folder) + 1:]
+        path = '/' + os_path[len(safe_long_path(self.base_folder)) + 1:]
         path = path.replace(os.path.sep, '/')  # unix style path
         # On unix we could use the inode for file move detection but that won't
         # work on Windows. To reduce complexity of the code and the possibility
@@ -222,7 +223,8 @@ class LocalClient(object):
         if not ref.startswith('/'):
             raise ValueError("LocalClient expects ref starting with '/'")
         path_suffix = ref[1:].replace('/', os.path.sep)
-        return normalized_path(os.path.join(self.base_folder, path_suffix))
+        path = normalized_path(os.path.join(self.base_folder, path_suffix))
+        return safe_long_path(path)
 
     def _abspath_deduped(self, parent, orig_name):
         """Absolute path on the operating system with deduplicated names"""

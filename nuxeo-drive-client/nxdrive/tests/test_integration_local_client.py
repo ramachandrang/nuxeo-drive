@@ -99,15 +99,15 @@ def test_complex_filenames():
     assert_not_equal(folder_1, folder_3)
 
     # Create a long file name with weird chars
-    long_filename = u"\xe9" * 50 + u"%$#!()[]{}+_-=';:&^" + ".doc"
+    long_filename = u"\xe9" * 50 + u"%$#!()[]{}+_-=';&^" + ".doc"
     file_1 = lcclient.make_file(folder_1, long_filename)
     file_1 = lcclient.get_info(file_1)
     assert_equal(file_1.name, long_filename)
     assert_equal(file_1.path, folder_1_info.path + "/" + long_filename)
 
     # Create a file with invalid chars
-    invalid_filename = u"a/b\\c*d.doc"
-    escaped_filename = u"a-b-c-d.doc"
+    invalid_filename = u"a/b\\c*d:e.doc"
+    escaped_filename = u"a-b-c-d-e.doc"
     file_2 = lcclient.make_file(folder_1, invalid_filename)
     file_2 = lcclient.get_info(file_2)
     assert_equal(file_2.name, escaped_filename)
@@ -142,3 +142,41 @@ def test_get_children_info():
     assert_equal(workspace_children[0].path, file_1)
     assert_equal(workspace_children[1].path, folder_1)
     assert_equal(workspace_children[2].path, folder_2)
+
+
+@with_temp_folder
+def test_deep_folders():
+    # Check that local client can workaround the default windows MAX_PATH limit
+    folder = '/'
+    for i in range(30):
+        folder = lcclient.make_folder(folder, '0123456789')
+
+    # Last Level
+    last_level_folder_info = lcclient.get_info(folder)
+    assert_equal(last_level_folder_info.path, '/0123456789' * 30)
+
+    # Create a nested file
+    deep_file = lcclient.make_file(folder, 'File.txt',
+        content="Some Content.")
+
+    # Check the consistency of  get_children_info and get_info
+    deep_file_info = lcclient.get_info(deep_file)
+    deep_children = lcclient.get_children_info(folder)
+    assert_equal(len(deep_children), 1)
+    deep_child_info = deep_children[0]
+    assert_equal(deep_file_info.name, deep_child_info.name)
+    assert_equal(deep_file_info.path, deep_child_info.path)
+    assert_equal(deep_file_info.get_digest(), deep_child_info.get_digest())
+
+    # Update the file content
+    lcclient.update_content(deep_file, "New Content.")
+    assert_equal(lcclient.get_content(deep_file), "New Content.")
+
+    # Delete the folder
+    lcclient.delete(folder)
+    assert_false(lcclient.exists(folder))
+    assert_false(lcclient.exists(deep_file))
+
+    # Delete the root folder and descendants
+    lcclient.delete('/0123456789')
+    assert_false(lcclient.exists('/0123456789'))

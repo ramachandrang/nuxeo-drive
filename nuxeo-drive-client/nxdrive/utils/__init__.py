@@ -2,6 +2,7 @@ from nxdrive.utils.helpers import create_settings
 from nxdrive.utils.startup import register_startup_darwin
 from nxdrive.utils.startup import register_startup
 from nxdrive.utils.helpers import normalized_path
+from nxdrive.utils.helpers import safe_long_path
 from nxdrive.utils.helpers import find_exe_path
 from nxdrive.utils.helpers import get_maintenance_message
 from nxdrive.utils.win32utils import update_win32_reg_key

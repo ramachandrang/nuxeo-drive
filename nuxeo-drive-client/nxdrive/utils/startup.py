@@ -47,11 +47,6 @@ NDRIVE_AGENT_TEMPLATE = """\
 <dict>
   <key>Label</key>
   <string>com.sharp.cpodesktop.agentlauncher</string>
-  <key>KeepAlive</key>
-  <dict>
-    <key>NetworkState</key>
-    <true/>
-  </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>Program</key>

@@ -2,6 +2,7 @@
 
 from __future__ import division
 
+import os
 import sys
 import os.path
 import urllib2
@@ -31,8 +32,10 @@ from nxdrive.model import ServerBinding
 from nxdrive.model import LastKnownState
 from nxdrive.model import SyncFolders
 from nxdrive.synchronizer import Synchronizer
+from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
+from nxdrive.utils import safe_long_path
 from nxdrive import Constants
 from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.http_server import HttpServer
@@ -43,16 +46,6 @@ from sqlalchemy import func
 from sqlalchemy import asc
 from sqlalchemy import or_
 
-
-POSSIBLE_NETWORK_ERROR_TYPES = (
-    Unauthorized,
-    urllib2.URLError,
-    urllib2.HTTPError,
-    httplib.HTTPException,
-    socket.error,
-    ProxyConnectionError,
-    ProxyConfigurationError,
-)
 
 # states used by the icon overlay status requests
 PROGRESS_STATES = ['unknown',
@@ -206,8 +199,7 @@ class Controller(object):
         self._local = local()
         self._remote_error = None
         self.device_id = self.get_device_config().device_id
-        self.fault_tolerant = True
-        self.loop_count = 0
+       	self.loop_count = 0
         self._init_storage()
         self.mydocs_folder = None
         self.synchronizer = Synchronizer(self)
@@ -254,7 +246,7 @@ class Controller(object):
             # process
             log.info("Telling synchronization process %d to stop." % pid)
             stop_file = os.path.join(self.config_folder, "stop_%d" % pid)
-            open(stop_file, 'wb').close()
+            open(safe_long_path(stop_file), 'wb').close()
         else:
             log.info("No running synchronization process to stop.")
 
@@ -356,13 +348,13 @@ class Controller(object):
     def get_server_binding(self, local_folder = None, raise_if_missing = False,
                            session = None):
         """Find the ServerBinding instance for a given local_folder"""
+        local_folder = normalized_path(local_folder)
         if session is None:
             session = self.get_session()
         try:
             if local_folder is None:
                 server_binding = session.query(ServerBinding).first()
             else:
-                local_folder = normalized_path(local_folder)
                 server_binding = session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
             return server_binding
