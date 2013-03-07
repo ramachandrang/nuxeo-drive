@@ -4,23 +4,25 @@ Created on Oct 28, 2012
 @author: mconstantin
 '''
 import sys
+from nxdrive import _
 try:
     import _version
     __version__ = _version.__version__
 except ImportError:
-    __version__ = "unknown"
+    __version__ = '0.0.0.0'
 
-COMPANY_NAME = 'SHARP'
-PRODUCT_NAME = 'Cloud Portal Office'
-APP_NAME = PRODUCT_NAME + ' Desktop'
+
+COMPANY_NAME = 'Sharp'
+PRODUCT_NAME = _('Cloud Portal Office')
+APP_NAME = PRODUCT_NAME + _(' Desktop')
 SHORT_APP_NAME = 'CpoDesktop'
 OSX_APP_NAME = APP_NAME
 
-APP_STATE_RUNNING = 'running'
-APP_STATE_STOPPED = 'stopped'
-APP_STATE_QUITTING = 'quitting'
-APP_SUBSTATE_AVAILABLE = 'available'
-APP_SUBSTATE_MAINTENANCE = 'maintenance'
+APP_STATE_RUNNING = _('running')
+APP_STATE_STOPPED = _('stopped')
+APP_STATE_QUITTING = _('quitting')
+APP_SUBSTATE_AVAILABLE = _('available')
+APP_SUBSTATE_MAINTENANCE = _('maintenance')
 
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 # TODO replace with CloudDesk url and admin(?) account

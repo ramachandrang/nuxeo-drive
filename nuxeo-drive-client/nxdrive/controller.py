@@ -294,8 +294,8 @@ class Controller(object):
         elif doc_pair.remote_ref is not None:
             f = LastKnownState.remote_parent_ref == doc_pair.remote_ref
         else:
-            raise ValueError("Illegal state %r: at least path or remote_ref"
-                             " should be not None." % doc_pair)
+            raise ValueError(_("Illegal state %r: at least path or remote_ref"
+                             " should be not None.") % doc_pair)
 
         children_states = session.query(LastKnownState).filter_by(
             local_folder=doc_pair.local_folder).filter(f).order_by(
@@ -335,10 +335,10 @@ class Controller(object):
                              if local_path.startswith(
                                 sb.local_folder + os.path.sep)]
         if len(matching_bindings) == 0:
-            raise NotFound("Could not find any server binding for "
+            raise NotFound(_("Could not find any server binding for ")
                                + local_path)
         elif len(matching_bindings) > 1:
-            raise RuntimeError("Found more than one binding for %s: %r" % (
+            raise RuntimeError(_("Found more than one binding for %s: %r") % (
                 local_path, matching_bindings))
         binding = matching_bindings[0]
         path = local_path[len(binding.local_folder):]
@@ -362,7 +362,7 @@ class Controller(object):
         except NoResultFound:
             if raise_if_missing:
                 raise RuntimeError(
-                    "Folder '%s' is not bound to any %s server"
+                    _("Folder '%s' is not bound to any %s server")
                     % (local_folder, Constants.PRODUCT_NAME))
             return None
 
@@ -390,7 +390,7 @@ class Controller(object):
             if (server_binding.remote_user != username
                 or server_binding.server_url != server_url):
                 raise RuntimeError(
-                    "%s is already bound to '%s' with user '%s'" % (
+                    _("%s is already bound to '%s' with user '%s'") % (
                         local_folder, server_binding.server_url,
                         server_binding.remote_user))
 
@@ -751,10 +751,10 @@ class Controller(object):
     
     def _log_offline(self, exception, context):
         if isinstance(exception, urllib2.HTTPError):
-            msg = ("Client offline in %s: HTTP error with code %d"
+            msg = (_("Client offline in %s: HTTP error with code %d")
                     % (context, exception.code))
         else:
-            msg = "Client offline in %s: %s" % (context, exception)
+            msg = _("Client offline in %s: %s") % (context, exception)
         log.trace(msg)
 
     def get_state(self, server_url, remote_ref):
@@ -847,7 +847,7 @@ class Controller(object):
     def _normalize_url(self, url):
         """Ensure that user provided url always has a trailing '/'"""
         if url is None or not url:
-            raise ValueError("Invalid url: %r" % url)
+            raise ValueError(_("Invalid url: %r") % url)
         if not url.endswith('/'):
             return url + '/'
         return url

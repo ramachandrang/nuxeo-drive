@@ -56,7 +56,7 @@ class RemoteFileSystemClient(BaseAutomationClient):
         fs_item = self.get_fs_item(fs_item_id)
         if fs_item is None:
             if raise_if_missing:
-                raise NotFound("Could not find '%s' on '%s'" % (
+                raise NotFound(_("Could not find '%s' on '%s'") % (
                     fs_item_id, self.server_url))
             return None
         return self._file_to_info(fs_item)
@@ -163,7 +163,7 @@ class RemoteFileSystemClient(BaseAutomationClient):
 
         headers = self._get_common_headers()
         base_error_message = (
-            "Failed to connect to Nuxeo server %r with user %r"
+            _("Failed to connect to Nuxeo server %r with user %r")
         ) % (self.server_url, self.user_id)
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)

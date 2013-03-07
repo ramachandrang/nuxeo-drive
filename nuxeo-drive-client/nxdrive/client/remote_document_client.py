@@ -94,7 +94,7 @@ class RemoteDocumentClient(BaseAutomationClient):
                  use_trash=True):
         if not self.exists(ref, use_trash=use_trash):
             if raise_if_missing:
-                raise NotFound("Could not find '%s' on '%s'" % (
+                raise NotFound(_("Could not find '%s' on '%s'") % (
                     self._check_ref(ref), self.server_url))
             return None
         return self._doc_to_info(self.fetch(self._check_ref(ref)),
@@ -118,8 +118,8 @@ class RemoteDocumentClient(BaseAutomationClient):
         if len(entries) == MAX_CHILDREN:
             # TODO: how to best handle this case? A warning and return an empty
             # list, a dedicated exception?
-            raise RuntimeError("Folder %r on server %r has more than the"
-                               "maximum number of children: %d" % (
+            raise RuntimeError(_("Folder %r on server %r has more than the"
+                               "maximum number of children: %d") % (
                                    ref, self.server_url, MAX_CHILDREN))
 
         return self._filtered_results(entries)
@@ -183,9 +183,9 @@ class RemoteDocumentClient(BaseAutomationClient):
     def _check_ref(self, ref):
         if ref.startswith('/'):
             if self._base_folder_path is None:
-                raise RuntimeError("Path handling is disabled on a remote client"
+                raise RuntimeError(_("Path handling is disabled on a remote client"
                                    " with no base_folder parameter: use idref"
-                                   " instead")
+                                   " instead"))
             elif self._base_folder_path.endswith('/'):
                 ref = self._base_folder_path + ref[1:]
             else:
@@ -301,7 +301,7 @@ class RemoteDocumentClient(BaseAutomationClient):
             return self.execute("Document.Fetch", value=ref)
         except urllib2.HTTPError as e:
             if e.code == 404:
-                raise NotFound("Failed to fetch document %r on server %r" % (
+                raise NotFound(_("Failed to fetch document %r on server %r") % (
                     ref, self.server_url))
             raise e
 

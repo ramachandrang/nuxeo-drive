@@ -1,5 +1,7 @@
 """GUI prompt to bind a new server"""
+
 import os
+from QtCore import QObject
 from nxdrive.client import Unauthorized
 from nxdrive.gui.resources import find_icon
 from nxdrive.logging_config import get_logger
@@ -14,7 +16,7 @@ try:
     QDialog = QtGui.QDialog
     log.debug("QT / PySide successfully imported")
 except ImportError:
-    log.warning("QT / PySide is not installed: GUI is disabled")
+    log.warning(_("QT / PySide is not installed: GUI is disabled"))
     pass
 
 
@@ -28,7 +30,7 @@ class Dialog(QDialog):
                  callback = None, parent = None):
         super(Dialog, self).__init__(parent)
         if QtGui is None:
-            raise RuntimeError("PySide is not installed.")
+            raise RuntimeError(self.tr("PySide is not installed."))
 
         self.setWindowIcon(QtGui.QIcon(Constants.APP_ICON_ENABLED))
         self.create_authentication_box(fields_spec)
@@ -99,8 +101,8 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
 
     if QtGui is None:
         # Qt / PySide is not installed
-        log.error("QT / PySide is not installed:"
-                  " use commandline options for binding a server.")
+        log.error(QObject.tr("QT / PySide is not installed:"
+                  " use commandline options for binding a server."))
         return (False, None)
 
     if is_dialog_open:
@@ -130,18 +132,18 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
         try:
             url = values['url']
             if not url:
-                dialog.show_message("The Nuxeo server URL is required.")
+                dialog.show_message(QObject.tr("The Nuxeo server URL is required."))
                 return False
             if (not url.startswith("http://")
                 and not url.startswith('https://')):
-                dialog.show_message("Not a valid HTTP url.")
+                dialog.show_message(QObject.tr("Not a valid HTTP url."))
                 return False
             username = values['username']
             if not username:
-                dialog.show_message("A user name is required")
+                dialog.show_message(QObject.tr("A user name is required"))
                 return False
             password = values['password']
-            dialog.show_message("Connecting to %s ..." % url)
+            dialog.show_message(QObject.tr("Connecting to %s ...") % url)
             if update:
                 controller.bind_server(local_folder, url, username, password)
                 # get federated token for CloudDesk
@@ -150,10 +152,10 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
                 controller.validate_credentials(url, username, password)
             return True
         except Unauthorized:
-            dialog.show_message("Invalid credentials.")
+            dialog.show_message(QObject.tr("Invalid credentials."))
             return False
         except Exception as e:
-            msg = "Unable to connect to %s" % url
+            msg = QObject.tr("Unable to connect to %s") % url
             log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
             # TODO: catch a new ServerUnreachable catching network issues
             dialog.show_message(msg)
@@ -165,7 +167,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
         QApplicationSingleton()
 #        QtGui.QApplication([])
 
-    dialog = Dialog(fields_spec, title = "%s Authentication" % Constants.APP_NAME,
+    dialog = Dialog(fields_spec, title = QObject.tr("%s Authentication") % Constants.APP_NAME,
                     callback = bind_server)
     is_dialog_open = True
     try:

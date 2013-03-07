@@ -26,13 +26,13 @@ def parse_protocol_url(url_string):
         return None
 
     if '/' not in data_string:
-        raise ValueError("Invalid nxdrive URL: " + url_string)
+        raise ValueError(_("Invalid nxdrive URL: ") + url_string)
 
     command, data_string = data_string.split('/', 1)
     if command == 'edit':
         return parse_edit_protocol(data_string)
     else:
-        raise ValueError("Unsupported command '%s' in " + url_string)
+        raise ValueError(_("Unsupported command '%s' in ") + url_string)
 
 
 def parse_edit_protocol(data_string):

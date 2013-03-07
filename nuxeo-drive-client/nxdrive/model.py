@@ -501,8 +501,8 @@ class LastKnownState(Base):
             self.remote_parent_ref = remote_info.parent_uid
 
         if self.remote_ref != remote_info.uid:
-            raise ValueError("State %r (%s) cannot be mapped to remote"
-                             " doc %r (%s)" % (
+            raise ValueError(_("State %r (%s) cannot be mapped to remote"
+                             " doc %r (%s)") % (
                 self, self.remote_ref, remote_info.name, remote_info.uid))
 
         # Use last known modification time to detect updates

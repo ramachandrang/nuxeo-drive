@@ -110,12 +110,12 @@ class BindingInfo(object):
         # TODO: i18n
         if self.online:
             if self.n_pending != 0:
-                return "%d%s pending operations" % (
+                return self.tr("%d%s pending operations") % (
                     self.n_pending, '+' if self.has_more_pending else '')
             else:
-                return "Up-to-date"
+                return self.tr("Up-to-date")
         else:
-            return "Offline"
+            return self.tr("Offline")
 
     def __str__(self):
         return "%s: %s" % (self.short_name, self.get_status_message())
@@ -146,7 +146,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def setupMenu(self):
         self.menuCloudDesk = QtGui.QMenu()
-        self.menuCloudDesk.setObjectName("self.menuCloudDesk")
+        self.menuCloudDesk.setObjectName("menuCloudDesk")
         self.actionStatus = QtGui.QAction(self.tr("sync status"), self)
         self.actionStatus.setObjectName("actionStatus")
         self.actionCommand = QtGui.QAction(self.tr("action"), self)
@@ -270,13 +270,13 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox = QMessageBox()
         msgbox.setText(self.tr("About %s") % Constants.APP_NAME)
         msgbox.setStandardButtons(QMessageBox.Ok)
-        msgbox.setInformativeText("""version<b>%s</b>
+        msgbox.setInformativeText(self.tr("""version<b>%s</b>
                 <p>Copyright &copy; 2012 SHARP CORPORATION
                 All Rights Reserved.
                 <p>Platform Details: %s</p>
                 <p style="font-size: small">Python %s</p>
                 <p style="font-size: small">PySide %s</p>
-                <p style="font-size: small">Qt %s</p>""" % (Constants.__version__, platform.system(),
+                <p style="font-size: small">Qt %s</p>""") % (Constants.__version__, platform.system(),
                             platform.python_version(), PySide.__version__, QtCore.__version__))
         icon = QIcon(Constants.APP_ICON_ABOUT)
         msgbox.setIconPixmap(icon.pixmap(48, 48))
@@ -535,7 +535,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             code = None
             
         if code is not None:  
-            reason = "Server returned HTTP code %r" % code  
+            reason = self.tr("Server returned HTTP code %r") % code  
         else:
             reason = str(exception)            
             
@@ -872,14 +872,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.setupProcessing()
 
     def started(self):
-        self.actionCommand.setText("Pause")
-        self.actionStatus.setText("Syncing")
+        self.actionCommand.setText(self.tr("Pause"))
+        self.actionStatus.setText(self.tr("Syncing"))
 
     def finished(self):
         self.opInProgress = None
         self.worker = None
-        self.actionCommand.setText("Start")
-        self.actionStatus.setText("Completed")
+        self.actionCommand.setText(self.tr("Start"))
+        self.actionStatus.setText(self.tr("Completed"))
 
     def _pauseSync(self):
         self.worker.pause()

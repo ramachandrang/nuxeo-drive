@@ -34,7 +34,7 @@ class ProgressDialog(QDialog):
         self.lblMov = QLabel(self)
         self.movie = QMovie(':/wheel.gif')
         self.lblMov.setMovie(self.movie)
-        self.lblMsg = QLabel("Stopping syncing...", self)
+        self.lblMsg = QLabel(self.tr("Stopping syncing..."), self)
         self.lblMsg.setStyleSheet("QLabel { font-family : arial; font-size : 10px; color : DarkBlue }")
         
         image = QImage(':/wheel.gif')

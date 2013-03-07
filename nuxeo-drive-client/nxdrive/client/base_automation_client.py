@@ -19,6 +19,8 @@ from urllib2 import HTTPPasswordMgr
 from cookielib import CookieJar
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
+
+from nxdrive import _
 from nxdrive.logging_config import get_logger
 from nxdrive.client.common import DEFAULT_IGNORED_PREFIXES
 from nxdrive.client.common import DEFAULT_IGNORED_SUFFIXES
@@ -48,8 +50,8 @@ class Unauthorized(Exception):
         self.data = data
 
     def __str__(self):
-        return ("'%s' is not authorized to access '%s' with"
-                " the provided credentials. http code=%d, data=%s" % (self.user_id, self.url, self.code, str(self.data)))
+        return (_("'%s' is not authorized to access '%s' with"
+                " the provided credentials. http code=%d, data=%s") % (self.user_id, self.url, self.code, str(self.data)))
 
 class QuotaExceeded(Exception):
     def __init__(self, url, user_id, ref, size):
@@ -59,8 +61,8 @@ class QuotaExceeded(Exception):
         self.size = size
 
     def __str__(self):
-        return ("'%s' exceeded quota for '%s' when"
-                " storing document %s" % (self.user_id, self.url, self.ref))
+        return (_("'%s' exceeded quota for '%s' when"
+                " storing document %s") % (self.user_id, self.url, self.ref))
 
 class MaintenanceMode(Exception):
     def __init__(self, url, user_id, retry_after, schedules):
@@ -340,8 +342,8 @@ class BaseAutomationClient(object):
     def fetch_api(self):
         headers = self._get_common_headers()
         base_error_message = (
-            "Failed to connect to %s Content Automation on server %r"
-            " with user %r"
+            _("Failed to connect to %s Content Automation on server %r"
+            " with user %r")
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
             req = urllib2.Request(self.automation_url, headers = headers)
@@ -363,7 +365,7 @@ class BaseAutomationClient(object):
                 raise Unauthorized(self.server_url, self.user_id, e.code)
             else:
                 self._log_details(e)
-                e.msg = base_error_message + ": HTTP error %d" % e.code
+                e.msg = base_error_message + _(": HTTP error %d") % e.code
                 raise e
         except Exception as e:
             self._log_details(e)
@@ -407,8 +409,8 @@ class BaseAutomationClient(object):
         url = self.automation_url + command
         log.trace("Calling '%s' with json payload: %r", url, data)
         base_error_message = (
-            "Failed to connect to %s Content Automation on server %r"
-            " with user %r"
+            _("Failed to connect to %s Content Automation on server %r"
+            " with user %r")
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
 
         req = urllib2.Request(url, data, headers)
@@ -448,7 +450,7 @@ class BaseAutomationClient(object):
                     raise
 
             else:
-                e.msg = base_error_message + ": HTTP error %d" % e.code
+                e.msg = base_error_message + _(": HTTP error %d") % e.code
                 raise e
         except urllib2.URLError, e:
             self._log_details(e)
@@ -635,8 +637,8 @@ class BaseAutomationClient(object):
 
         headers = self._get_common_headers()
         base_error_message = (
-            "Failed to connect to %s Content Automation on server %r"
-            " with user %r"
+            _("Failed to connect to %s Content Automation on server %r"
+            " with user %r")
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         if not revoke:
             prev_opener = self.opener
@@ -661,7 +663,7 @@ class BaseAutomationClient(object):
                 # Token based auth is not supported by this server
                 return None
             else:
-                e.msg = base_error_message + ": HTTP error %d" % e.code
+                e.msg = base_error_message + _(": HTTP error %d") % e.code
                 raise e
         except urllib2.URLError, e:
             self._log_details(e)
@@ -714,7 +716,7 @@ class BaseAutomationClient(object):
                     self.user_id + ":" + password).strip()
             self.auth = ("Authorization", basic_auth)
         else:
-            raise ValueError("Either password or token must be provided")
+            raise ValueError(_("Either password or token must be provided"))
 
     def _get_common_headers(self):
         """Headers to include in every HTTP requests
@@ -734,7 +736,7 @@ class BaseAutomationClient(object):
 
     def _check_params(self, command, input, params):
         if command not in self.operations:
-            raise ValueError("'%s' is not a registered operations." % command)
+            raise ValueError(_("'%s' is not a registered operations.") % command)
         method = self.operations[command]
         required_params = []
         other_params = []
@@ -747,12 +749,12 @@ class BaseAutomationClient(object):
         for param in params.keys():
             if (not param in required_params
                 and not param in other_params):
-                raise ValueError("Unexpected param '%s' for operation '%s"
+                raise ValueError(_("Unexpected param '%s' for operation '%s")
                                  % (param, command))
         for param in required_params:
             if not param in params:
                 raise ValueError(
-                    "Missing required param '%s' for operation '%s'" % (
+                    _("Missing required param '%s' for operation '%s'") % (
                         param, command))
 
         # TODO: add typechecking

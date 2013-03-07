@@ -5,6 +5,7 @@ import argparse
 from getpass import getpass
 import traceback
 
+from nxdrive import _
 from nxdrive.controller import Controller
 from nxdrive.daemon import daemonize
 from nxdrive.logging_config import configure
@@ -73,43 +74,45 @@ def make_cli_parser(add_subparsers = True):
     common_parser.add_argument(
         "--nxdrive-home",
         default = "~/.nuxeo-drive",
-        help = "Folder to store the %s configuration." % Constants.APP_NAME
+        help = _("Folder to store the %s configuration.") % Constants.APP_NAME
     )
     common_parser.add_argument(
         "--log-level-file",
         default = "DEBUG",
-        help = "Minimum log level for the file log (under NXDRIVE_HOME/logs)."
+        help = _("Minimum log level for the file log (under NXDRIVE_HOME/logs).")
     )
     common_parser.add_argument(
         "--log-level-console",
         default = "INFO",
-        help = "Minimum log level for the console log."
+        help = _("Minimum log level for the console log.")
     )
     common_parser.add_argument(
         "--log-filename",
-        help = ("File used to store the logs, default "
+        help = _("File used to store the logs, default "
               "NXDRIVE_HOME/logs/nxaudit.logs")
     )
     common_parser.add_argument(
         "--debug", default = False, action = "store_true",
-        help = "Fire a debugger (ipdb or pdb) one uncaught error."
+        help = _("Fire a debugger (ipdb or pdb) one uncaught error.")
     )
     common_parser.add_argument(
         "--delay", default = DEFAULT_DELAY, type = float,
-        help = "Delay in seconds between consecutive sync operations.")
+        help = _("Delay in seconds between consecutive sync operations.")
+    )
     common_parser.add_argument(
         # XXX: Make it true by default as the fault tolerant mode is not yet
         # implemented
         "--stop-on-error", default = True, action = "store_true",
-        help = "Stop the process on first unexpected error."
+        help = _("Stop the process on first unexpected error."
         "Useful for developers and Continuous Integration.")
+    )
 
     common_parser.add_argument(
-        '--start', '-s', action = 'store_true', help = 'start synchronization as soon as the gui starts.')
+        '--start', '-s', action = 'store_true', help = _('start synchronization as soon as the gui starts.'))
 
     parser = argparse.ArgumentParser(
         parents = [common_parser],
-        description = "Command line interface for %s operations." % Constants.APP_NAME,
+        description = _("Command line interface for %s operations.") % Constants.APP_NAME,
         usage = USAGE,
     )
 
@@ -127,24 +130,25 @@ def make_cli_parser(add_subparsers = True):
     )
     bind_server_parser.set_defaults(command = 'bind_server')
     bind_server_parser.add_argument(
-        "--password", help = "Password for the %s account" % Constants.PRODUCT_NAME)
+        "--password", help = _("Password for the %s account") % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument(
         "--local-folder",
-        help = "Local folder that will host the list of synchronized"
-        " workspaces with a remote %s server." % Constants.PRODUCT_NAME,
+        help = _("Local folder that will host the list of synchronized"
+        " workspaces with a remote %s server.") % Constants.PRODUCT_NAME,
         default = DEFAULT_NX_DRIVE_FOLDER,
     )
     bind_server_parser.add_argument(
-        "username", help = "User account to connect to %s" % Constants.PRODUCT_NAME)
+        "username", help = _("User account to connect to %s") % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument("nuxeo_url",
-                                    help = "URL of the %s server." % Constants.PRODUCT_NAME)
+                                    help = _("URL of the %s server.") % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument(
         "--remote-roots", nargs = "*", default = [],
-        help = "Path synchronization roots (reference or path for"
-        " folderish %s documents such as Workspaces or Folders)." % Constants.PRODUCT_NAME)
+        help = _("Path synchronization roots (reference or path for"
+        " folderish %s documents such as Workspaces or Folders).") % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument(
         "--remote-repo", default = 'default',
-        help = "Name of the remote repository.")
+        help = _("Name of the remote repository.")
+        )
 
     # Unlink from a remote Nuxeo server
     unbind_server_parser = subparsers.add_parser(
@@ -154,31 +158,33 @@ def make_cli_parser(add_subparsers = True):
     unbind_server_parser.set_defaults(command = 'unbind_server')
     unbind_server_parser.add_argument(
         "--local-folder",
-        help = "Local folder that hosts the list of synchronized"
-        " workspaces with a remote %s server." % Constants.PRODUCT_NAME,
+        help = _("Local folder that hosts the list of synchronized"
+        " workspaces with a remote %s server.") % Constants.PRODUCT_NAME,
         default = DEFAULT_NX_DRIVE_FOLDER,
     )
 
     # Bind root folders
     bind_root_parser = subparsers.add_parser(
         'bind-root',
-        help = 'Attach a local folder as a root for synchronization.',
+        help = _('Attach a local folder as a root for synchronization.'),
         parents = [common_parser],
     )
     bind_root_parser.set_defaults(command = 'bind_root')
     bind_root_parser.add_argument(
         "remote_root",
-        help = "Remote path or id reference of a folder to synchronize.")
+        help = _("Remote path or id reference of a folder to synchronize.")
+    )
     bind_root_parser.add_argument(
         "--local-folder",
-        help = "Local folder that will host the list of synchronized"
+        help = _("Local folder that will host the list of synchronized"
         " workspaces with a remote %s server. Must be bound with the"
-        " 'bind-server' command." % Constants.PRODUCT_NAME,
+        " 'bind-server' command.") % Constants.PRODUCT_NAME,
         default = DEFAULT_NX_DRIVE_FOLDER,
     )
     bind_root_parser.add_argument(
         "--remote-repo", default = 'default',
-        help = "Name of the remote repository.")
+        help = _("Name of the remote repository.")
+    )
 
     # Unlink from a remote Nuxeo root
     unbind_root_parser = subparsers.add_parser(
@@ -187,72 +193,77 @@ def make_cli_parser(add_subparsers = True):
     )
     unbind_root_parser.set_defaults(command = 'unbind_root')
     unbind_root_parser.add_argument(
-        "local_root", help = "Local sub-folder to de-synchronize.")
+        "local_root", help = _("Local sub-folder to de-synchronize.")
+    )
 
     # Start / Stop the synchronization daemon
     start_parser = subparsers.add_parser(
-        'start', help = 'Start the synchronization as a GUI-less daemon',
+        'start', help = _('Start the synchronization as a GUI-less daemon'),
         parents = [common_parser],
     )
     start_parser.set_defaults(command = 'start')
     stop_parser = subparsers.add_parser(
-        'stop', help = 'Stop the synchronization daemon',
+        'stop', help = _('Stop the synchronization daemon'),
         parents = [common_parser],
     )
     stop_parser.set_defaults(command = 'stop')
     console_parser = subparsers.add_parser(
         'console',
-        help = 'Start a GUI-less synchronization without detaching the process.',
+        help = _('Start a GUI-less synchronization without detaching the process.'),
         parents = [common_parser],
     )
     console_parser.set_defaults(command = 'console')
 
     status_parser = subparsers.add_parser(
         'status',
-        help = 'Fetch the status info of the children of a given folder.',
+        help = _('Fetch the status info of the children of a given folder.'),
         parents = [common_parser],
     )
     status_parser.set_defaults(command = 'status')
     status_parser.add_argument(
-        "folder", help = "Path to a local Nuxeo Drive folder.")
+        "folder", help = _("Path to a local Nuxeo Drive folder.")
+    )
 
     gui_parser = subparsers.add_parser(
         'gui',
-        help = 'Start as a TrayIcon application.',
+        help = _('Start as a TrayIcon application.'),
         parents = [common_parser],
     )
     gui_parser.set_defaults(command = 'gui')
 
     com_parser = subparsers.add_parser(
         'com',
-        help = "Register or Unregister the COM Local Server",
+        help = _("Register or Unregister the COM Local Server"),
     )
 
     if sys.platform == 'win32':
         com_parser.set_defaults(command = 'com')
         action = com_parser.add_mutually_exclusive_group(required = True)
         action.add_argument(
-            '--register', required = False, action = 'store_true', help = 'Register COM Local Server')
+            '--register', required = False, action = 'store_true', help = _('Register COM Local Server')
+        )
         action.add_argument(
-            '--unregister', required = False, action = 'store_true', help = 'Unregister COM Local Server')
+            '--unregister', required = False, action = 'store_true', help = _('Unregister COM Local Server')
+        )
 
     # embedded test runner base on nose:
     test_parser = subparsers.add_parser(
         'test',
-        help = 'Run the %s test suite.' % Constants.APP_NAME,
+        help = _('Run the %s test suite.') % Constants.APP_NAME,
         parents = [common_parser],
     )
 
     wizard_parser = subparsers.add_parser(
         'wizard',
-        help = 'Run the wizard.',
+        help = _('Run the wizard.'),
         parents = [common_parser],
     )
     wizard_parser.set_defaults(command = 'wizard')
 
     switch_parser = subparsers.add_parser(
         'switch',
-        help = 'Switch between wizard and normal mode, when launching the app with no command')
+        help = _('Switch between wizard and normal mode, when launching the app with no command')
+    )
     mode = switch_parser.add_mutually_exclusive_group(required = True)
     switch_parser.set_defaults(command = 'switch')
     mode.add_argument(
@@ -263,11 +274,12 @@ def make_cli_parser(add_subparsers = True):
     test_parser.set_defaults(command = 'test')
     test_parser.add_argument(
         "--with-coverage", default = False, action = "store_true",
-        help = "Compute coverage report.")
+        help = _("Compute coverage report.")
+    )
     test_parser.add_argument(
         "--with-profile", default = False, action = "store_true",
-        help = "Compute profiling report.")
-
+        help = _("Compute profiling report.")
+    )
     return parser
 
 

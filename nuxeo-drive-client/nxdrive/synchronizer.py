@@ -57,7 +57,7 @@ log = get_logger(__name__)
 
 def _log_offline(exception, context):
     if isinstance(exception, urllib2.HTTPError):
-        msg = ("Client offline in %s: HTTP error with code %d"
+        msg = (_("Client offline in %s: HTTP error with code %d")
                 % (context, exception.code))
     else:
         msg = "Client offline in %s: %s" % (context, exception)
@@ -277,7 +277,7 @@ class Synchronizer(object):
     def _scan_local_recursive(self, session, client, doc_pair, local_info):
         """Recursively scan the bound local folder looking for updates"""
         if local_info is None:
-            raise ValueError("Cannot bind %r to missing local info" %
+            raise ValueError(_("Cannot bind %r to missing local info") %
                              doc_pair)
 
         # Update the pair state from the collected local info
@@ -430,7 +430,7 @@ class Synchronizer(object):
         non newly created children.
         """
         if remote_info is None:
-            raise ValueError("Cannot bind %r to missing remote info" %
+            raise ValueError(_("Cannot bind %r to missing remote info") %
                              doc_pair)
 
         # Update the pair state from the collected remote info
@@ -588,7 +588,7 @@ class Synchronizer(object):
         sync_handler = getattr(self, handler_name, None)
 
         if sync_handler is None:
-            raise RuntimeError("Unhandled pair_state: %r for %r",
+            raise RuntimeError(_("Unhandled pair_state: %r for %r"),
                                doc_pair.pair_state, doc_pair)
         else:
             sync_handler(doc_pair, session, local_client, remote_client,
@@ -678,14 +678,14 @@ class Synchronizer(object):
             # Illegal state: report the error and let's wait for the
             # parent folder issue to get resolved first
             raise ValueError(
-                "Could not find parent folder of doc %r (%r)"
-                " folder" % (name, doc_pair.remote_ref))
+                _("Could not find parent folder of doc %r (%r)"
+                " folder") % (name, doc_pair.remote_ref))
         if parent_pair.local_path is None:
             # Illegal state: report the error and let's wait for the
             # parent folder issue to get resolved first
             raise ValueError(
-                "Parent folder of doc %r (%r) is not bound to a local"
-                " folder" % (name, doc_pair.remote_ref))
+                _("Parent folder of doc %r (%r) is not bound to a local"
+                " folder") % (name, doc_pair.remote_ref))
         local_parent_path = parent_pair.local_path
         if doc_pair.folderish:
             log.debug("Creating local folder '%s' in '%s'", name,

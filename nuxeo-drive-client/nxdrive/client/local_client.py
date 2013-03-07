@@ -94,7 +94,7 @@ class LocalClient(object):
         os_path = self._abspath(ref)
         if not os.path.exists(os_path):
             if raise_if_missing:
-                raise NotFound("Could not found file '%s' under '%s'" % (
+                raise NotFound(_("Could not found file '%s' under '%s'") % (
                 ref, self.base_folder))
             else:
                 return None
@@ -188,7 +188,7 @@ class LocalClient(object):
 
         """
         if ref == '/':
-            raise ValueError("Cannot rename the toplevel folder.")
+            raise ValueError(_("Cannot rename the toplevel folder."))
         source_os_path = self._abspath(ref)
         parent = ref.rsplit('/', 1)[0]
         parent = '/' if parent == '' else parent
@@ -221,7 +221,7 @@ class LocalClient(object):
     def _abspath(self, ref):
         """Absolute path on the operating system"""
         if not ref.startswith('/'):
-            raise ValueError("LocalClient expects ref starting with '/'")
+            raise ValueError(_("LocalClient expects ref starting with '/'"))
         path_suffix = ref[1:].replace('/', os.path.sep)
         path = normalized_path(os.path.join(self.base_folder, path_suffix))
         return safe_long_path(path)
@@ -247,5 +247,5 @@ class LocalClient(object):
             else:
                 name = name + '__1'
 
-        raise ValueError("Failed to de-duplicate '%s' under '%s'" % (
+        raise ValueError(_("Failed to de-duplicate '%s' under '%s'") % (
             orig_name, parent))
