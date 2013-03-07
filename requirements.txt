@@ -2,4 +2,26 @@ SQLAlchemy >= 0.7.9
 psutil
 nose
 coverage
+cx-Freeze
 argparse
+PySide
+suds
+dateutils
+py2exe (for Windows, py2app for Mac)
+
+(those 2 below may need that env var set for vcvarsall.bat)
+pywin32
+pycrypto
+
+Note:
+
+you can use:
+pip install -r requirements.txt
+
+if this files contains only 1 Pyhton module per line, i.e. remove all other text.
+But, based on actual experience:
+-psutil succeeded only with easy_install
+-pywin32 and py2exe required downloading an installer
+
+
+

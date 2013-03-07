@@ -54,9 +54,9 @@ try:
         return pwd
 
 except ImportError as e:
-    log.warning("module is not installed (%s): password will not be encrypted", str(e))
+    log.error("module is not installed (%s): password will not be encrypted", str(e))
     def encrypt_password(pwd):
-        return pwd
+        return pwd, ''
 
     def decrypt_password(encpwd, pwdhash = ''):
         return encpwd

@@ -73,7 +73,7 @@ class MaintenanceMode(Exception):
                 schedule = schedules['ScheduleItems'][0]
             else:
                 schedule = None
-            self.msg, self.detail = get_maintenance_message(status, schedule=schedule)
+            self.msg, self.detail = get_maintenance_message(status, schedule = schedule)
         else:
             self.msg, self.detail = get_maintenance_message('maintenance')
 
@@ -116,7 +116,7 @@ class ProxyInfo(object):
         if useProxy == ProxyInfo.PROXY_DIRECT:
             return None
         elif useProxy == ProxyInfo.PROXY_AUTODETECT:
-            return ProxyInfo(autodetect=True)
+            return ProxyInfo(autodetect = True)
         elif useProxy == ProxyInfo.PROXY_SERVER:
             server = settings.value('preferences/proxyServer')
             if not server:
@@ -125,7 +125,7 @@ class ProxyInfo(object):
             else:
                 user = settings.value('preferences/proxyUser')
                 pwd = settings.value('preferences/proxyPwd')
-        
+
                 if sys.platform == 'win32':
                     authnAsString = settings.value('preferences/proxyAuthN', 'false')
                     if authnAsString.lower() == 'true':
@@ -139,12 +139,12 @@ class ProxyInfo(object):
                         port = int(port)
                     except ValueError:
                         port = 0
-        
+
                 else:
                     authN = settings.value('preferences/proxyAuthN', False)
                     port = settings.value('preferences/proxyPort', 0)
-        
-                return ProxyInfo(server_url=server, port=port, authn_required=authN, user=user, pwd=pwd)
+
+                return ProxyInfo(server_url = server, port = port, authn_required = authN, user = user, pwd = pwd)
         else:
             return None
 
@@ -166,7 +166,7 @@ class NoSIICARedirectHandler(HTTPRedirectHandler):
     MAX_TRIES = 3
     def __init__(self):
         self.tries = 0
-        
+
     def redirect_request(self, req, fp, code, msg, hdrs, newurl):
         if code == 302 and self.tries < NoSIICARedirectHandler.MAX_TRIES:
             # normally should filter for redirects to SIICA token server
@@ -175,7 +175,7 @@ class NoSIICARedirectHandler(HTTPRedirectHandler):
             return req
         else:
             return None
-    
+
 class BaseAutomationClient(object):
     """Client for the Nuxeo Content Automation HTTP API
 
@@ -213,11 +213,11 @@ class BaseAutomationClient(object):
         if cls._proxy is None:
             cls._proxy = ProxyInfo.get_proxy()
         return cls._proxy
-    
+
     @classmethod
-    def set_proxy(cls, val=None):
+    def set_proxy(cls, val = None):
         cls._proxy = val
-        
+
     @classproperty
     @classmethod
     def proxy_error_count(cls):
@@ -233,9 +233,9 @@ class BaseAutomationClient(object):
     cookiejar = CookieJar()
 
     def __init__(self, server_url, user_id, device_id,
-                 password=None, token=None, repository="default",
-                 ignored_prefixes=None, ignored_suffixes=None,
-                 timeout=60, blob_timeout=None):
+                 password = None, token = None, repository = "default",
+                 ignored_prefixes = None, ignored_suffixes = None,
+                 timeout = 60, blob_timeout = None):
         self.timeout = timeout
         self.blob_timeout = blob_timeout
         if ignored_prefixes is not None:
@@ -259,7 +259,7 @@ class BaseAutomationClient(object):
         self.user_id = user_id
         self.device_id = device_id
         self._update_auth(password = password, token = token)
-        
+
         handlers = []
         proxy_support = None
         cookie_processor = urllib2.HTTPCookieProcessor(BaseAutomationClient.cookiejar)
@@ -271,39 +271,40 @@ class BaseAutomationClient(object):
             proxy_support = urllib2.ProxyHandler({})
         elif BaseAutomationClient.get_proxy().autodetect:
                 # Autodetect uses the default ProxyServer.
-                # The default is to read the list of proxies from the environment variables <protocol>_proxy. 
-                # If no proxy environment variables are set, in a Windows environment, proxy settings are obtained 
-                # from the registry Internet Settings section and in a Mac OS X environment, proxy information 
+                # The default is to read the list of proxies from the environment variables <protocol>_proxy.
+                # If no proxy environment variables are set, in a Windows environment, proxy settings are obtained
+                # from the registry Internet Settings section and in a Mac OS X environment, proxy information
                 # is retrieved from the OS X System Configuration Framework.
                 proxy_support = urllib2.ProxyHandler()
         else:
-            proxy_url = r'%s:%d' % (BaseAutomationClient.get_proxy().server_url, 
+            proxy_url = r'%s:%d' % (BaseAutomationClient.get_proxy().server_url,
                                     BaseAutomationClient.get_proxy().port)
-            proxy_support = urllib2.ProxyHandler({'http' : r'http://' + proxy_url, 
+            proxy_support = urllib2.ProxyHandler({'http' : r'http://' + proxy_url,
                                                   'https' : r'https://' + proxy_url})
             if BaseAutomationClient.get_proxy().authn_required:
                 proxy_url = r'%s:%s@%s:%d' % (BaseAutomationClient.get_proxy().user,
                                               BaseAutomationClient.get_proxy().pwd,
-                                              BaseAutomationClient.get_proxy().server_url, 
+                                              BaseAutomationClient.get_proxy().server_url,
                                               BaseAutomationClient.get_proxy().port)
-                proxy_support = urllib2.ProxyHandler({'http' : r'http://' + proxy_url, 
+                proxy_support = urllib2.ProxyHandler({'http' : r'http://' + proxy_url,
                                                       'https' : r'https://' + proxy_url})
                 pwd_mgr = HTTPPasswordMgr()
-                
-                pwd_mgr.add_password('sla', r'http://' + proxy_url, 
-                                    BaseAutomationClient.get_proxy().user, 
+
+                pwd_mgr.add_password('sla', r'http://' + proxy_url,
+                                    BaseAutomationClient.get_proxy().user,
                                     BaseAutomationClient.get_proxy().pwd)
-                pwd_mgr.add_password('sla', r'https://' + proxy_url, 
-                                    BaseAutomationClient.get_proxy().user, 
+                pwd_mgr.add_password('sla', r'https://' + proxy_url,
+                                    BaseAutomationClient.get_proxy().user,
                                     BaseAutomationClient.get_proxy().pwd)
                 proxy_auth = ProxyBasicAuthHandler(pwd_mgr)
                 handlers.append(proxy_auth)
 
         handlers.append(proxy_support)
-        handlers.append(cookie_processor)        
+        handlers.append(cookie_processor)
         # DEBUG force raw HTTP debugging
-        handlers.append(HTTPHandler(debuglevel=1))
-        handlers.append(HTTPSHandler(debuglevel=1))
+        # NOTE this does not work in the installed version!!!
+#        handlers.append(HTTPHandler(debuglevel=1))
+#        handlers.append(HTTPSHandler(debuglevel=1))
         self.opener = urllib2.build_opener(*handlers)
 
         self.automation_url = server_url + 'site/automation/'
@@ -343,9 +344,9 @@ class BaseAutomationClient(object):
             " with user %r"
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
-            req = urllib2.Request(self.automation_url, headers=headers)
+            req = urllib2.Request(self.automation_url, headers = headers)
             response = json.loads(self.opener.open(
-                req, timeout=self.timeout).read())
+                req, timeout = self.timeout).read())
             req = urllib2.Request(self.automation_url, headers = headers)
             BaseAutomationClient.cookiejar.add_cookie_header(req)
             # --- BEGIN DEBUG ----
@@ -374,7 +375,7 @@ class BaseAutomationClient(object):
         for operation in response["operations"]:
             self.operations[operation['id']] = operation
 
-    def execute(self, command, input=None, timeout=-1, **params):
+    def execute(self, command, input = None, timeout = -1, **params):
         if self._error is not None:
             # Simulate a configurable (e.g. network or server) error for the
             # tests
@@ -417,7 +418,7 @@ class BaseAutomationClient(object):
         self.log_request(req)
         # ---- END DEBUG -----
         try:
-            resp = self.opener.open(req, timeout=timeout)
+            resp = self.opener.open(req, timeout = timeout)
             # --- BEGIN DEBUG ----
 #            from StringIO import StringIO
 #            msg = '{"Status": "maintenance", "ScheduleItems": [\
@@ -551,7 +552,7 @@ class BaseAutomationClient(object):
         self.log_request(req)
         # ---- END DEBUG -----
         try:
-            resp = self.opener.open(req, timeout=self.blob_timeout)
+            resp = self.opener.open(req, timeout = self.blob_timeout)
             # --- BEGIN DEBUG ----
 #            from StringIO import StringIO
 #            msg = '{ "entity-type": "exception",\
@@ -647,9 +648,9 @@ class BaseAutomationClient(object):
             prev_opener = None
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
-            req = urllib2.Request(url, headers=headers)
+            req = urllib2.Request(url, headers = headers)
             BaseAutomationClient.cookiejar.add_cookie_header(req)
-            token = self.opener.open(req, timeout=self.timeout).read()
+            token = self.opener.open(req, timeout = self.timeout).read()
             token2 = token.decode('ascii')
             log.debug("received token: %s", token)
         except urllib2.HTTPError as e:
@@ -699,8 +700,8 @@ class BaseAutomationClient(object):
         if token is not None:
             # server is using token, not password for authentication
             try:
-                self.execute('Drive.LastAccess', lastAccess=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                             token=token)
+                self.execute('Drive.LastAccess', lastAccess = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                             token = token)
             except ValueError:
                 log.debug("operation 'Drive.LastAccess' is not implemented.")
 
@@ -837,4 +838,3 @@ class BaseAutomationClient(object):
                 my_redirect_handler.handler_order = self.opener.handlers[i].handler_order - 10
                 break
         self.opener.add_handler(my_redirect_handler)
-            

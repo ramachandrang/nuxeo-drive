@@ -32,7 +32,7 @@ import nxdrive.gui.qrc_resources
 
 if sys.platform == 'win32':
     from nxdrive.protocol_handler import win32
-    
+
 def default_expanded_nuxeo_drive_folder():
     return os.path.expanduser(DEFAULT_NX_DRIVE_FOLDER)
 
@@ -153,7 +153,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             else:
                 self.lblStorage.setVisible(True)
                 self.lblStorage.setText(storage_text)
-            
+
             self.lblComputer.setText(platform.node())
             self.rbProxy.setChecked(self.proxy != None)
             self.cbAutostart.setChecked(self.autostart)
@@ -216,7 +216,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         # Proxy... button is only enabled in this case
         self.useProxy = ProxyInfo.PROXY_SERVER
         dlg = ProxyDlg(frontend = self.frontend)
-        self.result = dlg.exec_()    
+        self.result = dlg.exec_()
 
     def setAutostart(self, state):
         self.autostart = True if state == Qt.Checked else False
@@ -330,7 +330,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if self.previous_local_folder is not None:
             previous_binding = self.controller.get_server_binding(local_folder = self.previous_local_folder, raise_if_missing = False)
         same_binding = self.server_binding == previous_binding
-        
+
         if not same_binding:
             try:
                 if previous_binding is not None:
@@ -463,10 +463,10 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 if self.result == ProgressDialog.CANCELLED:
                     return QDialog.Rejected
 #                self.controller.nuxeo_client_factory(...).proxy = None
-                #NOTE: this will not work for a remote client factory different from RemoteDocumentClient
+                # NOTE: this will not work for a remote client factory different from RemoteDocumentClient
                 # but requires at least 4 params
                 self.controller.reset_proxy()
-                
+
             self.useProxy = useProxy
             if self.useProxy == ProxyInfo.PROXY_AUTODETECT or self.useProxy == ProxyInfo.PROXY_DIRECT:
                 settings.setValue('preferences/proxyServer', '')
@@ -522,12 +522,12 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
         settings.sync()
 
-        self.check_and_restart(self.result)                    
+        self.check_and_restart(self.result)
         self.done(QDialog.Accepted)
 
     def check_and_restart(self, result):
         """Restart syncing if it was stopped."""
-        
+
         if self.result == ProgressDialog.OK_AND_RESTART and self.frontend.state == Constants.APP_STATE_STOPPED:
             self.frontend._doSync()
             
