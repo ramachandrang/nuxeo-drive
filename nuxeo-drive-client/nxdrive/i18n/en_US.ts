@@ -6,164 +6,164 @@
     <message>
         <location filename="gui/menubar.py" line="271"/>
         <source>About %s</source>
-        <translation type="unfinished"></translation>
+        <translation>Despre %s</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="575"/>
         <source>%d items are pending synchronization. This may take a while...</source>
-        <translation type="unfinished"></translation>
+        <translation>%d elemente asteapa sa fie sincronizate. Poate sa dureze ceva timp...</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="759"/>
         <source>Unavailable</source>
-        <translation type="unfinished"></translation>
+        <translation>Nu este liber</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="823"/>
         <source>Start</source>
-        <translation type="unfinished"></translation>
+        <translation>Porneste</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="829"/>
         <source>Resume</source>
-        <translation type="unfinished"></translation>
+        <translation>Porneste din nou</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="833"/>
         <source>Pause</source>
-        <translation type="unfinished"></translation>
+        <translation>Fa pauza</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="837"/>
         <source>Not connected</source>
-        <translation type="unfinished"></translation>
+        <translation>Nu este connectat</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="839"/>
         <source>Off-line</source>
-        <translation type="unfinished"></translation>
+        <translation>Este off-line</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="841"/>
         <source>Completed</source>
-        <translation type="unfinished"></translation>
+        <translation>Completat</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="843"/>
         <source>Paused</source>
-        <translation type="unfinished"></translation>
+        <translation>In pauza</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="845"/>
         <source>Pausing</source>
-        <translation type="unfinished"></translation>
+        <translation>Aproape in pauza</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="847"/>
         <source>Running</source>
-        <translation type="unfinished"></translation>
+        <translation>Merge</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="850"/>
         <source>Quitting...</source>
-        <translation type="unfinished"></translation>
+        <translation>Aproape de terminare...</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="904"/>
         <source>%s Authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>Autentificare pentru %s</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="916"/>
         <source>%s Configuration</source>
-        <translation type="unfinished"></translation>
+        <translation>Configuratie pentru %s</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="208"/>
         <source>Unable to set roots for %s (%s)</source>
-        <translation type="unfinished"></translation>
+        <translation>No se poate sa desemneze baze pentru %s (%s)</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="251"/>
         <source>Choose or create %s folder location</source>
-        <translation type="unfinished"></translation>
+        <translation>Alege sau creaza locatia pentru fisierul %s</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="347"/>
         <source>Folder %s does not exist.</source>
-        <translation type="unfinished"></translation>
+        <translation>Fisierul %s nu exista</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="348"/>
         <source>Do you want to create it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Vrei sa il creezi?</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="366"/>
         <source>%s Error</source>
-        <translation type="unfinished"></translation>
+        <translation>Eroare %s</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="366"/>
         <source>Failed to connect to server, please try again.</source>
-        <translation type="unfinished"></translation>
+        <translation>Nu reuseste sa se conecteze la server, va rugam sa incercati din nou.</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="372"/>
         <source>Move Root Folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Muta fisierul de baza</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="375"/>
         <source>This action will move the %s folder and all its subfolders and files
 to a new location. It will also stop the synchronization if running.
 </source>
-        <translation type="unfinished"></translation>
+        <translation>Aceasta operatie va muta fisierul %s and toate subfisierele sale intr-o noua locatie. De asemenea va opri sincronizarea, daca merge.</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="377"/>
         <source>Do you want to proceed?</source>
-        <translation type="unfinished"></translation>
+        <translation>Vrei sa procedezi?</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="383"/>
         <source>Path Error</source>
-        <translation type="unfinished"></translation>
+        <translation>Eroare de path</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="384"/>
         <source>Folder %s already exists</source>
-        <translation type="unfinished"></translation>
+        <translation>Fisierul %s deja exista</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="386"/>
         <source>Select a folder where %s does not exist.</source>
-        <translation type="unfinished"></translation>
+        <translation>Selecteaza un fisier unde % nu exista.</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="403"/>
         <source>Move Error</source>
-        <translation type="unfinished"></translation>
+        <translation>Eroare la mutare</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="404"/>
         <source>Error moving folder %s to %s</source>
-        <translation type="unfinished"></translation>
+        <translation>Eroare mutind fisierul %s la %s</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="205"/>
         <source>Do you want to start next time in wizard mode?</source>
-        <translation type="unfinished"></translation>
+        <translation>Vrei sa pornesti data viitoare in modul wizard?</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="206"/>
         <source>Select Yes to start in wizard mode or No to start the normal application, when launched next time.</source>
-        <translation type="unfinished"></translation>
+        <translation>Apasa Da sa pornesti in modul wizard, sau Nu sa pornesti normal, cind lansezi programul data urmatoare.</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="329"/>
         <source>Unable to connect to %s%s</source>
-        <translation type="unfinished"></translation>
+        <translation>Nu se poate conects la %s%s</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="337"/>
@@ -178,52 +178,52 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="356"/>
         <source>Choose Setup Type</source>
-        <translation type="unfinished"></translation>
+        <translation>Selecteaza modul de configurare</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="364"/>
         <source>Typical</source>
-        <translation type="unfinished"></translation>
+        <translation>Tipic</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="365"/>
         <source>(recommended)</source>
-        <translation type="unfinished"></translation>
+        <translation>(recomandat)</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="368"/>
         <source>Setup %s with normal settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Configura %s cu valori normale</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="387"/>
         <source>Advanced</source>
-        <translation type="unfinished"></translation>
+        <translation>Avansat</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="389"/>
         <source>Select your %s folder location, folders to synchronize, etc.</source>
-        <translation type="unfinished"></translation>
+        <translation>Selecteaza locatia fisierului %s, si fisierele care sa fie sincronizate, etc.</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="436"/>
         <source>Folder Exists</source>
-        <translation type="unfinished"></translation>
+        <translation>Fisierul deja exista</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="437"/>
         <source>Folder %s already exists. Do you want to use it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Fisierul %s deja exista. Vrei sa il folosesti?</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="438"/>
         <source>Select Yes to keep this location or No to select a different one on the Advanced next page.</source>
-        <translation type="unfinished"></translation>
+        <translation>Selecteaza Da sa pastreazi aceasta locatie, sau Nu sa selectezi o locatie diferita pe pagina Avansata urmatoare.</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="475"/>
         <source>Unable to set roots on &apos;%s&apos; for user &apos;%s&apos; (%s)</source>
-        <translation type="unfinished"></translation>
+        <translation>Ni poate sa desemneze bazele la %s pentru utilizatorul %s (%s)</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="580"/>
@@ -233,7 +233,7 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="774"/>
         <source>Unable to update folders from %s (%s)</source>
-        <translation type="unfinished"></translation>
+        <translation>Nu poate sa inoiasca fisierele de la %s (%s) </translation>
     </message>
 </context>
 <context>
@@ -329,17 +329,17 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/menubar.py" line="154"/>
         <source>Open %s Folder</source>
-        <translation type="unfinished"></translation>
+        <translation>Deschide fisierul %</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="156"/>
         <source>Open %s Website</source>
-        <translation type="unfinished"></translation>
+        <translation>deschide siteul %s</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="158"/>
         <source>Recently Changed Files</source>
-        <translation type="unfinished"></translation>
+        <translation>Documente Schimbate Recent</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="160"/>
@@ -349,37 +349,37 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/menubar.py" line="162"/>
         <source>used storage</source>
-        <translation type="unfinished"></translation>
+        <translation>Spatiu folosit</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="164"/>
         <source>Preferences...</source>
-        <translation type="unfinished"></translation>
+        <translation>Preferinte...</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="166"/>
         <source>Help</source>
-        <translation type="unfinished"></translation>
+        <translation>Ajutor</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="168"/>
         <source>About</source>
-        <translation type="unfinished"></translation>
+        <translation>Despre</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="171"/>
         <source>HTTP Trace</source>
-        <translation type="unfinished"></translation>
+        <translation>Trasare HTTP</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="175"/>
         <source>Quit %s</source>
-        <translation type="unfinished"></translation>
+        <translation>Termina %s</translation>
     </message>
     <message>
         <location filename="gui/menubar.py" line="178"/>
         <source>Info..</source>
-        <translation type="unfinished"></translation>
+        <translation>Informatii...</translation>
     </message>
 </context>
 <context>
@@ -392,7 +392,7 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="86"/>
         <source>&amp;Skip Tour</source>
-        <translation type="unfinished"></translation>
+        <translation>Sare peste tur</translation>
     </message>
 </context>
 <context>
@@ -400,7 +400,7 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="789"/>
         <source>Successfully Completed.</source>
-        <translation type="unfinished"></translation>
+        <translation>Completat cu suces</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="791"/>
@@ -410,7 +410,7 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="795"/>
         <source>Launch %s</source>
-        <translation type="unfinished"></translation>
+        <translation>Porneste %s</translation>
     </message>
 </context>
 <context>
@@ -418,7 +418,7 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="497"/>
         <source>Welcome to %s, %s!</source>
-        <translation type="unfinished"></translation>
+        <translation>Bine ati venit la %s, %s</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="503"/>
@@ -431,7 +431,7 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="546"/>
         <source>The %s Notification Icon</source>
-        <translation type="unfinished"></translation>
+        <translation>Icoana pentru notificare de %s</translation>
     </message>
 </context>
 <context>
@@ -439,7 +439,7 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="527"/>
         <source>Access your files from everywhere using %s!</source>
-        <translation type="unfinished"></translation>
+        <translation>Ai acces la fisierele tale de oriunde folosind %s</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="529"/>
@@ -452,32 +452,32 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/info_dlg.py" line="27"/>
         <source>Select All</source>
-        <translation type="unfinished"></translation>
+        <translation>Selecteaza Toate</translation>
     </message>
     <message>
         <location filename="gui/info_dlg.py" line="28"/>
         <source>Clear All</source>
-        <translation type="unfinished"></translation>
+        <translation>Sterge Toate</translation>
     </message>
     <message>
         <location filename="gui/info_dlg.py" line="29"/>
         <source>Delete</source>
-        <translation type="unfinished"></translation>
+        <translation>Sters</translation>
     </message>
     <message>
         <location filename="gui/info_dlg.py" line="91"/>
         <source>Type</source>
-        <translation type="unfinished"></translation>
+        <translation>Tipul</translation>
     </message>
     <message>
         <location filename="gui/info_dlg.py" line="92"/>
         <source>Created</source>
-        <translation type="unfinished"></translation>
+        <translation>Create</translation>
     </message>
     <message>
         <location filename="gui/info_dlg.py" line="94"/>
         <source>Information</source>
-        <translation type="unfinished"></translation>
+        <translation>Informatii</translation>
     </message>
 </context>
 <context>
@@ -485,22 +485,22 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="222"/>
         <source>Welcome to %s</source>
-        <translation type="unfinished"></translation>
+        <translation>Bine ati venit la %s</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="226"/>
         <source>Please log in to %s</source>
-        <translation type="unfinished"></translation>
+        <translation>Va rugam sa semnati pe %s</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="231"/>
         <source>Username</source>
-        <translation type="unfinished"></translation>
+        <translation>Utilizatorul</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="232"/>
         <source>Password</source>
-        <translation type="unfinished"></translation>
+        <translation>Parola</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="278"/>
@@ -515,23 +515,24 @@ to a new location. It will also stop the synchronization if running.
     <message>
         <location filename="gui/wizard.py" line="271"/>
         <source>Logout</source>
-        <translation type="unfinished"></translation>
+        <translation></translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="297"/>
         <source>Connected</source>
-        <translation type="unfinished"></translation>
+        <translation>Conectat</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="303"/>
         <source>Invalid credentials.</source>
-        <translation type="unfinished"></translation>
+        <translation>Credentiile nu sint valida.</translation>
     </message>
     <message>
         <location filename="gui/wizard.py" line="320"/>
         <source>Unable to connect to %s.
 If a proxy server is required, please configure it here by selecting the Proxy... button</source>
-        <translation type="unfinished"></translation>
+        <translation>No se poate conects la %s.
+Daca un proxy este necesar, va rugam sa il configuraty apasind pe butonul Proxy...</translation>
     </message>
 </context>
 <context>
@@ -539,22 +540,22 @@ If a proxy server is required, please configure it here by selecting the Proxy..
     <message>
         <location filename="gui/preferences_dlg.py" line="55"/>
         <source>Start automatically when starting this computer</source>
-        <translation type="unfinished"></translation>
+        <translation>Porneste automat cind porneste computerul</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="56"/>
         <source>Site Url</source>
-        <translation type="unfinished"></translation>
+        <translation>Url pentru Site</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="57"/>
         <source>Folder location</source>
-        <translation type="unfinished"></translation>
+        <translation>Locatia fisierului</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="58"/>
         <source>%s Site</source>
-        <translation type="unfinished"></translation>
+        <translation>%s Siteul</translation>
     </message>
     <message>
         <location filename="gui/preferences_dlg.py" line="143"/>
@@ -569,7 +570,7 @@ If a proxy server is required, please configure it here by selecting the Proxy..
     <message>
         <location filename="gui/preferences_dlg.py" line="152"/>
         <source>not available</source>
-        <translation type="unfinished"></translation>
+        <translation>Nu este liber</translation>
     </message>
 </context>
 <context>
@@ -577,32 +578,32 @@ If a proxy server is required, please configure it here by selecting the Proxy..
     <message>
         <location filename="gui/proxy_dlg.py" line="26"/>
         <source> Proxy Configuration</source>
-        <translation type="unfinished"></translation>
+        <translation>Configuratie pentru Proxy</translation>
     </message>
     <message>
         <location filename="gui/proxy_dlg.py" line="129"/>
         <source>port %s is invalid.</source>
-        <translation type="unfinished"></translation>
+        <translation>Portul nu este valid.</translation>
     </message>
     <message>
         <location filename="gui/proxy_dlg.py" line="93"/>
         <source>Must be between 1024 and 65535.</source>
-        <translation type="unfinished"></translation>
+        <translation>Trebuie sa fie intre 1024 si 65535</translation>
     </message>
     <message>
         <location filename="gui/proxy_dlg.py" line="122"/>
         <source>port %s is in use.</source>
-        <translation type="unfinished"></translation>
+        <translation>Portul %s este in uz</translation>
     </message>
     <message>
         <location filename="gui/proxy_dlg.py" line="124"/>
         <source>If this port is used by the proxy, click Yes, otherwise click No and use another port between 1024 and 65535.</source>
-        <translation type="unfinished"></translation>
+        <translation>Daca acest port este folosit, apasa Yes, altcumva apasa Nu si foloseste un alt port intre 1024 si 65535</translation>
     </message>
     <message>
         <location filename="gui/proxy_dlg.py" line="130"/>
         <source>Must be a numeric value.</source>
-        <translation type="unfinished"></translation>
+        <translation>Trebuie sa fie o valoare numerica</translation>
     </message>
 </context>
 <context>

@@ -362,10 +362,16 @@ class BaseAutomationClient(object):
         except urllib2.HTTPError as e:
             if e.code == 401 or e.code == 403:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
+            elif e.code == 503:
+                retry_after, schedules = self._check_maintenance_mode(e)
+                if retry_after > 0:
+                    raise MaintenanceMode(self.server_url, self.user_id, retry_after, schedules)
+                else:
+                    raise
             else:
                 self._log_details(e)
                 e.msg = base_error_message + _(": HTTP error %d") % e.code
-                raise e
+                raise
         except Exception as e:
             self._log_details(e)
             if hasattr(e, 'msg'):

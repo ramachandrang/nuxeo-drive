@@ -950,6 +950,13 @@ class Synchronizer(object):
 
             if len(pending) == 0:
                 break
+            
+            if self.should_pause_synchronization():
+                break;
+            if self.should_stop_synchronization():
+                pid = self.check_running()
+                log.info("Stopping synchronization (pid=%d, in synchronize)", pid)
+                break
 
             # TODO: make it possible to catch unexpected exceptions here so as
             # to black list the pair of document and ignore it for a while
@@ -1155,17 +1162,17 @@ class Synchronizer(object):
         except Exception, e:
             log.debug("error retrieving folders: %s", str(e))
 
-            # start status thread used to provide file status for icon overlays
-            self._controller.start_status_thread()
+        # start status thread used to provide file status for icon overlays
+        self._controller.start_status_thread()
 
         try:
             while True:
                 n_synchronized = 0
-                if self.should_stop_synchronization():
-                    log.info("Stopping synchronization (pid=%d)", pid)
-                    break
                 if self.should_pause_synchronization():
                     break;
+                if self.should_stop_synchronization():
+                    log.info("Stopping synchronization (pid=%d, in loop)", pid)
+                    break
                 if (max_loops is not None and self.loop_count > max_loops):
                     log.info("Stopping synchronization after %d loops",
                              self.loop_count)
@@ -1814,96 +1821,6 @@ class Synchronizer(object):
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
                                   rc, session)
 
-#    def _local_bind_root(self, server_binding, remote_info, nxclient, session):
-#        # Check that this workspace does not already exist locally
-#        # TODO: shall we handle deduplication for root names too?
-#
-#        folder_name = remote_info.name
-#        local_root = os.path.join(server_binding.local_folder,
-#                                safe_filename(remote_info.name))
-#        try:
-#            sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_id == remote_info.uid).one()
-#            if sync_folder.remote_root == Constants.ROOT_CLOUDDESK and sync_folder.remote_id == Constants.OTHERS_DOCS_UID:
-#                # this binding root is Others' Docs
-#                local_root = os.path.join(server_binding.local_folder,
-#                                  safe_filename(Constants.OTHERS_DOCS))
-#
-#            elif sync_folder.remote_root == Constants.ROOT_CLOUDDESK:
-#                # this is My Docs
-#                local_root = os.path.join(server_binding.local_folder,
-#                                  safe_filename(Constants.MY_DOCS))
-#
-#            elif sync_folder.remote_root == Constants.ROOT_MYDOCS:
-#                # child of My Docs
-#                local_root = os.path.join(server_binding.local_folder,
-#                                  safe_filename(Constants.MY_DOCS),
-#                                  safe_filename(folder_name))
-#
-#            elif sync_folder.remote_root == Constants.ROOT_OTHERS_DOCS:
-#                # child of Others Docs
-#                local_root = os.path.join(server_binding.local_folder,
-#                                  safe_filename(Constants.OTHERS_DOCS),
-#                                  safe_filename(folder_name))
-#
-#        except NoResultFound:
-#            log.error("binding root %s is not a synced folder", remote_info.name)
-#        except MultipleResultsFound:
-#            log.error("binding root %s is two or more  synced folders", remote_info.name)
-#
-#        repository = nxclient.repository
-#        if not os.path.exists(local_root):
-#            os.makedirs(local_root)
-#        lcclient = LocalClient(local_root)
-#        local_info = lcclient.get_info('/')
-#
-#        try:
-#            existing_binding = session.query(RootBinding).filter_by(
-#                local_root = local_root,
-#            ).one()
-#            if (existing_binding.remote_repo != repository
-#                or existing_binding.remote_root != remote_info.uid):
-#                raise RuntimeError(
-#                    "%r is already bound to %r on repo %r of %r" % (
-#                        local_root,
-#                        existing_binding.remote_root,
-#                        existing_binding.remote_repo,
-#                        existing_binding.server_binding.server_url))
-#        except NoResultFound:
-#            # Register the new binding itself
-#            log.info("Binding local root '%s' to '%s' (id=%s) on server '%s'",
-#                 local_root, remote_info.name, remote_info.uid,
-#                     server_binding.server_url)
-#            session.add(RootBinding(local_root, repository, remote_info.uid, server_binding.local_folder))
-#
-#            # Initialize the metadata of the root and let the synchronizer
-#            # scan the folder recursively
-#            state = LastKnownState(lcclient.base_folder,
-#                    local_info = local_info, remote_info = remote_info)
-#            if remote_info.folderish:
-#                # Mark as synchronized as there is nothing to download later
-#                state.update_state(local_state = 'synchronized',
-#                        remote_state = 'synchronized')
-#            else:
-#                # Mark remote as updated to trigger a download of the binary
-#                # attachment during the next synchro
-#                state.update_state(local_state = 'synchronized',
-#                                remote_state = 'modified')
-#            session.add(state)
-#            self.scan_local(local_root, session = session)
-#            self.scan_remote(local_root, session = session)
-#            session.commit()
-#
-#            if  self._frontend is not None:
-#                self._frontend.notify_folders_changed()
-#
-#    def _local_unbind_root(self, binding, session):
-#        log.info("Unbinding local root '%s'.", binding.local_root)
-#        session.delete(binding)
-#        session.commit()
-#
-#        if self._frontend is not None:
-#            self._frontend.notify_folders_changed()
-
     def notify_to_signin(self, server_binding = None):
         if self._frontend is None:
             return
@@ -2003,29 +1920,4 @@ class Synchronizer(object):
         except NoResultFound:
             pass
 
-#    def _update_sync_folders(self, server_binding, session=None):
-#        """update SyncFolders table based on the LastKnownState table"""
-#        if session is None:
-#            session = self._controller.get_session()
-#        sync_folders = session.query(SyncFolders).all()
-#        # clear all
-#        map(session.delete, sync_folders)
-#
-#        folders = session.query(LastKnownState).filter(and_(LastKnownState.local_folder == server_binding.local_folder,
-#                                                            LastKnownState.folderish == 1)).all()
-#        sync_folders = []
-#        for tlf in folders:
-#            sync_folders.append(SyncFolders(tlf.remote_ref, tlf.remote_name, tlf.remote_parent_ref,
-#                                    server_binding.local_folder))
-#
-#        # set binding roots
-#        remote_client = self.get_remote_client(server_binding)
-#        remote_roots = remote_client.get_roots()
-#        remote_root_ids = [r.uid for r in remote_roots]
-#        for fld in sync_folders:
-#            uid = fld.remote_id.rsplit('#', 1)
-#            if uid[1] in remote_root_ids:
-#                fld.bind_state = True
-#            session.add(fld)
-#        session.commit()
 
