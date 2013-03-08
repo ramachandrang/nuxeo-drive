@@ -4,7 +4,7 @@ Created on Oct 28, 2012
 @author: mconstantin
 '''
 import sys
-from nxdrive import _
+
 try:
     import _version
     __version__ = _version.__version__

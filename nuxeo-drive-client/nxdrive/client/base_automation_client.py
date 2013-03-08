@@ -20,7 +20,6 @@ from cookielib import CookieJar
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 
-from nxdrive import _
 from nxdrive.logging_config import get_logger
 from nxdrive.client.common import DEFAULT_IGNORED_PREFIXES
 from nxdrive.client.common import DEFAULT_IGNORED_SUFFIXES
