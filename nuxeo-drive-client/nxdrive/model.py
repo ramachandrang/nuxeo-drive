@@ -93,7 +93,7 @@ class ServerBinding(Base):
     quota_exceeded = Column(Boolean)
     maintenance = Column(Boolean)
     next_nag_quota = Column(DateTime)
-    next_nag_maintenance = Column(DateTime)
+    next_nag_notification = Column(DateTime)
     next_maintenance_check = Column(DateTime)
     remote_password = Column(String)
     __remote_password = Column('remote_password', String)
@@ -121,7 +121,7 @@ class ServerBinding(Base):
         self.quota_exceeded = False
         self.maintenance = False
         self.next_nag_quota = None
-        self.next_nag_maintenance = datetime.now()
+        self.next_nag_notification = datetime.now()
         self.next_maintenance_check = None
         # Password is only stored if the server does not support token based authentication
         # CHANGED: Password IS currently stored for (1) refresh the token when it expires,
@@ -197,15 +197,15 @@ class ServerBinding(Base):
             self.maintenance = False
         self.next_maintenance_check = datetime.now() + timedelta(seconds=retry_after)
         
-    def update_server_maintenance_schedule(self):
-        self.next_nag_maintenance = datetime.now() + timedelta(seconds=Constants.SERVICE_NOTIFICATION_INTERVAL)
+    def update_server_notification_schedule(self):
+        self.next_nag_notification = datetime.now() + timedelta(seconds=Constants.SERVICE_NOTIFICATION_INTERVAL)
 
     def nag_maintenance_schedule(self):
         if self.maintenance:
             return False
-        elif self.next_nag_maintenance is None:
+        elif self.next_nag_notification is None:
             return False
-        elif not self.maintenance and datetime.now() > self.next_nag_maintenance:
+        elif not self.maintenance and datetime.now() > self.next_nag_notification:
             return True
         else:
             return False
@@ -217,6 +217,14 @@ class ServerBinding(Base):
         else:
             return False
             
+    def nag_upgrade_schedule(self):
+        if self.next_nag_notification is None:
+            return False
+        elif datetime.now() > self.next_nag_notification:
+            return True
+        else:
+            return False
+        
     def nag_quota_exceeded(self):
         if self.next_nag_quota is None:
             return False
@@ -549,10 +557,11 @@ class ServerEvent(Base):
     utc_time = Column(DateTime)
     message = Column(String)
     message_type = Column(String)
+    data = Column(String)
 
     server_binding = relationship("ServerBinding", uselist=False, backref="server_events")
 
-    def __init__(self, local_folder, message, message_type, utc_time = None):
+    def __init__(self, local_folder, message, message_type, utc_time = None, data = None):
         self.local_folder = local_folder
         self.message = message
         self.message_type = message_type
@@ -560,6 +569,7 @@ class ServerEvent(Base):
             self.utc_time = datetime.utcnow()
         else:
             self.utc_time = utc_time
+        self.data = data
             
 def init_db(nxdrive_home, echo = False, scoped_sessions = True, poolclass = None):
     """Return an engine and session maker configured for using nxdrive_home

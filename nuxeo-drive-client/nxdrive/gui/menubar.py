@@ -21,6 +21,8 @@ from PySide.QtGui import QDialog, QMessageBox, QImage, QPainter, QIcon
 from PySide.QtCore import QTimer
 
 from sqlalchemy import func
+from sqlalchemy.sql.expression import asc, desc
+from sqlalchemy.orm.exc import NoResultFound
 
 from nxdrive import Constants
 from nxdrive.async.operations import SyncOperations
@@ -174,9 +176,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # TO BE REMOVED - END
         self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
-        # add a new info action
-        self.actionInfo = QtGui.QAction(self.tr("Info.."), self)
-        self.actionUsedStorage.setObjectName("actionInfo")
+        # add a new notification (about maintenance) action
+        self.actionNotification = QtGui.QAction(self.tr("Notification..."), self)
+        self.actionNotification.setObjectName("actionNotification")
+        # add a new software upgrade action
+        self.actionUpgrade = QtGui.QAction(self.tr("Upgrade Available..."), self)
+        self.actionUpgrade.setObjectName("actionUpgrade")        
         
         self.menuCloudDesk.addAction(self.actionStatus)
         self.menuCloudDesk.addAction(self.actionCommand)
@@ -187,21 +192,22 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionUsername)
         self.menuCloudDesk.addAction(self.actionUsedStorage)
-        self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionPreferences)
-        self.menuCloudDesk.addAction(self.actionHelp)
-        self.menuCloudDesk.addAction(self.actionAbout)
-        self.menuCloudDesk.insertAction(self.actionCommand, self.actionInfo)
-
+        self.menuCloudDesk.addSeparator()
+        self.menuCloudDesk.addAction(self.actionNotification)
+        self.menuCloudDesk.addAction(self.actionUpgrade)
         # TO BE REMOVED - BEGIN
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionDebug)
         # TO BE REMOVED - END
-
+        self.menuCloudDesk.addSeparator()
+        self.menuCloudDesk.addAction(self.actionHelp)
+        self.menuCloudDesk.addAction(self.actionAbout)
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionQuit)
         # this is just an indicator
         self.actionStatus.setEnabled(False)
+        self.actionUpgrade.setVisible(False)
 
     def setupMisc(self):
         self.setContextMenu(self.menuCloudDesk)
@@ -213,7 +219,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionOpenCloudDeskFolder.triggered.connect(self.openLocalFolder)
         self.actionShowCloudDeskInfo.triggered.connect(self.openCloudDesk)
         self.messageClicked.connect(self.handle_message_clicked)
-        self.actionInfo.triggered.connect(self.showInfo)
+        self.actionNotification.triggered.connect(self.show_maintenance_info)
+        self.actionUpgrade.triggered.connect(self.show_upgrade_info)
         
         # BEGIN TO BE REMOVED
         self.actionDebug.setChecked(False)
@@ -495,26 +502,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def notify_signin(self, url):
         # TODO add ui for signing in
         pass
-
-    def notify_maintenance_schedule(self, msg, detail):
-        self.server_binding = self.controller.get_server_binding(self.local_folder)
-        self.communicator.message.emit(msg,
-                                       detail,
-                                       QtGui.QSystemTrayIcon.Information)
         
-    def notify_maintenance_mode(self, msg, detail):
-        # TODO update menu, icon
-        self.substate = Constants.APP_SUBSTATE_MAINTENANCE
-        self.server_binding = self.controller.get_server_binding(self.local_folder)
+    def notify_quota_exceeded(self, local_folder, msg, detail):
         self.communicator.message.emit(msg,
                                        detail,
-                                       QtGui.QSystemTrayIcon.Warning)  
-        self.notify_offline(self.local_folder)      
-
-    def notify_quota_exceeded(self, msg):
-        self.server_binding = self.controller.get_server_binding(self.local_folder)
-        self.communicator.message.emit(Constants.APP_NAME,
-                                       msg,
                                        QtGui.QSystemTrayIcon.Warning)
 
     def notify_online(self, local_folder):
@@ -556,7 +547,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             text = getattr(exception, 'text', None)
             msg = 'Detected invalid proxy server settings' + '' if text is None else ': %s' % text
             log.debug(msg)
-            self.communicator.invalid_proxy.emit(msg)
+            self.communicator.invalid_proxy.emit(local_folder, msg)
 
     def notify_pending(self, local_folder, n_pending, or_more = False):
         if self.state == Constants.APP_STATE_QUITTING:
@@ -729,11 +720,19 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.actionUsedStorage.setText(storage_text)
 
         session = self.controller.get_session()
-        has_events = session.query(func.count(ServerEvent.id)).\
-                filter(ServerEvent.local_folder == self.local_folder).scalar() > 0
-        self.actionInfo.setVisible(has_events)
+        # Notification (for maintenance info) menu is always available
+        # TO BE REMOVED
+#        has_events = session.query(func.count(ServerEvent.id)).\
+#                filter(ServerEvent.local_folder == self.local_folder).scalar() > 0
+#        self.actionInfo.setVisible(has_events)
+        
         self.actionUsername.setText(self._getUserName())
-        self.actionShowCloudDeskInfo.setEnabled(len(self.binding_info.values()) > 0)
+        connected = len(self.binding_info.values()) > 0
+        self.actionShowCloudDeskInfo.setEnabled(connected)
+        self.actionNotification.setEnabled(len(self.binding_info.values()) > 0)
+        has_upgrade_event = session.query(ServerEvent).filter(ServerEvent.local_folder == self.local_folder).\
+                                                    filter(ServerEvent.message_type == 'upgrade').scalar() > 0
+        self.actionUpgrade.setVisible(connected and has_upgrade_event)
         self.actionStatus.setText(self._syncStatus())
         self.actionCommand.setText(self._syncCommand())
         self.actionOpenCloudDeskFolder.setText('Open %s Folder' % os.path.basename(self._get_local_folder()))
@@ -893,6 +892,26 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             log.info("application quit.")
             self.quit()
 
+    @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
+    def handle_message(self, title, message, icon_type):
+        if self.notifications:
+            self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
+
+    def handle_message_clicked(self):
+        info = self.get_binding_info(self.local_folder)
+        handler = getattr(self, '_handle_click_%s' % info.state, Constants.INFO_STATE_NONE)
+        handler(info)
+        info.state = Constants.INFO_STATE_NONE
+
+    def _common_click_handler(self, local_folder, state):
+        info = self.get_binding_info(local_folder)
+        info.state = state
+        if sys.platform == 'darwin':
+            # clicking on the message notification is not working on the Mac
+            handler = getattr(self, '_handle_click_%s' % info.state, Constants.INFO_STATE_NONE)
+            handler(info)
+            info.state = Constants.INFO_STATE_NONE
+            
     @QtCore.Slot(str)
     def handle_invalid_credentials(self, local_folder):
         sb = self.controller.get_server_binding(local_folder, raise_if_missing = False)
@@ -900,38 +919,94 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 #        self.communicator.menu.emit()
         # show a notification
         for_server = '' if sb is None else ' for server: %s' % sb.server_url
-        detail = 'Update credentials%s' % for_server
+        detail = self.tr('Update credentials%s') % for_server
         self.handle_message(self.tr("%s Authentication") % Constants.APP_NAME,
                            detail,
                            QtGui.QSystemTrayIcon.Critical)
 
-        # clicking on the message notification is not working on the Mac
-        if sys.platform == 'darwin':
-            if not self.get_binding_info(self.local_folder).online:
-                if self._authenticate():
-                    self.doWork()
+        self._common_click_handler(local_folder, Constants.INFO_STATE_INVALID_CREDENTIALS)
 
+    def _handle_click_invalid_cred(self, info):
+        if not self.get_binding_info(self.local_folder).online:
+            if self._authenticate():
+                self.doWork()
+        
     @QtCore.Slot()
-    def handle_invalid_proxy(self, message):
+    def handle_invalid_proxy(self, local_folder, message):
         self.handle_message(self.tr("%s Configuration") % Constants.APP_NAME,
                            message,
                            QtGui.QSystemTrayIcon.Critical)
+        
+        self._common_click_handler(local_folder, Constants.INFO_STATE_INVALID_PROXY)
+
+    def _handle_click_invalid_proxy(self, info):
         if self.proxyDlg is None:
             self.proxyDlg = ProxyDlg(frontend = self)
             self.proxyDlg.exec_()
             self.proxyDlg = None
+            
+    def notify_maintenance_schedule(self, local_folder, msg, detail):
+        info = self.get_info(local_folder)
+        info.state = Constants.INFO_STATE_MAINTENANCE_SCHEDULE
+        self.communicator.message.emit(msg,
+                                       detail,
+                                       QtGui.QSystemTrayIcon.Information)
+        
+    def notify_maintenance_mode(self, local_folder, msg, detail):
+        # TODO update menu, icon
+        self.substate = Constants.APP_SUBSTATE_MAINTENANCE
+        self.communicator.message.emit(msg,
+                                       detail,
+                                       QtGui.QSystemTrayIcon.Warning)  
+        self.notify_offline(local_folder)      
+        
+    def _handle_click_main_schedule(self, info):
+        self.show_maintenance_info()
 
-    @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
-    def handle_message(self, title, message, icon_type):
-        if self.notifications:
-            self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
-
-    def handle_message_clicked(self):
-        # handle only the click for entering credentials
-        if not self.get_binding_info(self.local_folder).online:
-            if self._authenticate():
-                self.doWork()
-
+    def show_maintenance_info(self):
+        msg = self.tr('Maintenance is not available.')
+        icon = QMessageBox.Question
+        if self.binding_info is not None:
+            session = self.controller.get_session()
+            try:
+                server_maint_event = session.query(ServerEvent).\
+                                filter(ServerEvent.local_folder == self.server_binding.local_folder).\
+                                filter(ServerEvent.message_type == 'maintenance').\
+                                order_by(desc(ServerEvent.utc_time)).first()
+                msg = server_maint_event.message
+                if self.binding_info.maintenance:
+                    icon = QMessageBox.warning
+                else:
+                    icon = QMessageBox.Information
+            except NoResultFound:
+                msg = self.tr('No maintenance is scheduled')
+                icon = QMessageBox.Information
+            except Exception, e:
+                log.debug("error retrieving maintenance info (%s)", e)
+          
+        msgbox = QMessageBox()
+        msgbox.setText(self.tr("Maintenance information"))
+        msgbox.setStandardButtons(QMessageBox.Ok)
+        msgbox.setDefaultButton(QMessageBox.Ok)
+        main, detail = msg.split('\n')
+        msgbox.setInformativeText(main)
+        msgbox.setDetailedText(detail)
+        msgbox.setIcon(icon)
+        msgbox.exec_()
+    
+    def show_upgrade_info(self):
+        pass
+    
+    def notify_upgrade(self, local_folder, msg, detail):
+        info = self.get_info(local_folder)
+        info.state = Constants.INFO_STATE_UPGRADE
+        self.communicator.message.emit(msg,
+                                       detail,
+                                       QtGui.QSystemTrayIcon.Information)
+        
+    def _handle_click_upgrade(self, info):
+        self.show_upgrade_info()
+        
     def _getUserName(self):
 #        local_folder = default_nuxeo_drive_folder()
 #        local_folder = os.path.abspath(os.path.expanduser(local_folder))

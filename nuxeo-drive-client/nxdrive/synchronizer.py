@@ -1,4 +1,6 @@
 """Handle synchronization logic."""
+
+import sys
 import re
 import os.path
 from time import time
@@ -1506,7 +1508,9 @@ class Synchronizer(object):
             used, total = self._controller.update_server_storage_used(e.url, e.user_id, session = session)
             server_binding.update_server_quota_status(used, total, e.size)
             if self._frontend is not None and server_binding.nag_quota_exceeded():
-                self._frontend.notify_quota_exceeded()
+                msg = _('Quota execceded')
+                detail = _('You used %d of %d') % (used, total)
+                self._frontend.notify_quota_exceeded(server_binding.local_folder, msg, detail)
             return True
 
         else:
@@ -1937,11 +1941,17 @@ class Synchronizer(object):
                 remote_client = self._controller.get_remote_client(sb)
                 self.process_maintenance_schedule(sb, schedules = remote_client._get_maintenance_schedule(sb))
 
+            if sb.nag_upgrade_schedule():
+                remote_client = self._controller.get_remote_client(sb)
+                creation_date, version, url = remote_client._get_upgrade_info()
+                self.process_upgrade_schedule(sb, creation_date, version, url)
+                
             if sb.nag_quota_exceeded():
-                self.persist_server_event(sb, 'Storage Quota exceeded',
+                detail = _('Storage Quota exceeded')
+                self.persist_server_event(sb, detail,
                                           message_type = 'quota', session = session)
                 if self._frontend is not None:
-                    self._frontend.notify_quota_exceeded()
+                    self._frontend.notify_quota_exceeded(sb.local_folder, Constants.APP_NAME, detail)
 
     def update_last_access(self, sb):
         remote_client = self._controller.get_remote_client(sb)
@@ -1973,22 +1983,57 @@ class Synchronizer(object):
             else:
                 # uses current utc time
                 creation_date = None
-            self.persist_server_event(sb, '%s. %s' % (msg, detail), message_type = 'maintenance',
+            self.persist_server_event(sb, '%s\n%s' % (msg, detail), message_type = 'maintenance',
                                               utc_time = creation_date, session = session)
             if self._frontend is not None:
-                if status == 'available' and sb.nag_maintenance_schedule():
+                if status == 'available' and sb.nag_upgrade_schedule():
                     self._frontend.notify_maintenance_schedule(msg, detail)
                 elif status == 'maintenance':
                     self._frontend.notify_maintenance_mode(msg, detail)
         finally:
-            sb.update_server_maintenance_schedule()
+            sb.update_server_notification_schedule()
 
+    def process_upgrade_schedule(self, sb, creation_date, version, url, session=None):
+        from _version import __version__
+        
+        try:
+            v1=map(int,re.sub('(\.0+)+\Z','',version).split('.'))
+            v=map(int,re.sub('(\.0+)+\Z','',__version__).split('.'))
+            result = cmp(v1, v) 
+            if result == -1 or result == 0:
+                return
+            
+            creation_date = datetime.strptime(creation_date, '%Y-%m-%dT%H:%M:%S.%fZ')
+            main = _('An update is available for download')
+            if sys.platform == 'win32':
+                detail = _('Click to go to download page')
+            elif sys.platform == 'darwin':
+                detail = _('Use Upgrade Available menu to download')
+            else:
+                detail = ''
+            msg = '%s. $s' % (main, detail)
+            
+            self.persist_server_event(sb, msg, message_type='upgrade', 
+                                      utc_time=creation_date, data=url, session=session)
+            if self._frontend is not None:
+                if sb.nag_upgrade_schedule():
+                    self._frontend.notify_upgrade(main, detail)
+
+        finally:
+            sb.update_server_notification_schedule()
+        
     def persist_server_event(self, server_binding, message, message_type, utc_time = None, session = None):
         if session is None:
             session = self._controller.get_session()
-        server_event = ServerEvent(server_binding.local_folder, message, message_type = message_type, utc_time = utc_time)
-        session.add(server_event)
-        session.commit()
+        # check if event with same creation date already exists
+        try:
+            event = session.query(ServerEvent).filter(ServerEvent.local_folder == server_binding.local_folder).\
+                                                filter(ServerEvent.message_type == message_type).\
+                                                filter(ServerEvent.utc_time == utc_time).all()
+        except NoResultFound:
+            server_event = ServerEvent(server_binding.local_folder, message, message_type = message_type, utc_time = utc_time)
+            session.add(server_event)
+            session.commit()
 
     def persist_server_event2(self, url, user_id, message, message_type, utc_time = None, session = None):
         if session is None:
@@ -2002,30 +2047,3 @@ class Synchronizer(object):
             session.commit()
         except NoResultFound:
             pass
-
-#    def _update_sync_folders(self, server_binding, session=None):
-#        """update SyncFolders table based on the LastKnownState table"""
-#        if session is None:
-#            session = self._controller.get_session()
-#        sync_folders = session.query(SyncFolders).all()
-#        # clear all
-#        map(session.delete, sync_folders)
-#
-#        folders = session.query(LastKnownState).filter(and_(LastKnownState.local_folder == server_binding.local_folder,
-#                                                            LastKnownState.folderish == 1)).all()
-#        sync_folders = []
-#        for tlf in folders:
-#            sync_folders.append(SyncFolders(tlf.remote_ref, tlf.remote_name, tlf.remote_parent_ref,
-#                                    server_binding.local_folder))
-#
-#        # set binding roots
-#        remote_client = self.get_remote_client(server_binding)
-#        remote_roots = remote_client.get_roots()
-#        remote_root_ids = [r.uid for r in remote_roots]
-#        for fld in sync_folders:
-#            uid = fld.remote_id.rsplit('#', 1)
-#            if uid[1] in remote_root_ids:
-#                fld.bind_state = True
-#            session.add(fld)
-#        session.commit()
-

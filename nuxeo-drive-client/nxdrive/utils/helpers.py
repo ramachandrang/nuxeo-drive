@@ -107,7 +107,7 @@ class Communicator(QObject):
     menu = Signal()
     stop = Signal()
     invalid_credentials = Signal(str)
-    invalid_proxy = Signal(str)
+    invalid_proxy = Signal(str, str)
     message = Signal(str, str, QSystemTrayIcon.MessageIcon)
     error = Signal(str, str, QMessageBox.StandardButton)
     folders = Signal()
