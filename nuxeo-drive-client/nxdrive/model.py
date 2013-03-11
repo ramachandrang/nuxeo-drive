@@ -204,7 +204,8 @@ class ServerBinding(Base):
         if self.maintenance:
             return False
         elif self.next_nag_notification is None:
-            return False
+            # check with a clean db
+            return True
         elif not self.maintenance and datetime.now() > self.next_nag_notification:
             return True
         else:
@@ -219,11 +220,14 @@ class ServerBinding(Base):
             
     def nag_upgrade_schedule(self):
         if self.next_nag_notification is None:
-            return False
+            # check if a clean db
+            return True
         elif datetime.now() > self.next_nag_notification:
             return True
         else:
             return False
+            # FOR DEBUG ONLY - TO BE REMOVED
+#            return True
         
     def nag_quota_exceeded(self):
         if self.next_nag_quota is None:
@@ -557,11 +561,11 @@ class ServerEvent(Base):
     utc_time = Column(DateTime)
     message = Column(String)
     message_type = Column(String)
-    data = Column(String)
-
+    data1 = Column(String)
+    data2 = Column(String)
     server_binding = relationship("ServerBinding", uselist=False, backref="server_events")
 
-    def __init__(self, local_folder, message, message_type, utc_time = None, data = None):
+    def __init__(self, local_folder, message, message_type, utc_time = None, data1 = None, data2 = None):
         self.local_folder = local_folder
         self.message = message
         self.message_type = message_type
@@ -569,7 +573,8 @@ class ServerEvent(Base):
             self.utc_time = datetime.utcnow()
         else:
             self.utc_time = utc_time
-        self.data = data
+        self.data1 = data1
+        self.data2 = data2
             
 def init_db(nxdrive_home, echo = False, scoped_sessions = True, poolclass = None):
     """Return an engine and session maker configured for using nxdrive_home

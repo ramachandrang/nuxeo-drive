@@ -348,13 +348,14 @@ class Controller(object):
     def get_server_binding(self, local_folder = None, raise_if_missing = False,
                            session = None):
         """Find the ServerBinding instance for a given local_folder"""
-        local_folder = normalized_path(local_folder)
+
         if session is None:
             session = self.get_session()
         try:
             if local_folder is None:
                 server_binding = session.query(ServerBinding).first()
             else:
+                local_folder = normalized_path(local_folder)
                 server_binding = session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
             return server_binding
@@ -585,28 +586,6 @@ class Controller(object):
             pass
 
         return fdtoken
-
-#    def get_sync_status(self, local_folder = None, from_time = None, delay = 10):
-#        """retrieve count of created/modified/deleted local files since 'from_time'.
-#        If 'from_time is None, use current time minus delay.
-#        If local_folder is None, return results for all bindings.
-#        Return a list of tuples of the form [('<local_folder>', '<pair_state>', count),...]
-#        """
-#        after = from_time if from_time is not None else datetime.now() - delay
-#
-#        # query for result of last synchronize cycle
-#        session = self.get_session()
-#        q = session.query(RootBinding.local_folder, LastKnownState.pair_state, func.count(LastKnownState.pair_state)).\
-#                    filter(RootBinding.local_root == LastKnownState.local_root).\
-#                    filter(LastKnownState.folderish == 0).\
-#                    filter(LastKnownState.last_local_updated >= after).\
-#                    group_by(RootBinding.local_folder).\
-#                    group_by(LastKnownState.pair_state)
-#
-#        if local_folder is None:
-#            return q.all()
-#        else:
-#            return q.filter(RootBinding.local_folder == local_folder).all()
 
     def bind_root(self, local_folder, remote_ref, repository='default',
                   session=None):

@@ -41,6 +41,7 @@ from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
 from nxdrive.gui.info_dlg import InfoDlg
 from nxdrive.client import Unauthorized
+from nxdrive._version import _is_newer_version
 
 if sys.platform == 'win32':
     from nxdrive.protocol_handler import win32
@@ -699,9 +700,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if self.worker is not None and self.worker.isAlive():
             # Ask the controller to stop: the synchronization loop will in turn
             # call notify_sync_stopped and finally handle_stop
-            self.controller.stop()
+            # This could be a race condition, resume first if paused
             if self.worker.isPaused():
                 self._resumeSync()
+            self.controller.stop()
         else:
             # quit directly
             QtGui.QApplication.quit()
@@ -730,9 +732,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         connected = len(self.binding_info.values()) > 0
         self.actionShowCloudDeskInfo.setEnabled(connected)
         self.actionNotification.setEnabled(len(self.binding_info.values()) > 0)
-        has_upgrade_event = session.query(ServerEvent).filter(ServerEvent.local_folder == self.local_folder).\
-                                                    filter(ServerEvent.message_type == 'upgrade').scalar() > 0
-        self.actionUpgrade.setVisible(connected and has_upgrade_event)
+        self.actionUpgrade.setVisible(connected and self._is_new_version_available())
         self.actionStatus.setText(self._syncStatus())
         self.actionCommand.setText(self._syncCommand())
         self.actionOpenCloudDeskFolder.setText('Open %s Folder' % os.path.basename(self._get_local_folder()))
@@ -964,7 +964,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.show_maintenance_info()
 
     def show_maintenance_info(self):
-        msg = self.tr('Maintenance is not available.')
+        msg = self.tr('Maintenance is not available.\n')
         icon = QMessageBox.Question
         if self.binding_info is not None:
             session = self.controller.get_session()
@@ -972,14 +972,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 server_maint_event = session.query(ServerEvent).\
                                 filter(ServerEvent.local_folder == self.server_binding.local_folder).\
                                 filter(ServerEvent.message_type == 'maintenance').\
-                                order_by(desc(ServerEvent.utc_time)).first()
+                                order_by(desc(ServerEvent.utc_time)).one()
                 msg = server_maint_event.message
                 if self.binding_info.maintenance:
                     icon = QMessageBox.warning
                 else:
                     icon = QMessageBox.Information
             except NoResultFound:
-                msg = self.tr('No maintenance is scheduled')
+                msg = self.tr('No maintenance is scheduled.\n')
                 icon = QMessageBox.Information
             except Exception, e:
                 log.debug("error retrieving maintenance info (%s)", e)
@@ -995,14 +995,36 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox.exec_()
     
     def show_upgrade_info(self):
-        pass
-    
+        if self.binding_info is not None:
+            session = self.controller.get_session()
+            try:
+                server_upgrade_event = session.query(ServerEvent).\
+                                filter(ServerEvent.local_folder == self.server_binding.local_folder).\
+                                filter(ServerEvent.message_type == 'upgrade').\
+                                order_by(desc(ServerEvent.utc_time)).one()
+                url = server_upgrade_event.data2
+                new = 2  # open in a new tab if possible
+                webbrowser.open(url, new = new)
+            except NoResultFound:
+                log.debug('no upgrade event available')
+            except Exception, e:
+                log.debug("error retrieving client upgrade (%s)", e)
+  
     def notify_upgrade(self, local_folder, msg, detail):
         info = self.get_info(local_folder)
-        info.state = Constants.INFO_STATE_UPGRADE
-        self.communicator.message.emit(msg,
-                                       detail,
-                                       QtGui.QSystemTrayIcon.Information)
+        if (info.online and self._is_new_version_available()):
+            info.state = Constants.INFO_STATE_UPGRADE
+            self.communicator.message.emit(msg,
+                                           detail,
+                                           QtGui.QSystemTrayIcon.Information)
+        
+    def _is_new_version_available(self):
+        session = self.controller.get_session()
+        last_upgrade_event = session.query(ServerEvent).filter(ServerEvent.local_folder == self.local_folder).\
+                                        filter(ServerEvent.message_type == 'upgrade').\
+                                        order_by(desc(ServerEvent.utc_time)).one()
+        # upgrade event: data1 is the version, data2 is the download url
+        return _is_newer_version(last_upgrade_event.data1)
         
     def _handle_click_upgrade(self, info):
         self.show_upgrade_info()

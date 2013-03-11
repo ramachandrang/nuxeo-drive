@@ -22,7 +22,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
     def __init__(self, frontend = None, parent = None):
         super(ProxyDlg, self).__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
+        self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setWindowTitle(Constants.APP_NAME + self.tr(' Proxy Configuration'))
         self.frontend = frontend
         self.controller = frontend.controller

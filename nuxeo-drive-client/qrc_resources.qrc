@@ -1,5 +1,6 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
+     <file alias="icon_dlg.png">nxdrive/data/icons/CP_Red_Office_16.png</file>
      <file alias="indicator_icon_enabled.png">nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png</file>
 <!--
      <file alias="indicator_icon_enabled.png">nxdrive/data/icons/CP_Red_Office_48x48.png</file>
@@ -19,9 +20,10 @@
      <file alias="account.png">nxdrive/data/icons/user-account.png</file>
      <file alias="network.png">nxdrive/data/icons/network-proxy.png</file>
      <file alias="advanced.png">nxdrive/data/icons/advanced.png</file>
-     <file alias="rb_icon.png">nxdrive/data/icons/nuxeo_drive_icon_32.png</file>
+     <file alias="rb_icon.png">nxdrive/data/icons/CP_Red_Office_32.png</file>
      <file alias="banner.png">nxdrive/data/images/banner-small.png</file>
-     <file alias="bkgrnd.png">nxdrive/data/images/webpage.png</file>
+     <file alias="bkgrnd.png">nxdrive/data/images/background_darwin.png</file>
+     <file alias="watermark.png">nxdrive/data/images/watermark_win32.png</file>
      <file alias="finder_folders.png">nxdrive/data/images/finder_folders.png</file>
      <file alias="explorer_folders.png">nxdrive/data/images/explorer_folders.png</file>
      <file alias="access_files_darwin.png">nxdrive/data/images/access_files_darwin.png</file>

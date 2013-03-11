@@ -24,7 +24,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
     def __init__(self, frontend=None, parent=None):
         super(SyncFoldersDlg, self).__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
+        self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setWindowTitle(Constants.APP_NAME + self.tr(' Synced Folders'))
         self.frontend = frontend
         if frontend is None: return

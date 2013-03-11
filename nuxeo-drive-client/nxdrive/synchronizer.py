@@ -6,6 +6,7 @@ import os.path
 from time import time
 from time import sleep
 from datetime import datetime
+from dateutil import tz
 import urllib2
 import socket
 import httplib
@@ -952,6 +953,13 @@ class Synchronizer(object):
 
             if len(pending) == 0:
                 break
+            
+            if self.should_pause_synchronization():
+                break;
+            if self.should_stop_synchronization(delete_stop_file=False):
+                pid = self.check_running()
+                log.info("Stopping synchronization (pid=%d, in synchronize)", pid)
+                break
 
             # TODO: make it possible to catch unexpected exceptions here so as
             # to black list the pair of document and ignore it for a while
@@ -1157,17 +1165,17 @@ class Synchronizer(object):
         except Exception, e:
             log.debug("error retrieving folders: %s", str(e))
 
-            # start status thread used to provide file status for icon overlays
-            self._controller.start_status_thread()
+        # start status thread used to provide file status for icon overlays
+        self._controller.start_status_thread()
 
         try:
             while True:
                 n_synchronized = 0
-                if self.should_stop_synchronization():
-                    log.info("Stopping synchronization (pid=%d)", pid)
-                    break
                 if self.should_pause_synchronization():
                     break;
+                if self.should_stop_synchronization():
+                    log.info("Stopping synchronization (pid=%d, in loop)", pid)
+                    break
                 if (max_loops is not None and self.loop_count > max_loops):
                     log.info("Stopping synchronization after %d loops",
                              self.loop_count)
@@ -1818,96 +1826,6 @@ class Synchronizer(object):
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
                                   rc, session)
 
-#    def _local_bind_root(self, server_binding, remote_info, nxclient, session):
-#        # Check that this workspace does not already exist locally
-#        # TODO: shall we handle deduplication for root names too?
-#
-#        folder_name = remote_info.name
-#        local_root = os.path.join(server_binding.local_folder,
-#                                safe_filename(remote_info.name))
-#        try:
-#            sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_id == remote_info.uid).one()
-#            if sync_folder.remote_root == Constants.ROOT_CLOUDDESK and sync_folder.remote_id == Constants.OTHERS_DOCS_UID:
-#                # this binding root is Others' Docs
-#                local_root = os.path.join(server_binding.local_folder,
-#                                  safe_filename(Constants.OTHERS_DOCS))
-#
-#            elif sync_folder.remote_root == Constants.ROOT_CLOUDDESK:
-#                # this is My Docs
-#                local_root = os.path.join(server_binding.local_folder,
-#                                  safe_filename(Constants.MY_DOCS))
-#
-#            elif sync_folder.remote_root == Constants.ROOT_MYDOCS:
-#                # child of My Docs
-#                local_root = os.path.join(server_binding.local_folder,
-#                                  safe_filename(Constants.MY_DOCS),
-#                                  safe_filename(folder_name))
-#
-#            elif sync_folder.remote_root == Constants.ROOT_OTHERS_DOCS:
-#                # child of Others Docs
-#                local_root = os.path.join(server_binding.local_folder,
-#                                  safe_filename(Constants.OTHERS_DOCS),
-#                                  safe_filename(folder_name))
-#
-#        except NoResultFound:
-#            log.error("binding root %s is not a synced folder", remote_info.name)
-#        except MultipleResultsFound:
-#            log.error("binding root %s is two or more  synced folders", remote_info.name)
-#
-#        repository = nxclient.repository
-#        if not os.path.exists(local_root):
-#            os.makedirs(local_root)
-#        lcclient = LocalClient(local_root)
-#        local_info = lcclient.get_info('/')
-#
-#        try:
-#            existing_binding = session.query(RootBinding).filter_by(
-#                local_root = local_root,
-#            ).one()
-#            if (existing_binding.remote_repo != repository
-#                or existing_binding.remote_root != remote_info.uid):
-#                raise RuntimeError(
-#                    "%r is already bound to %r on repo %r of %r" % (
-#                        local_root,
-#                        existing_binding.remote_root,
-#                        existing_binding.remote_repo,
-#                        existing_binding.server_binding.server_url))
-#        except NoResultFound:
-#            # Register the new binding itself
-#            log.info("Binding local root '%s' to '%s' (id=%s) on server '%s'",
-#                 local_root, remote_info.name, remote_info.uid,
-#                     server_binding.server_url)
-#            session.add(RootBinding(local_root, repository, remote_info.uid, server_binding.local_folder))
-#
-#            # Initialize the metadata of the root and let the synchronizer
-#            # scan the folder recursively
-#            state = LastKnownState(lcclient.base_folder,
-#                    local_info = local_info, remote_info = remote_info)
-#            if remote_info.folderish:
-#                # Mark as synchronized as there is nothing to download later
-#                state.update_state(local_state = 'synchronized',
-#                        remote_state = 'synchronized')
-#            else:
-#                # Mark remote as updated to trigger a download of the binary
-#                # attachment during the next synchro
-#                state.update_state(local_state = 'synchronized',
-#                                remote_state = 'modified')
-#            session.add(state)
-#            self.scan_local(local_root, session = session)
-#            self.scan_remote(local_root, session = session)
-#            session.commit()
-#
-#            if  self._frontend is not None:
-#                self._frontend.notify_folders_changed()
-#
-#    def _local_unbind_root(self, binding, session):
-#        log.info("Unbinding local root '%s'.", binding.local_root)
-#        session.delete(binding)
-#        session.commit()
-#
-#        if self._frontend is not None:
-#            self._frontend.notify_folders_changed()
-
     def notify_to_signin(self, server_binding = None):
         if self._frontend is None:
             return
@@ -1943,7 +1861,7 @@ class Synchronizer(object):
 
             if sb.nag_upgrade_schedule():
                 remote_client = self._controller.get_remote_client(sb)
-                creation_date, version, url = remote_client._get_upgrade_info()
+                creation_date, version, url = remote_client._get_upgrade_info(sb)
                 self.process_upgrade_schedule(sb, creation_date, version, url)
                 
             if sb.nag_quota_exceeded():
@@ -1972,7 +1890,7 @@ class Synchronizer(object):
             else:
                 schedule = None
 
-            msg, detail = get_maintenance_message(status, schedule = schedule)
+            msg, detail, data1, data2 = get_maintenance_message(status, schedule = schedule)
             # nothing to notify or persist
             if msg is None:
                 return
@@ -1980,30 +1898,40 @@ class Synchronizer(object):
             # persist server event in the database
             if schedule is not None:
                 creation_date = datetime.strptime(schedule['CreationDate'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                
             else:
                 # uses current utc time
                 creation_date = None
-            self.persist_server_event(sb, '%s\n%s' % (msg, detail), message_type = 'maintenance',
-                                              utc_time = creation_date, session = session)
+            self.persist_server_event(sb, '%s\n%s' % (msg, detail), message_type='maintenance',
+                                              utc_time=creation_date, data1=data1, data2=data2, 
+                                              session=session)
             if self._frontend is not None:
-                if status == 'available' and sb.nag_upgrade_schedule():
-                    self._frontend.notify_maintenance_schedule(msg, detail)
+                if status == 'available' and sb.nag_maintenance_schedule():
+                    self._frontend.notify_maintenance_schedule(sb.local_folder, msg, detail)
                 elif status == 'maintenance':
-                    self._frontend.notify_maintenance_mode(msg, detail)
+                    self._frontend.notify_maintenance_mode(sb.local_folder, msg, detail)
         finally:
             sb.update_server_notification_schedule()
 
-    def process_upgrade_schedule(self, sb, creation_date, version, url, session=None):
-        from _version import __version__
+    def process_upgrade_schedule(self, sb, creation_utc, version, url, session=None):
+        from _version import _is_newer_version
         
         try:
-            v1=map(int,re.sub('(\.0+)+\Z','',version).split('.'))
-            v=map(int,re.sub('(\.0+)+\Z','',__version__).split('.'))
-            result = cmp(v1, v) 
-            if result == -1 or result == 0:
+            if not _is_newer_version(version):
                 return
             
-            creation_date = datetime.strptime(creation_date, '%Y-%m-%dT%H:%M:%S.%fZ')
+            try:
+                creation_utc = datetime.strptime(creation_utc, '%Y-%m-%dT%H:%M:%S.%fZ')
+            except ValueError:
+                try:
+                    creation_utc = datetime.strptime(creation_utc, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    pass
+            # convert to local times
+            from_tz = tz.tzutc()
+            to_tz = tz.tzlocal()
+            creation_utc = creation_utc.replace(tzinfo = from_tz)
+            creation_local = creation_utc.astimezone(to_tz)
             main = _('An update is available for download')
             if sys.platform == 'win32':
                 detail = _('Click to go to download page')
@@ -2011,39 +1939,47 @@ class Synchronizer(object):
                 detail = _('Use Upgrade Available menu to download')
             else:
                 detail = ''
-            msg = '%s. $s' % (main, detail)
+            msg = '%s\n%s' % (main, detail)
             
             self.persist_server_event(sb, msg, message_type='upgrade', 
-                                      utc_time=creation_date, data=url, session=session)
+                                      utc_time=creation_local, 
+                                      data1=version, data2=url,
+                                      session=session)
             if self._frontend is not None:
                 if sb.nag_upgrade_schedule():
-                    self._frontend.notify_upgrade(main, detail)
+                    self._frontend.notify_upgrade(sb.local_folder, main, detail)
 
         finally:
             sb.update_server_notification_schedule()
         
-    def persist_server_event(self, server_binding, message, message_type, utc_time = None, session = None):
+    def persist_server_event(self, server_binding, message, message_type, utc_time=None, 
+                             data1=None, data2=None, session=None):
         if session is None:
             session = self._controller.get_session()
         # check if event with same creation date already exists
         try:
             event = session.query(ServerEvent).filter(ServerEvent.local_folder == server_binding.local_folder).\
                                                 filter(ServerEvent.message_type == message_type).\
-                                                filter(ServerEvent.utc_time == utc_time).all()
+                                                filter(ServerEvent.utc_time == utc_time).one()
         except NoResultFound:
-            server_event = ServerEvent(server_binding.local_folder, message, message_type = message_type, utc_time = utc_time)
+            server_event = ServerEvent(server_binding.local_folder, message, message_type, 
+                                       utc_time=utc_time, data1=data1, data2=data2)
             session.add(server_event)
             session.commit()
 
-    def persist_server_event2(self, url, user_id, message, message_type, utc_time = None, session = None):
+    def persist_server_event2(self, url, user_id, message, message_type, utc_time=None, 
+                              data1=None, data2=None, session=None):
         if session is None:
             session = self._controller.get_session()
         try:
             server_binding = session.query(ServerBinding).\
                                         filter(and_(ServerBinding.server_url == url, ServerBinding.remote_user == user_id)).\
                                         one()
-            server_event = ServerEvent(server_binding.local_folder, message, message_type = message_type, utc_time = utc_time)
+            server_event = ServerEvent(server_binding.local_folder, message, message_type, 
+                                       utc_time=utc_time, data1=data1, data2=data2)
             session.add(server_event)
             session.commit()
         except NoResultFound:
             pass
+
+

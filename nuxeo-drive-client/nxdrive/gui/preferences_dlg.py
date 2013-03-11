@@ -49,7 +49,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def __init__(self, frontend = None, parent = None):
         super(PreferencesDlg, self).__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
+        self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setWindowTitle('%s Preferences' % Constants.APP_NAME)
         self.tabWidget.setCurrentIndex(1)
         self.cbAutostart.setText(self.tr('Start automatically when starting this computer'))

@@ -20,7 +20,6 @@ from cookielib import CookieJar
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 
-from nxdrive import _
 from nxdrive.logging_config import get_logger
 from nxdrive.client.common import DEFAULT_IGNORED_PREFIXES
 from nxdrive.client.common import DEFAULT_IGNORED_SUFFIXES
@@ -75,9 +74,9 @@ class MaintenanceMode(Exception):
                 schedule = schedules['ScheduleItems'][0]
             else:
                 schedule = None
-            self.msg, self.detail = get_maintenance_message(status, schedule = schedule)
+            self.msg, self.detail, self.data1, self.data2 = get_maintenance_message(status, schedule = schedule)
         else:
-            self.msg, self.detail = get_maintenance_message('maintenance')
+            self.msg, self.detail, self.data1, self.data2 = get_maintenance_message('maintenance')
 
     def __str__(self):
         return '\n'.join((self.msg, self.detail))
@@ -363,10 +362,16 @@ class BaseAutomationClient(object):
         except urllib2.HTTPError as e:
             if e.code == 401 or e.code == 403:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
+            elif e.code == 503:
+                retry_after, schedules = self._check_maintenance_mode(e)
+                if retry_after > 0:
+                    raise MaintenanceMode(self.server_url, self.user_id, retry_after, schedules)
+                else:
+                    raise
             else:
                 self._log_details(e)
                 e.msg = base_error_message + _(": HTTP error %d") % e.code
-                raise e
+                raise
         except Exception as e:
             self._log_details(e)
             if hasattr(e, 'msg'):
@@ -831,6 +836,30 @@ class BaseAutomationClient(object):
             log.debug('error retrieving schedule: %s', str(e))
             return None
 
+    def _get_upgrade_info(self, server_binding):
+        from nxdrive._version import __version__
+        
+        params = {'appName': Constants.SHORT_APP_NAME,
+                  'currentVersion': __version__}
+        req = urllib2.Request(Constants.UPGRADE_SERVICE_URL + urlencode(params))
+        # --- BEGIN DEBUG ----
+        self.log_request(req)
+        # ---- END DEBUG -----
+
+        try:
+            resp = self.opener.open(req)
+            # extract the json payload as it is wrapped insode a <string><.string>!
+            data = resp.read()
+            # --- BEGIN DEBUG ----
+            self.log_response(resp, data)
+            # ---- END DEBUG -----
+            info = json.loads(data)
+            assert(info['AppName'] == Constants.SHORT_APP_NAME)
+            return info['CreationDate'], info['Version'], info['DownloadUrl']
+        except Exception, e:
+            log.debug('error retrieving upgrade version: %s', str(e))
+            return None, None, None
+        
     def _add_redirect_handler(self):
         my_redirect_handler = NoSIICARedirectHandler()
         my_redirect_handler.add_parent(self.opener)

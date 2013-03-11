@@ -57,7 +57,7 @@ def get_model(session, controller=None):
     item.setCheckable(False)
     item.setEnabled(False)
     item.setSelectable(False)
-    item.setIcon(QIcon(Constants.APP_ICON_ENABLED))
+    item.setIcon(QIcon(Constants.APP_ICON_DIALOG))
     item.setData(sync_folder.remote_id, ID_ROLE)
     rootItem.appendRow(item)
     add_subfolders(session, item, sync_folder.remote_id)

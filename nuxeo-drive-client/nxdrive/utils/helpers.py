@@ -63,6 +63,7 @@ def get_maintenance_message(status, schedule=None):
     if schedule is None and status == 'maintenance':
         msg = '%s is currently offline.' % Constants.SERVICE_NAME
         detail = 'Due to maintenance.'
+        data1 = data2 = None
     elif schedule is not None:
         service = schedule['Service']
         # get UTC times
@@ -73,8 +74,8 @@ def get_maintenance_message(status, schedule=None):
         to_tz = tz.tzlocal()
         start_utc = start_utc.replace(tzinfo = from_tz)
         end_utc = end_utc.replace(tzinfo = from_tz)
-        start_local = start_utc.astimezone(to_tz)
-        end_local = end_utc.astimezone(to_tz)
+        data1 = start_local = start_utc.astimezone(to_tz)
+        data2 = end_local = end_utc.astimezone(to_tz)
         if status == 'maintenance':
             msg = _("%s is currently offline.") % service                           
             detail = _("Due to maintenance from %s to %s.") %\
@@ -86,8 +87,8 @@ def get_maintenance_message(status, schedule=None):
         else:
             msg = detail = None       
     else:
-        msg = detail = None
-    return msg, detail
+        msg = detail = dat1 = data2 = None
+    return msg, detail, data1, data2
 
 def create_settings():
     QCoreApplication.setOrganizationDomain(Constants.COMPANY_NAME)

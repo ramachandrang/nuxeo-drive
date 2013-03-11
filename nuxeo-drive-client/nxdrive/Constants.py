@@ -4,7 +4,7 @@ Created on Oct 28, 2012
 @author: mconstantin
 '''
 import sys
-from nxdrive import _
+
 try:
     import _version
     __version__ = _version.__version__
@@ -39,6 +39,7 @@ DEFAULT_ACCOUNT = "user4@qt1.com"
 # DEFAULT_ACCOUNT = "user@shiro.com"
 SERVICE_NAME = 'Cloud Portal Office'
 MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
+UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json?'
 INTERNAL_HTTP_PORT = 63111
 
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
@@ -57,6 +58,7 @@ SERVICE_NOTIFICATION_INTERVAL = 6 * 3600  # six hours
 FDTOKEN_DURATION = 15 * 60
 SYNC_STATUS_STOP = 1
 SYNC_STATUS_START = 2
+APP_ICON_DIALOG = ':/icon_dlg.png'
 APP_ICON_ENABLED = ':/indicator_icon_enabled.png'
 APP_ICON_DISABLED = ':/indicator_icon_disabled.png'
 APP_ICON_PAUSED = ':/indicator_icon_paused.png'
@@ -76,15 +78,13 @@ if sys.platform == 'darwin':
     APP_IMG_WIZARD_APPBAR = ':/appbar.png'
     APP_IMG_WIZARD_FINAL = ':/final_page_darwin.png'
     APP_IMG_WIZARD_BKGRND = ':/bkgrnd.png'
-    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'
     APP_IMG_WIZARD_BANNER = ':/banner.png'
 elif sys.platform == 'win32':
     APP_IMG_WIZARD_FINDER_FOLDERS = ':/explorer_folders.png'
     APP_IMG_WIZARD_ACCESS_FILES = ':/access_files_win32.png'
     APP_IMG_WIZARD_APPBAR = ':/systray.png'
     APP_IMG_WIZARD_FINAL = ':/final_page_win32.png'
-    APP_IMG_WIZARD_BKGRND = ':/bkgrnd.png'
-    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'
+    APP_IMG_WIZARD_WATERMARK = ':/watermark.png'
     APP_IMG_WIZARD_BANNER = ':/banner.png'
 
 COPYRIGHT_FILE = r'nxdrive/data/CloudDesk_EULA.txt'
