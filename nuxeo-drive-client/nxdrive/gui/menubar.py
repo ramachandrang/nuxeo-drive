@@ -22,7 +22,7 @@ from PySide.QtCore import QTimer
 
 from sqlalchemy import func
 from sqlalchemy.sql.expression import asc, desc
-from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
 from nxdrive import Constants
 from nxdrive.async.operations import SyncOperations
@@ -972,7 +972,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 server_maint_event = session.query(ServerEvent).\
                                 filter(ServerEvent.local_folder == self.server_binding.local_folder).\
                                 filter(ServerEvent.message_type == 'maintenance').\
-                                order_by(desc(ServerEvent.utc_time)).one()
+                                order_by(desc(ServerEvent.utc_time)).first()
                 msg = server_maint_event.message
                 if self.binding_info.maintenance:
                     icon = QMessageBox.warning
@@ -1001,12 +1001,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 server_upgrade_event = session.query(ServerEvent).\
                                 filter(ServerEvent.local_folder == self.server_binding.local_folder).\
                                 filter(ServerEvent.message_type == 'upgrade').\
-                                order_by(desc(ServerEvent.utc_time)).one()
-                url = server_upgrade_event.data2
-                new = 2  # open in a new tab if possible
-                webbrowser.open(url, new = new)
-            except NoResultFound:
-                log.debug('no upgrade event available')
+                                order_by(desc(ServerEvent.utc_time)).first()
+                if server_upgrade_event is not None:
+                    url = server_upgrade_event.data2
+                    new = 2  # open in a new tab if possible
+                    webbrowser.open(url, new = new)
             except Exception, e:
                 log.debug("error retrieving client upgrade (%s)", e)
   
@@ -1019,12 +1018,18 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                            QtGui.QSystemTrayIcon.Information)
         
     def _is_new_version_available(self):
-        session = self.controller.get_session()
-        last_upgrade_event = session.query(ServerEvent).filter(ServerEvent.local_folder == self.local_folder).\
-                                        filter(ServerEvent.message_type == 'upgrade').\
-                                        order_by(desc(ServerEvent.utc_time)).one()
-        # upgrade event: data1 is the version, data2 is the download url
-        return _is_newer_version(last_upgrade_event.data1)
+        try:
+            session = self.controller.get_session()
+            last_upgrade_event = session.query(ServerEvent).filter(ServerEvent.local_folder == self.local_folder).\
+                                            filter(ServerEvent.message_type == 'upgrade').\
+                                            order_by(desc(ServerEvent.utc_time)).first()
+            # upgrade event: data1 is the version, data2 is the download url
+            if last_upgrade_event is not None:
+                return _is_newer_version(last_upgrade_event.data1)
+            else:
+                return False
+        except Exception, e:
+            log.debug("error retrieving upgrade version (%s)", e)
         
     def _handle_click_upgrade(self, info):
         self.show_upgrade_info()

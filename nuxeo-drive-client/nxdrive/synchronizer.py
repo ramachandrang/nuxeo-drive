@@ -1448,7 +1448,6 @@ class Synchronizer(object):
             if n_synchronized > 0 or self.loop_count == 0:
                 self._controller.update_storage_used(session = session)
 
-            self.fire_notifications(session = session)
             return n_synchronized
 
         except POSSIBLE_NETWORK_ERROR_TYPES as e:
@@ -1460,6 +1459,8 @@ class Synchronizer(object):
                 # extension can still be right)
                 self.scan_local(server_binding, session = session)
             return 0
+        finally:
+            self.fire_notifications(session = session)
 
     def _notify_refreshing(self, server_binding):
         """Notify the frontend that a remote scan is happening"""
@@ -1860,7 +1861,7 @@ class Synchronizer(object):
                 self.process_maintenance_schedule(sb, schedules = remote_client._get_maintenance_schedule(sb))
 
             if sb.nag_upgrade_schedule():
-                remote_client = self._controller.get_remote_client(sb)
+                remote_client = self._controller.get_remote_client(sb, skip_fetch_api=True)
                 creation_date, version, url = remote_client._get_upgrade_info(sb)
                 self.process_upgrade_schedule(sb, creation_date, version, url)
                 
@@ -1897,13 +1898,22 @@ class Synchronizer(object):
 
             # persist server event in the database
             if schedule is not None:
-                creation_date = datetime.strptime(schedule['CreationDate'], '%Y-%m-%dT%H:%M:%S.%fZ')
-                
+                creation_utc = schedule['CreationDate'] 
+                try:
+                    creation_utc = datetime.strptime(creation_utc, '%Y-%m-%dT%H:%M:%S.%fZ')
+                except ValueError:
+                    try:
+                        creation_utc = datetime.strptime(creation_utc, '%Y-%m-%dT%H:%M:%SZ')
+                    except ValueError:
+                        try:
+                            creation_utc = datetime.strptime(creation_utc, '%Y-%m-%d %H:%M:%S')
+                        except ValueError:
+                            pass
             else:
                 # uses current utc time
-                creation_date = None
+                creation_utc = datetime.utcnow()
             self.persist_server_event(sb, '%s\n%s' % (msg, detail), message_type='maintenance',
-                                              utc_time=creation_date, data1=data1, data2=data2, 
+                                              utc_time=creation_utc, data1=data1, data2=data2, 
                                               session=session)
             if self._frontend is not None:
                 if status == 'available' and sb.nag_maintenance_schedule():
@@ -1924,14 +1934,17 @@ class Synchronizer(object):
                 creation_utc = datetime.strptime(creation_utc, '%Y-%m-%dT%H:%M:%S.%fZ')
             except ValueError:
                 try:
-                    creation_utc = datetime.strptime(creation_utc, '%Y-%m-%d %H:%M:%S')
+                    creation_utc = datetime.strptime(creation_utc, '%Y-%m-%dT%H:%M:%SZ')
                 except ValueError:
-                    pass
+                    try:
+                        creation_utc = datetime.strptime(creation_utc, '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        pass
             # convert to local times
-            from_tz = tz.tzutc()
-            to_tz = tz.tzlocal()
-            creation_utc = creation_utc.replace(tzinfo = from_tz)
-            creation_local = creation_utc.astimezone(to_tz)
+#            from_tz = tz.tzutc()
+#            to_tz = tz.tzlocal()
+#            creation_utc = creation_utc.replace(tzinfo = from_tz)
+#            creation_local = creation_utc.astimezone(to_tz)
             main = _('An update is available for download')
             if sys.platform == 'win32':
                 detail = _('Click to go to download page')
@@ -1942,7 +1955,7 @@ class Synchronizer(object):
             msg = '%s\n%s' % (main, detail)
             
             self.persist_server_event(sb, msg, message_type='upgrade', 
-                                      utc_time=creation_local, 
+                                      utc_time=creation_utc, 
                                       data1=version, data2=url,
                                       session=session)
             if self._frontend is not None:

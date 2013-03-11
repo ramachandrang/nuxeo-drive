@@ -236,7 +236,8 @@ class BaseAutomationClient(object):
     def __init__(self, server_url, user_id, device_id,
                  password = None, token = None, repository = "default",
                  ignored_prefixes = None, ignored_suffixes = None,
-                 timeout = 60, blob_timeout = None):
+                 timeout = 60, blob_timeout = None, 
+                 skip_fetch_api=False):
         self.timeout = timeout
         self.blob_timeout = blob_timeout
         if ignored_prefixes is not None:
@@ -307,9 +308,9 @@ class BaseAutomationClient(object):
 #        handlers.append(HTTPHandler(debuglevel=1))
 #        handlers.append(HTTPSHandler(debuglevel=1))
         self.opener = urllib2.build_opener(*handlers)
-
-        self.automation_url = server_url + 'site/automation/'
-        self.fetch_api()
+        if not skip_fetch_api:
+            self.automation_url = server_url + 'site/automation/'
+            self.fetch_api()
 
     def log_request(self, req):
         if BaseAutomationClient._enable_trace:
@@ -838,10 +839,9 @@ class BaseAutomationClient(object):
 
     def _get_upgrade_info(self, server_binding):
         from nxdrive._version import __version__
-        
-        params = {'appName': Constants.SHORT_APP_NAME,
-                  'currentVersion': __version__}
-        req = urllib2.Request(Constants.UPGRADE_SERVICE_URL + urlencode(params))
+
+        url = Constants.UPGRADE_SERVICE_URL + Constants.SHORT_APP_NAME + '/' + __version__
+        req = urllib2.Request(url)
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
@@ -853,8 +853,13 @@ class BaseAutomationClient(object):
             # --- BEGIN DEBUG ----
             self.log_response(resp, data)
             # ---- END DEBUG -----
+            # NOTE Workaround this response which is supposed to be JSON but it looks like this
+            # <?xml version="1.0" encoding="utf-8"?><string>...json data...</string>
+            # and the Content-Type is 'application/xml'
+            data = data.partition('<string>')[2]
+            data = data.rpartition('</string')[0]
             info = json.loads(data)
-            assert(info['AppName'] == Constants.SHORT_APP_NAME)
+            assert(info['AppName'].lower() == Constants.SHORT_APP_NAME.lower())
             return info['CreationDate'], info['Version'], info['DownloadUrl']
         except Exception, e:
             log.debug('error retrieving upgrade version: %s', str(e))

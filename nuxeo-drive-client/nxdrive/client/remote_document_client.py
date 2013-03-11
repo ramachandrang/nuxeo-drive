@@ -70,11 +70,12 @@ class RemoteDocumentClient(BaseAutomationClient):
     def __init__(self, server_url, user_id, device_id,
                  password=None, token=None, repository="default",
                  ignored_prefixes=None, ignored_suffixes=None,
-                 base_folder=None, timeout=60, blob_timeout=None):
+                 base_folder=None, timeout=60, blob_timeout=None,
+                 skip_fetch_api=False):
         super(RemoteDocumentClient, self).__init__(
             server_url, user_id, device_id, password, token, repository,
             ignored_prefixes, ignored_suffixes, timeout=timeout,
-            blob_timeout=blob_timeout)
+            blob_timeout=blob_timeout, skip_fetch_api=skip_fetch_api)
 
         # fetch the root folder ref
         self.base_folder = base_folder

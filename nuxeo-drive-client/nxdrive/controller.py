@@ -689,7 +689,7 @@ class Controller(object):
         return remote_client
 
     def get_remote_doc_client(self, server_binding, repository='default',
-                              base_folder=None):
+                              base_folder=None, skip_fetch_api=False):
         """Return an instance of Nuxeo Document Client"""
         # NOTE: this fails against standard Nuxeo server
         # It was added to workaround permission error (http 401) against CloudDesk
@@ -700,13 +700,13 @@ class Controller(object):
             sb.server_url, sb.remote_user, self.device_id,
             token=sb.remote_token, password=sb.remote_password,
             repository=repository, base_folder=base_folder,
-            timeout=self.timeout)
+            timeout=self.timeout, skip_fetch_api=skip_fetch_api)
 
     def get_remote_client(self, server_binding, repository='default',
-                          base_folder=None):
+                          base_folder=None, skip_fetch_api=False):
         # Backward compat
         return self.get_remote_doc_client(server_binding,
-            repository=repository, base_folder=base_folder)
+            repository=repository, base_folder=base_folder, skip_fetch_api=skip_fetch_api)
 
     def invalidate_client_cache(self, server_url):
         cache = self._get_client_cache()

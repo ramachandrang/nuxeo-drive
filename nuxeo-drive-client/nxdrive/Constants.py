@@ -38,8 +38,10 @@ DEFAULT_ACCOUNT = "user4@qt1.com"
 # DEFAULT_CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
 # DEFAULT_ACCOUNT = "user@shiro.com"
 SERVICE_NAME = 'Cloud Portal Office'
-MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
-UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json?'
+#MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
+MAINTENANCE_SERVICE_URL = r'https://qa-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/qadm.sharpb2bcloud.com'
+#UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
+UPGRADE_SERVICE_URL = r'http://HBDISDLW7.enet.sharplabs.com/Maintenance/SoftwareUpdates.svc/json/'
 INTERNAL_HTTP_PORT = 63111
 
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
