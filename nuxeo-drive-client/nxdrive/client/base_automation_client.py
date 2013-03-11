@@ -840,7 +840,7 @@ class BaseAutomationClient(object):
     def _get_upgrade_info(self, server_binding):
         from nxdrive._version import __version__
 
-        url = Constants.UPGRADE_SERVICE_URL + Constants.SHORT_APP_NAME + '/' + __version__
+        url = Constants.UPGRADE_SERVICE_URL + Constants.SHORT_APP_NAME + '/' + __version__ + '/' + sys.platform
         req = urllib2.Request(url)
         # --- BEGIN DEBUG ----
         self.log_request(req)
