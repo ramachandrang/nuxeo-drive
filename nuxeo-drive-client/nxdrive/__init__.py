@@ -1,7 +1,4 @@
-#from gettext import NullTranslations
-#
-#t = NullTranslations()
-#_ = t.lgettext
+"""Setup i18n"""
 
 import gettext
 gettext.install('cpodesktop')
