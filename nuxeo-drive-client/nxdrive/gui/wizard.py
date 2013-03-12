@@ -178,11 +178,13 @@ class CpoWizard(QWizard):
         settings.setValue('preferences/log', True)
         # change wizard mode to false (start as app)
         settings.setValue('wizard', False)
-
+        # save settings now
+        settings.sync()
         launch = self.field('launch')
         if launch:
             exe_path = find_exe_path()
             script, ext = os.path.splitext(exe_path)
+            params = ['gui', '--start']
 #            if exe_path is not None:
 #                subprocess.Popen([exe_path])
 #            else:
@@ -192,9 +194,11 @@ class CpoWizard(QWizard):
 #                subprocess.Popen([python, script, 'gui'])
             if ext == '.py':
                 python = sys.executable
-                subprocess.Popen([python, exe_path, '--start'])
+                subprocess.Popen([python, exe_path] + params)
+                log.debug('launching %s %s %s', python, exe_path, ' '.join(params))
             else:
-                subprocess.Popen([exe_path, '--start'])
+                subprocess.Popen([exe_path] + params)
+                log.debug('launching %s %s', exe_path, ' '.join(params))
 
         return super(CpoWizard, self).accept()
 

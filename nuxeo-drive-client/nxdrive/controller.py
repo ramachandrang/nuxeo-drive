@@ -17,7 +17,7 @@ from datetime import timedelta
 from threading import local
 from threading import Thread
 import logging
-        
+
 import nxdrive
 from nxdrive.client import LocalClient
 from nxdrive.client import RemoteFileSystemClient
@@ -171,7 +171,7 @@ class Controller(object):
         # not exactly a singleton
         return Controller.__instance
 
-    def __init__(self, config_folder, echo=None, poolclass=None, timeout=20):
+    def __init__(self, config_folder, echo = None, poolclass = None, timeout = 20):
 
         if Controller.__instance:
             raise Controller.__instance
@@ -195,7 +195,7 @@ class Controller(object):
         # Handle connection to the local Nuxeo Drive configuration and
         # metadata sqlite database.
         self._engine, self._session_maker = init_db(
-            self.config_folder, echo=echo, poolclass=poolclass)
+            self.config_folder, echo = echo, poolclass = poolclass)
         self._local = local()
         self._remote_error = None
         self.device_id = self.get_device_config().device_id
@@ -241,6 +241,13 @@ class Controller(object):
 
         """
         pid = self.synchronizer.check_running(process_name = "sync")
+        if pid is None:
+            # this could happen if the nxdrive_sync.pid file is in use
+            # and the pid could not be written into it at startup
+            # TODO Assume there is this process running, investigate...
+            log.info("No running synchronization process to stop.")
+            pid = os.getpid()
+
         if pid is not None:
             # Create a stop file marker for the running synchronization
             # process
@@ -248,7 +255,7 @@ class Controller(object):
             stop_file = os.path.join(self.config_folder, "stop_%d" % pid)
             open(safe_long_path(stop_file), 'wb').close()
         else:
-            log.info("No running synchronization process to stop.")
+            log.info("Failed to get process id, app will not quit.")
 
     def children_states(self, folder_path):
         """List the status of the children of a folder
@@ -261,14 +268,14 @@ class Controller(object):
         session = self.get_session()
         # Find the server binding for this absolute path
         try:
-            binding, path = self._binding_path(folder_path, session=session)
+            binding, path = self._binding_path(folder_path, session = session)
         except NotFound:
             return []
 
         try:
             folder_state = session.query(LastKnownState).filter_by(
-                local_folder=binding.local_folder,
-                local_path=path,
+                local_folder = binding.local_folder,
+                local_path = path,
             ).one()
         except NoResultFound:
             return []
@@ -298,7 +305,7 @@ class Controller(object):
                              " should be not None.") % doc_pair)
 
         children_states = session.query(LastKnownState).filter_by(
-            local_folder=doc_pair.local_folder).filter(f).order_by(
+            local_folder = doc_pair.local_folder).filter(f).order_by(
                 asc(LastKnownState.local_name),
                 asc(LastKnownState.remote_name),
             ).all()
@@ -318,13 +325,13 @@ class Controller(object):
         # Pre-pend the folder state to the descendants
         return [(doc_pair, pair_state)] + results
 
-    def _binding_path(self, local_path, session=None):
+    def _binding_path(self, local_path, session = None):
         """Find a server binding and relative path for a given FS path"""
         local_path = normalized_path(local_path)
 
         # Check exact binding match
-        binding = self.get_server_binding(local_path, session=session,
-            raise_if_missing=False)
+        binding = self.get_server_binding(local_path, session = session,
+            raise_if_missing = False)
         if binding is not None:
             return binding, '/'
 
@@ -359,7 +366,7 @@ class Controller(object):
                 server_binding = session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
             return server_binding
-        
+
         except NoResultFound:
             if raise_if_missing:
                 raise RuntimeError(
@@ -413,10 +420,10 @@ class Controller(object):
             log.info("Binding '%s' to '%s' with account '%s'",
                      local_folder, server_url, username)
             server_binding = ServerBinding(local_folder, server_url, username,
-                                           remote_password=password,
-                                           remote_token=token)
+                                           remote_password = password,
+                                           remote_token = token)
             session.add(server_binding)
-            
+
             # ignore if this fails
             try:
                 self.update_server_storage_used(server_url, username, session = session)
@@ -431,10 +438,10 @@ class Controller(object):
             remote_info = remote_client.get_filesystem_root_info()
 
             state = LastKnownState(server_binding.local_folder,
-                                   local_info=local_info,
-                                   local_state='synchronized',
-                                   remote_info=remote_info,
-                                   remote_state='synchronized')
+                                   local_info = local_info,
+                                   local_state = 'synchronized',
+                                   remote_info = remote_info,
+                                   remote_state = 'synchronized')
             session.add(state)
             session.commit()
             return server_binding
@@ -587,8 +594,8 @@ class Controller(object):
 
         return fdtoken
 
-    def bind_root(self, local_folder, remote_ref, repository='default',
-                  session=None):
+    def bind_root(self, local_folder, remote_ref, repository = 'default',
+                  session = None):
         """Bind local root to a remote root (folderish document in Nuxeo).
 
         local_folder must be already bound to an existing Nuxeo server.
@@ -600,29 +607,29 @@ class Controller(object):
         session = self.get_session() if session is None else session
         local_folder = normalized_path(local_folder)
         server_binding = self.get_server_binding(
-            local_folder, raise_if_missing=True, session=session)
+            local_folder, raise_if_missing = True, session = session)
 
         nxclient = self.get_remote_doc_client(server_binding,
-            repository=repository)
+            repository = repository)
 
         # Register the root on the server
         nxclient.register_as_root(remote_ref)
 
-    def unbind_root(self, local_folder, remote_ref, repository='default',
-                    session=None):
+    def unbind_root(self, local_folder, remote_ref, repository = 'default',
+                    session = None):
         """Remove binding to remote folder"""
         session = self.get_session() if session is None else session
         server_binding = self.get_server_binding(
-            local_folder, raise_if_missing=True, session=session)
+            local_folder, raise_if_missing = True, session = session)
 
         nxclient = self.get_remote_doc_client(server_binding,
-            repository=repository)
+            repository = repository)
 
         # Unregister the root on the server
         nxclient.unregister_as_root(remote_ref)
 
-    def list_pending(self, limit=100, local_folder=None, ignore_in_error=None,
-                     session=None):
+    def list_pending(self, limit = 100, local_folder = None, ignore_in_error = None,
+                     session = None):
         """List pending files to synchronize, ordered by path
 
         Ordering by path makes it possible to synchronize sub folders content
@@ -639,7 +646,7 @@ class Controller(object):
             predicates.append(LastKnownState.local_folder == local_folder)
 
         if ignore_in_error is not None and ignore_in_error > 0:
-            max_date = datetime.utcnow() - timedelta(seconds=ignore_in_error)
+            max_date = datetime.utcnow() - timedelta(seconds = ignore_in_error)
             predicates.append(or_(
                 LastKnownState.last_sync_error_date == None,
                 LastKnownState.last_sync_error_date < max_date))
@@ -659,10 +666,10 @@ class Controller(object):
             asc(LastKnownState.remote_ref)
         ).limit(limit).all()
 
-    def next_pending(self, local_folder=None, session=None):
+    def next_pending(self, local_folder = None, session = None):
         """Return the next pending file to synchronize or None"""
-        pending = self.list_pending(limit=1, local_folder=local_folder,
-                                    session=session)
+        pending = self.list_pending(limit = 1, local_folder = local_folder,
+                                    session = session)
         return pending[0] if len(pending) > 0 else None
 
     def _get_client_cache(self):
@@ -680,16 +687,16 @@ class Controller(object):
         if remote_client is None:
             remote_client = self.remote_fs_client_factory(
                 sb.server_url, sb.remote_user, self.device_id,
-                token=sb.remote_token, password=sb.remote_password,
-                timeout=self.timeout)
+                token = sb.remote_token, password = sb.remote_password,
+                timeout = self.timeout)
             cache[cache_key] = remote_client
         # Make it possible to have the remote client simulate any kind of
         # failure
         remote_client.make_raise(self._remote_error)
         return remote_client
 
-    def get_remote_doc_client(self, server_binding, repository='default',
-                              base_folder=None, skip_fetch_api=False):
+    def get_remote_doc_client(self, server_binding, repository = 'default',
+                              base_folder = None, skip_fetch_api = False):
         """Return an instance of Nuxeo Document Client"""
         # NOTE: this fails against standard Nuxeo server
         # It was added to workaround permission error (http 401) against CloudDesk
@@ -698,15 +705,15 @@ class Controller(object):
         sb = server_binding
         return self.remote_doc_client_factory(
             sb.server_url, sb.remote_user, self.device_id,
-            token=sb.remote_token, password=sb.remote_password,
-            repository=repository, base_folder=base_folder,
-            timeout=self.timeout, skip_fetch_api=skip_fetch_api)
+            token = sb.remote_token, password = sb.remote_password,
+            repository = repository, base_folder = base_folder,
+            timeout = self.timeout, skip_fetch_api = skip_fetch_api)
 
-    def get_remote_client(self, server_binding, repository='default',
-                          base_folder=None, skip_fetch_api=False):
+    def get_remote_client(self, server_binding, repository = 'default',
+                          base_folder = None, skip_fetch_api = False):
         # Backward compat
         return self.get_remote_doc_client(server_binding,
-            repository=repository, base_folder=base_folder, skip_fetch_api=skip_fetch_api)
+            repository = repository, base_folder = base_folder, skip_fetch_api = skip_fetch_api)
 
     def invalidate_client_cache(self, server_url):
         cache = self._get_client_cache()
@@ -718,16 +725,16 @@ class Controller(object):
         if self.mydocs_folder is None:
             if session is None:
                 session = self.get_session()
-    
+
             try:
                 mydocs = session.query(SyncFolders).\
                     filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
                 self.mydocs_folder = mydocs.remote_id
             except NoResultFound:
                 self.mydocs_folder = None
-                
+
         return self.mydocs_folder
-    
+
     def _log_offline(self, exception, context):
         if isinstance(exception, urllib2.HTTPError):
             msg = (_("Client offline in %s: HTTP error with code %d")
@@ -753,9 +760,9 @@ class Controller(object):
     def get_state_for_local_path(self, local_os_path):
         """Find a DB state from a local filesystem path"""
         session = self.get_session()
-        sb, local_path = self._binding_path(local_os_path, session=session)
+        sb, local_path = self._binding_path(local_os_path, session = session)
         return session.query(LastKnownState).filter_by(
-            local_folder=sb.local_folder, local_path=local_path).one()
+            local_folder = sb.local_folder, local_path = local_path).one()
 
     def recover_from_invalid_credentials(self, server_binding, exception, session = None):
         code = getattr(exception, 'code', None)
@@ -866,7 +873,7 @@ class Controller(object):
                 break
 
         return (0, 0)
-        
+
     def get_storage(self, server_binding):
         try:
             used, total = server_binding.used_storage, server_binding.total_storage
@@ -876,37 +883,37 @@ class Controller(object):
                 return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
         except KeyError:
             return None
-        
+
     def enable_trace(self, state):
         BaseAutomationClient._enable_trace = state
 
     def start_status_thread(self):
         if self.status_thread is None or not self.status_thread.isAlive():
             self.http_server = HttpServer(Constants.INTERNAL_HTTP_PORT, self.sync_status_app)
-            self.status_thread = Thread(target=http_server_loop,
-                                      args=(self.http_server,))
+            self.status_thread = Thread(target = http_server_loop,
+                                      args = (self.http_server,))
             self.status_thread.start()
-            
+
     def stop_status_thread(self):
         if self.http_server:
             self.http_server.stop()
-        
+
     def sync_status_app(self, environ, start_response):
         import json
         from cgi import parse_qs, escape
-        
+
         # Returns a dictionary containing lists as values.
         d = parse_qs(environ['QUERY_STRING'])
         # select the first state
         state = d.get('state', [''])[0]
         folders = d.get('folder', [])
-        
+
         # Always escape user input to avoid script injection
         state = escape(state)
         folders = [escape(folder) for folder in folders]
-        
+
         status = '200 OK'
-        
+
         # response is json in the following format:
         # { "list": ["folder" : {"name": "/users/bob/loud portal office desktop/My Docs/work",
         #                         "files": ["foo.txt",
@@ -920,11 +927,11 @@ class Controller(object):
         #                        }
         #            ]
         # }
-            
+
         json_struct = { 'list': {}}
         folder_list = []
         for folder in folders:
-            
+
             folder_struct = {}
             folder_struct['name'] = folder
             states = self.children_states(folder)
@@ -939,22 +946,22 @@ class Controller(object):
             folder_struct['files'] = files
             folder_list.append({'folder': folder_struct})
         json_struct['list'] = folder_list
-            
-        response_body = json.dumps(json_struct)        
+
+        response_body = json.dumps(json_struct)
         http_status = '200 OK'
         response_headers = [('Content-Type', 'application/json'),
                             ('Content-Length', str(len(response_body)))]
-        
+
         start_response(http_status, response_headers)
         return [response_body]
 
     def reset_proxy(self):
         BaseAutomationClient.set_proxy()
-        
+
     def setProxy(self):
         BaseAutomationClient.set_proxy(ProxyInfo.get_proxy())
-        
+
     def proxy_changed(self):
         return BaseAutomationClient.get_proxy() != ProxyInfo.get_proxy()
-        
-        
+
+
