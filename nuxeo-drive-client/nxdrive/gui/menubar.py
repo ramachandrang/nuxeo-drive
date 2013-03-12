@@ -35,6 +35,7 @@ from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import create_settings
+from nxdrive.utils import find_exe_path
 from nxdrive.model import RecentFiles
 from nxdrive.model import ServerEvent
 from nxdrive.gui.proxy_dlg import ProxyDlg
@@ -278,7 +279,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox = QMessageBox()
         msgbox.setText(self.tr("About %s") % Constants.APP_NAME)
         msgbox.setStandardButtons(QMessageBox.Ok)
-        msgbox.setInformativeText(self.tr("""version<b>%s</b>
+        msgbox.setInformativeText(self.tr("""version<b> %s</b>
                 <p>Copyright &copy; 2012 SHARP CORPORATION
                 All Rights Reserved.
                 <p>Platform Details: %s</p>
@@ -288,7 +289,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                             platform.python_version(), PySide.__version__, QtCore.__version__))
         icon = QIcon(Constants.APP_ICON_ABOUT)
         msgbox.setIconPixmap(icon.pixmap(48, 48))
-        msgbox.setDetailedText(open(Constants.COPYRIGHT_FILE).read())
+        path = os.path.split(find_exe_path())[0]
+        msgbox.setDetailedText(open(os.path.join(path, Constants.COPYRIGHT_FILE)).read())
         msgbox.setDefaultButton(QMessageBox.Ok)
         msgbox.exec_()
 

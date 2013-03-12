@@ -185,13 +185,6 @@ class CpoWizard(QWizard):
             exe_path = find_exe_path()
             script, ext = os.path.splitext(exe_path)
             params = ['gui', '--start']
-#            if exe_path is not None:
-#                subprocess.Popen([exe_path])
-#            else:
-#                base = os.path.split(os.path.split(__file__)[0])[0]
-#                script = os.path.join(base, 'commandline.py')
-#                python = sys.executable
-#                subprocess.Popen([python, script, 'gui'])
             if ext == '.py':
                 python = sys.executable
                 subprocess.Popen([python, exe_path] + params)

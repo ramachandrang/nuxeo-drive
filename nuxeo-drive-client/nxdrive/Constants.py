@@ -38,9 +38,9 @@ DEFAULT_ACCOUNT = "user4@qt1.com"
 # DEFAULT_CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
 # DEFAULT_ACCOUNT = "user@shiro.com"
 SERVICE_NAME = 'Cloud Portal Office'
-#MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
+# MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
 MAINTENANCE_SERVICE_URL = r'https://qa-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/qadm.sharpb2bcloud.com'
-#UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
+# UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
 UPGRADE_SERVICE_URL = r'http://HBDISDLW7.enet.sharplabs.com/Maintenance/SoftwareUpdates.svc/json/'
 INTERNAL_HTTP_PORT = 63111
 
@@ -89,7 +89,7 @@ elif sys.platform == 'win32':
     APP_IMG_WIZARD_WATERMARK = ':/watermark.png'
     APP_IMG_WIZARD_BANNER = ':/banner.png'
 
-COPYRIGHT_FILE = r'nxdrive/data/CloudDesk_EULA.txt'
+COPYRIGHT_FILE = r'data/CloudDesk_EULA.txt'
 ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
 ICON_APP_ENABLED = R'nuxeo_drive_icon_16_enabled.png'
 ICON_APP_DISABLED = R'nuxeo_drive_icon_16_disabled.png'
