@@ -1504,7 +1504,7 @@ class Synchronizer(object):
             server_binding.update_server_maintenance_status(e.retry_after)
             self.persist_server_event2(e.url, e.user_id, str(e), 'maintenance', session = session)
             if self._frontend is not None:
-                self._frontend.notify_maintenance_mode(e.msg, e.detail)
+                self._frontend.notify_maintenance_mode(server_binding.local_folder, e.msg, e.detail)
             return False
 
         elif isinstance(e, QuotaExceeded):

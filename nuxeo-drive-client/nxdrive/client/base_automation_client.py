@@ -28,6 +28,7 @@ from nxdrive.utils import classproperty
 from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.utils import get_maintenance_message
 from nxdrive import Constants
+from nxdrive import DEBUG, DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION
 
 log = get_logger(__name__)
 
@@ -428,17 +429,18 @@ class BaseAutomationClient(object):
         try:
             resp = self.opener.open(req, timeout = timeout)
             # --- BEGIN DEBUG ----
-#            from StringIO import StringIO
-#            msg = '{"Status": "maintenance", "ScheduleItems": [\
-#                    {"CreationDate": "2013-02-15T09:50:22.001",\
-#                     "Target": "qadm.sharpb2bcloud.com",\
-#                     "Service": "Cloud Portal Service",\
-#                     "FromDate": "2013-02-16T23:00:00Z",\
-#                     "ToDate": "2013-02-17T03:00:00Z"\
-#                    }]\
-#                    }'
-#            fp = StringIO(msg)
-#            raise urllib2.HTTPError(url, 503, "service unavailable", None, fp)
+            if DEBUG_MAINTENANCE_EXCEPTION:
+                from StringIO import StringIO
+                msg = '{"Status": "maintenance", "ScheduleItems": [\
+                        {"CreationDate": "2013-02-15T09:50:22.001",\
+                         "Target": "qadm.sharpb2bcloud.com",\
+                         "Service": "Cloud Portal Service",\
+                         "FromDate": "2013-02-16T23:00:00Z",\
+                         "ToDate": "2013-02-17T03:00:00Z"\
+                        }]\
+                        }'
+                fp = StringIO(msg)
+                raise urllib2.HTTPError(url, 503, "service unavailable", None, fp)
             # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             # NOTE cannot rewind the error stream from maintenance server!
@@ -562,15 +564,16 @@ class BaseAutomationClient(object):
         try:
             resp = self.opener.open(req, timeout = self.blob_timeout)
             # --- BEGIN DEBUG ----
-#            from StringIO import StringIO
-#            msg = '{ "entity-type": "exception",\
-#                    "type":"com.sharplabs.clouddesk.operations.StorageExceededException",\
-#                    "status": "500",\
-#                    "message": "Failed to execute operation: StorageUsed.Get",\
-#                    "stack": ""\
-#                }'
-#            fp = StringIO(msg)
-#            raise urllib2.HTTPError(url, 500, "internal server error", None, fp)
+            if DEBUG_QUOTA_EXCEPTION:
+                from StringIO import StringIO
+                msg = '{ "entity-type": "exception",\
+                        "type":"com.sharplabs.clouddesk.operations.StorageExceededException",\
+                        "status": "500",\
+                        "message": "Failed to execute operation: StorageUsed.Get",\
+                        "stack": ""\
+                    }'
+                fp = StringIO(msg)
+                raise urllib2.HTTPError(url, 500, "internal server error", None, fp)
             # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             self._log_details(e)
