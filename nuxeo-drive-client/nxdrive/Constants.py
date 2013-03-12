@@ -4,13 +4,13 @@ Created on Oct 28, 2012
 @author: mconstantin
 '''
 import sys
+from nxdrive import USE_LOCAL_SERVICE, DEBUG
 
 try:
     import _version
     __version__ = _version.__version__
 except ImportError:
     __version__ = '0.0.0.0'
-
 
 COMPANY_NAME = 'Sharp'
 PRODUCT_NAME = _('Cloud Portal Office')
@@ -38,12 +38,16 @@ DEFAULT_ACCOUNT = "user4@qt1.com"
 # DEFAULT_CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
 # DEFAULT_ACCOUNT = "user@shiro.com"
 SERVICE_NAME = 'Cloud Portal Office'
-#MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
-MAINTENANCE_SERVICE_URL = r'https://qa-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/qadm.sharpb2bcloud.com'
-#UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
-UPGRADE_SERVICE_URL = r'http://HBDISDLW7.enet.sharplabs.com/Maintenance/SoftwareUpdates.svc/json/'
-INTERNAL_HTTP_PORT = 63111
 
+if USE_LOCAL_SERVICE:
+    MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
+    UPGRADE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/SoftwareUpdates.svc/json/'
+    #UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
+else:
+    MAINTENANCE_SERVICE_URL = r'https://qa-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
+    UPGRADE_SERVICE_URL = r'https://qa-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
+
+INTERNAL_HTTP_PORT = 63111
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
 MY_DOCS = 'My Docs'
 OTHERS_DOCS = 'Others Docs'
