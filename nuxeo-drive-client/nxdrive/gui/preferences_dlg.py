@@ -180,20 +180,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         app = QApplication.instance()
         process_filter = EventFilter(self)
 
-#        app.setOverrideCursor(Qt.WaitCursor)
-#        self.installEventFilter(process_filter)
-#        try:
-#            # retrieve folders
-#            self.controller.synchronizer.get_folders()
-#            self.controller.synchronizer.update_roots(self.server_binding)
-#
-#        except Exception as e:
-#            log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
-#
-#        finally:
-#            app.restoreOverrideCursor()
-#            self.removeEventFilter(process_filter)
-
         dlg = SyncFoldersDlg(frontend = self.frontend)
         if dlg.exec_() == QDialog.Rejected:
             return
@@ -355,9 +341,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                         self.server_binding.server_url,
                         self.server_binding.remote_user,
                         self.server_binding.remote_password)
-
-#                    self.controller.synchronizer.get_folders()
-#                    self.controller.synchronizer.update_roots(self.server_binding)
 
             except Exception as ex:
                 log.debug("failed to bind or unbind: %s", str(ex))

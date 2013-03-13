@@ -27,7 +27,7 @@ MAX_CHILDREN = 1000
 BaseNuxeoDocumentInfo = namedtuple('NuxeoDocumentInfo', [
     'root',  # ref of the document that serves as sync root
     'name',  # title of the document (not guaranteed to be locally unique)
-    'uid',   # ref of the document
+    'uid',  # ref of the document
     'parent_uid',  # ref of the parent document
     'path',  # remote path (useful for ordering)
     'folderish',  # True is can host child documents
@@ -45,18 +45,6 @@ class NuxeoDocumentInfo(BaseNuxeoDocumentInfo):
     def get_digest(self):
         return self.digest
 
-class FolderInfo(object):
-    """Folder node for retrieving folder hierarchy"""
-
-    def __init__(self, docId, title, parentId):
-        self.docId = docId
-        self.title = title
-        self.parentId = parentId
-
-    def __str__(self):
-        return "folder '%s', docId=%s, parentId=%s" % (self.title, self.docId, self.parentId)
-    
-    
 class RemoteDocumentClient(BaseAutomationClient):
     """Nuxeo document oriented Automation client
 
@@ -68,14 +56,13 @@ class RemoteDocumentClient(BaseAutomationClient):
     # Override constructor to initialize base folder
     # which is specific to RemoteDocumentClient
     def __init__(self, server_url, user_id, device_id,
-                 password=None, token=None, repository="default",
-                 ignored_prefixes=None, ignored_suffixes=None,
-                 base_folder=None, timeout=60, blob_timeout=None,
-                 skip_fetch_api=False):
+                 password = None, token = None, repository = "default",
+                 ignored_prefixes = None, ignored_suffixes = None,
+                 base_folder = None, timeout = 60, blob_timeout = None):
         super(RemoteDocumentClient, self).__init__(
             server_url, user_id, device_id, password, token, repository,
-            ignored_prefixes, ignored_suffixes, timeout=timeout,
-            blob_timeout=blob_timeout, skip_fetch_api=skip_fetch_api)
+            ignored_prefixes, ignored_suffixes, timeout = timeout,
+            blob_timeout = blob_timeout)
 
         # fetch the root folder ref
         self.base_folder = base_folder
@@ -91,21 +78,21 @@ class RemoteDocumentClient(BaseAutomationClient):
     # API common with the local client API
     #
 
-    def get_info(self, ref, raise_if_missing=True, fetch_parent_uid=True,
-                 use_trash=True):
-        if not self.exists(ref, use_trash=use_trash):
+    def get_info(self, ref, raise_if_missing = True, fetch_parent_uid = True,
+                 use_trash = True):
+        if not self.exists(ref, use_trash = use_trash):
             if raise_if_missing:
                 raise NotFound(_("Could not find '%s' on '%s'") % (
                     self._check_ref(ref), self.server_url))
             return None
         return self._doc_to_info(self.fetch(self._check_ref(ref)),
-                                 fetch_parent_uid=fetch_parent_uid)
+                                 fetch_parent_uid = fetch_parent_uid)
 
     def get_content(self, ref):
         ref = self._check_ref(ref)
         return self.get_blob(ref)
 
-    def get_children_info(self, ref, types=DEFAULT_TYPES, limit=MAX_CHILDREN):
+    def get_children_info(self, ref, types = DEFAULT_TYPES, limit = MAX_CHILDREN):
         ref = self._check_ref(ref)
         query = (
             "SELECT * FROM Document"
@@ -125,45 +112,45 @@ class RemoteDocumentClient(BaseAutomationClient):
 
         return self._filtered_results(entries)
 
-    def make_folder(self, parent, name, doc_type=FOLDER_TYPE):
+    def make_folder(self, parent, name, doc_type = FOLDER_TYPE):
         # TODO: make it possible to configure context dependent:
         # - SocialFolder under SocialFolder or SocialWorkspace
         # - Folder under Folder or Workspace
         # This configuration should be provided by a special operation on the
         # server.
         parent = self._check_ref(parent)
-        doc = self.create(parent, doc_type, name=name,
-                    properties={'dc:title': name})
+        doc = self.create(parent, doc_type, name = name,
+                    properties = {'dc:title': name})
         return doc[u'uid']
 
-    def make_file(self, parent, name, content=None, doc_type=FILE_TYPE):
+    def make_file(self, parent, name, content = None, doc_type = FILE_TYPE):
         parent = self._check_ref(parent)
-        doc = self.create(parent, FILE_TYPE, name=name,
-                          properties={'dc:title': name})
+        doc = self.create(parent, FILE_TYPE, name = name,
+                          properties = {'dc:title': name})
         ref = doc[u'uid']
         if content is not None:
             self.attach_blob(ref, content, name)
         return ref
 
-    def update_content(self, ref, content, name=None):
+    def update_content(self, ref, content, name = None):
         if name is None:
             name = self.get_info(ref).name
         self.attach_blob(self._check_ref(ref), content, name)
 
-    def delete(self, ref, use_trash=True):
+    def delete(self, ref, use_trash = True):
         input = "doc:" + self._check_ref(ref)
         if use_trash:
             try:
-                return self.execute("Document.SetLifeCycle", input=input,
-                                     value='delete')
+                return self.execute("Document.SetLifeCycle", input = input,
+                                     value = 'delete')
             except urllib2.HTTPError as e:
                 if e.code == 500:
-                    return self.execute("Document.Delete", input=input)
+                    return self.execute("Document.Delete", input = input)
                 raise
         else:
-            return self.execute("Document.Delete", input=input)
+            return self.execute("Document.Delete", input = input)
 
-    def exists(self, ref, use_trash=True):
+    def exists(self, ref, use_trash = True):
         ref = self._check_ref(ref)
         id_prop = 'ecm:path' if ref.startswith('/') else 'ecm:uuid'
         if use_trash:
@@ -193,7 +180,7 @@ class RemoteDocumentClient(BaseAutomationClient):
                 ref = self._base_folder_path + ref
         return ref
 
-    def _doc_to_info(self, doc, fetch_parent_uid=True, parent_uid=None):
+    def _doc_to_info(self, doc, fetch_parent_uid = True, parent_uid = None):
         """Convert Automation document description to NuxeoDocumentInfo"""
         props = doc['properties']
         folderish = 'Folderish' in doc['facets']
@@ -219,7 +206,7 @@ class RemoteDocumentClient(BaseAutomationClient):
                 digest = blob.get('digest')
 
         # XXX: we need another roundtrip just to fetch the parent uid...
-        
+
         if parent_uid is None and fetch_parent_uid:
             parent_uid = self.fetch(os.path.dirname(doc['path']))['uid']
 
@@ -231,14 +218,14 @@ class RemoteDocumentClient(BaseAutomationClient):
             self._base_folder_ref, name, doc['uid'], parent_uid,
             doc['path'], folderish, last_update, digest, self.repository,
             doc['type'])
-    
-    def _filtered_results(self, entries, fetch_parent_uid=True,
-                          parent_uid=None):
+
+    def _filtered_results(self, entries, fetch_parent_uid = True,
+                          parent_uid = None):
         # Filter out filenames that would be ignored by the file system client
         # so as to be consistent.
         filtered = []
-        for info in [self._doc_to_info(d, fetch_parent_uid=fetch_parent_uid,
-                                       parent_uid=parent_uid)
+        for info in [self._doc_to_info(d, fetch_parent_uid = fetch_parent_uid,
+                                       parent_uid = parent_uid)
                      for d in entries]:
             ignore = False
 
@@ -263,61 +250,61 @@ class RemoteDocumentClient(BaseAutomationClient):
 
     # Document category
 
-    def create(self, ref, type, name=None, properties=None):
-        return self.execute("Document.Create", input="doc:" + ref,
-            type=type, name=name, properties=properties)
+    def create(self, ref, type, name = None, properties = None):
+        return self.execute("Document.Create", input = "doc:" + ref,
+            type = type, name = name, properties = properties)
 
-    def update(self, ref, properties=None):
-        return self.execute("Document.Update", input="doc:" + ref,
-            properties=properties)
+    def update(self, ref, properties = None):
+        return self.execute("Document.Update", input = "doc:" + ref,
+            properties = properties)
 
     def set_property(self, ref, xpath, value):
-        return self.execute("Document.SetProperty", input="doc:" + ref,
-            xpath=xpath, value=value)
+        return self.execute("Document.SetProperty", input = "doc:" + ref,
+            xpath = xpath, value = value)
 
     def get_children(self, ref):
-        return self.execute("Document.GetChildren", input="doc:" + ref)
+        return self.execute("Document.GetChildren", input = "doc:" + ref)
 
     def get_parent(self, ref):
-        return self.execute("Document.GetParent", input="doc:" + ref)
+        return self.execute("Document.GetParent", input = "doc:" + ref)
 
     def lock(self, ref):
-        return self.execute("Document.Lock", input="doc:" + ref)
+        return self.execute("Document.Lock", input = "doc:" + ref)
 
     def unlock(self, ref):
-        return self.execute("Document.Unlock", input="doc:" + ref)
+        return self.execute("Document.Unlock", input = "doc:" + ref)
 
-    def move(self, ref, target, name=None):
-        return self.execute("Document.Move", input="doc:" + ref,
-            target=target, name=name)
+    def move(self, ref, target, name = None):
+        return self.execute("Document.Move", input = "doc:" + ref,
+            target = target, name = name)
 
-    def copy(self, ref, target, name=None):
-        return self.execute("Document.Copy", input="doc:" + ref,
-            target=target, name=name)
+    def copy(self, ref, target, name = None):
+        return self.execute("Document.Copy", input = "doc:" + ref,
+            target = target, name = name)
 
     # These ones are special: no 'input' parameter
 
     def fetch(self, ref):
         try:
-            return self.execute("Document.Fetch", value=ref)
+            return self.execute("Document.Fetch", value = ref)
         except urllib2.HTTPError as e:
             if e.code == 404:
                 raise NotFound(_("Failed to fetch document %r on server %r") % (
                     ref, self.server_url))
             raise e
 
-    def query(self, query, language=None):
-        return self.execute("Document.Query", query=query, language=language)
+    def query(self, query, language = None):
+        return self.execute("Document.Query", query = query, language = language)
 
     # Blob category
 
     def get_blob(self, ref):
-        return self.execute("Blob.Get", input="doc:" + ref,
-                            timeout=self.blob_timeout)
+        return self.execute("Blob.Get", input = "doc:" + ref,
+                            timeout = self.blob_timeout)
 
     def attach_blob(self, ref, blob, filename, **params):
         return self.execute_with_blob("Blob.Attach",
-            blob, filename, document=ref)
+            blob, filename, document = ref)
 
     #
     # Nuxeo Drive specific operations
@@ -328,60 +315,61 @@ class RemoteDocumentClient(BaseAutomationClient):
 
     def get_roots(self):
         entries = self.execute("NuxeoDrive.GetRoots")[u'entries']
-        return self._filtered_results(entries, fetch_parent_uid=False)
+        return self._filtered_results(entries, fetch_parent_uid = False)
 
     def register_as_root(self, ref):
         ref = self._check_ref(ref)
-        self.execute("NuxeoDrive.SetSynchronization", input="doc:" + ref,
-                     enable=True)
+        self.execute("NuxeoDrive.SetSynchronization", input = "doc:" + ref,
+                     enable = True)
         return True
 
     def unregister_as_root(self, ref):
         ref = self._check_ref(ref)
-        self.execute("NuxeoDrive.SetSynchronization", input="doc:" + ref,
-                     enable=False)
+        self.execute("NuxeoDrive.SetSynchronization", input = "doc:" + ref,
+                     enable = False)
         return True
 
-    def get_mydocs(self):
-        return self.execute("UserWorkspace.Get")
+#    def get_mydocs(self):
+#        return self.execute("UserWorkspace.Get")
+#
+#    def get_othersdocs(self):
+#        query = """SELECT * FROM Document WHERE
+#                   sh:rootshared = 1 AND
+#                   sh:isWritePermission = 1 AND
+#                   ecm:currentLifeCycleState!= 'deleted' AND
+#                   ecm:mixinType = 'Folderish' AND
+#                   dc:creator != 'system' AND
+#                   ecm:name != 'Guest Folder' AND
+#                   ecm:primaryType!='Domain' AND
+#                   ecm:primaryType!='SocialDomain' AND
+#                   ecm:mixinType != 'HiddenInNavigation'
+#                   AND ecm:mixinType!='HiddenInFacetedSearch' AND
+#                   dc:creator != '"+username+"'
+#                   """
+#
+#        return self.execute('Document.Query', query = query)[u'entries']
+#        # TODO return result - any filtering needed?
+#
+#    def get_subfolders(self, parent, nodes):
+#        docId = parent[u'uid']
+#        query = """SELECT * FROM Document WHERE
+#                ecm:parentId = '%s' AND
+#                ecm:currentLifeCycleState != 'deleted' AND
+#                ecm:mixinType = 'Folderish' AND
+#                sh:isWritePermission = 1 AND
+#                ecm:mixinType != 'HiddenInNavigation' AND
+#                ecm:isCheckedInVersion = 0""" % docId
+#
+#        subfolders = self.execute('Document.Query', query = query)[u'entries']
+#        for sf in subfolders:
+#            nodes[sf[u'title']]['value'] = FolderInfo(sf[u'uid'], sf[u'title'], docId)
+#            self.get_subfolders(sf, nodes[sf[u'title']])
 
-    def get_othersdocs(self):
-        query = """SELECT * FROM Document WHERE
-                   sh:rootshared = 1 AND
-                   sh:isWritePermission = 1 AND
-                   ecm:currentLifeCycleState!= 'deleted' AND
-                   ecm:mixinType = 'Folderish' AND
-                   dc:creator != 'system' AND
-                   ecm:name != 'Guest Folder' AND
-                   ecm:primaryType!='Domain' AND
-                   ecm:primaryType!='SocialDomain' AND
-                   ecm:mixinType != 'HiddenInNavigation'
-                   AND ecm:mixinType!='HiddenInFacetedSearch' AND
-                   dc:creator != '"+username+"'
-                   """
-
-        return self.execute('Document.Query', query = query)[u'entries']
-        # TODO return result - any filtering needed?
-
-    def get_subfolders(self, parent, nodes):
-        docId = parent[u'uid']
-        query = """SELECT * FROM Document WHERE
-                ecm:parentId = '%s' AND
-                ecm:currentLifeCycleState != 'deleted' AND
-                ecm:mixinType = 'Folderish' and
-                ecm:mixinType != 'HiddenInNavigation' AND
-                ecm:isCheckedInVersion = 0""" % docId
-
-        subfolders = self.execute('Document.Query', query = query)[u'entries']
-        for sf in subfolders:
-            nodes[sf[u'title']]['value'] = FolderInfo(sf[u'uid'], sf[u'title'], docId)
-            self.get_subfolders(sf, nodes[sf[u'title']])
-
-    def get_changes(self, last_sync_date=None, last_root_definitions=None):
+    def get_changes(self, last_sync_date = None, last_root_definitions = None):
         return self.execute(
             'NuxeoDrive.GetChangeSummary',
-            lastSyncDate=last_sync_date,
-            lastSyncActiveRootDefinitions=last_root_definitions)
+            lastSyncDate = last_sync_date,
+            lastSyncActiveRootDefinitions = last_root_definitions)
 
     def get_storage_used(self):
         try:
@@ -390,4 +378,4 @@ class RemoteDocumentClient(BaseAutomationClient):
         except ValueError:
             log.debug("operation 'StorageUsed.Get' is not implemented.")
             raise
-    
+

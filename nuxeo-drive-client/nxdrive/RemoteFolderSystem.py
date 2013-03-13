@@ -19,39 +19,19 @@ log = get_logger(__name__)
 
 ID_ROLE = Qt.UserRole + 1
 CHECKED_ROLE = Qt.UserRole + 2
-        
-    
-def get_model(session, controller=None):
+
+
+def get_model(session, controller = None):
     model = QStandardItemModel()
     rootItem = model.invisibleRootItem()
-    
-    # get the root CloudDesk item
-#    attempts = 0
-#    while attempts < 2:
-#        try:
-#            sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).one()
-#            break
-#        except NoResultFound:
-#            log.warn("root does not exist.")
-#            if controller is None:
-#                raise RuntimeError(tr("An internal error occurred: Please restart the program"))
-#            controller.get_folders()
-#            controller.synchronizer.update_roots(controller.get_server_binding())
-#            attempts += 1
-#        except MultipleResultsFound:
-#            log.error("multiple roots exist.")
-#            config_folder = os.path.expanduser(r'~\.nuxeo_drive')
-#            if controller is not None:
-#                config_folder = controller.config_folder
-#            raise ValueError(tr('An internal error occurred: Please delete %s' % os.path.join(config_folder, 'nxdrive.db')))
-        
+
     try:
         server_binding = controller.get_server_binding()
-        controller.synchronizer.get_folders(server_binding=server_binding, session=session)
-        controller.synchronizer.update_roots(server_binding=server_binding, session=session)
+        controller.synchronizer.get_folders(server_binding = server_binding, session = session)
+        controller.synchronizer.update_roots(server_binding = server_binding, session = session)
     except Exception, e:
         log.debug("failed to retrieve folders or sync roots (%s)", str(e))
-        
+
     sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).one()
     item = QStandardItem(sync_folder.remote_name)
     item.setCheckable(False)
@@ -63,15 +43,15 @@ def get_model(session, controller=None):
     add_subfolders(session, item, sync_folder.remote_id)
     return model
 
-    
+
 def add_subfolders(session, root, data):
     sync_folders = session.query(SyncFolders).\
                            filter(SyncFolders.remote_parent == data).\
                            order_by(SyncFolders.remote_name).all()
-                           
+
     if len(sync_folders) > 1:
         root.setTristate(True)
-                        
+
     for fld in sync_folders:
         item = QStandardItem(fld.remote_name)
         item.setCheckable(True)
@@ -80,19 +60,19 @@ def add_subfolders(session, root, data):
         item.setData(check_state, CHECKED_ROLE)
         root.appendRow(item)
         add_subfolders(session, item, fld.remote_id)
-        
+
 def update_model(session, parent):
     """Walk the model and inform the view if there are any changes.
     Only process added and deleted folders."""
-    
+
     # TODO Should it process renamed folders?
-    
+
     parentId = parent.data(ID_ROLE)
     subfolders = session.query(SyncFolders).\
                         filter(SyncFolders.remote_parent == parentId).\
                         order_by(SyncFolders.remote_name).all()
     subfolders_dict = dict((folder.remote_id, folder) for folder in subfolders)
-    
+
     subitems = [parent.child(i) for i in range(parent.rowCount())]
     subitems_dict = dict((item.data(ID_ROLE), item) for item in subitems)
     subfolders_ids = set(subfolders_dict.keys())
@@ -111,15 +91,15 @@ def update_model(session, parent):
                 check_state = Qt.Checked
             # TODO new child is not checked if parent is
             new_item.setData(check_state, CHECKED_ROLE)
-            
+
             # insert in order of item (i.e. folder) name
             for item in enumerate(subitems):
                 if item[1].data(Qt.DisplayRole) > subfolders_dict[itemId].remote_name:
-                    parent.insertRow(item[0], new_item) 
+                    parent.insertRow(item[0], new_item)
                     break
             else:
                 parent.appendRow(new_item)
-                                 
+
         for itemId in items_to_remove:
             # index method does not work (operator not implemented) for QStandardItem
 #            row = subitems.index(subitems_dict[itemId])
@@ -128,7 +108,7 @@ def update_model(session, parent):
                     parent.removeRow(item[0])
                     subitems = [parent.child(i) for i in range(parent.rowCount())]
                     break
-            
+
         # the slot should update the entire tree
         parent.model().layoutChanged.emit()
     else:
@@ -141,4 +121,3 @@ def no_bindings(session):
     count = session.query(SyncFolders).\
                        filter(not SyncFolders.bind_state == True).count()
     return count == 0
-    

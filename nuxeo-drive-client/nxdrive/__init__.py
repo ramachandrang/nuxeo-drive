@@ -1,8 +1,8 @@
 """Global debug flag"""
-DEBUG = False
+DEBUG = True
 
 """Global maintenance/upgrade service flag"""
-USE_LOCAL_SERVICE = False
+USE_LOCAL_SERVICE = True
 """Flag for simulating a quota exception"""
 DEBUG_QUOTA_EXCEPTION = False
 """Flag for simulating a maintenance exception"""

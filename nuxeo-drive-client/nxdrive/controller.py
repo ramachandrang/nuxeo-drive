@@ -6,11 +6,10 @@ import os
 import sys
 import os.path
 import urllib2
+import urlparse
 import md5
 import suds
 import base64
-import socket
-import httplib
 import subprocess
 from datetime import datetime
 from datetime import timedelta
@@ -24,6 +23,8 @@ from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import RemoteDocumentClient
 from nxdrive.client import Unauthorized
 from nxdrive.client import BaseAutomationClient
+from nxdrive.client import RemoteMaintServiceClient
+from nxdrive.client import RemoteUpgradeServiceClient
 from nxdrive.client import ProxyInfo
 from nxdrive.client import NotFound
 from nxdrive.model import init_db
@@ -37,7 +38,6 @@ from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
 from nxdrive.utils import safe_long_path
 from nxdrive import Constants
-from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.http_server import HttpServer
 from nxdrive.http_server import http_server_loop
 
@@ -163,6 +163,8 @@ class Controller(object):
 
     # Used for FS synchronization operations
     remote_fs_client_factory = RemoteFileSystemClient
+    remote_maint_service_client_factory = RemoteMaintServiceClient
+    remote_upgrade_service_client_factory = RemoteUpgradeServiceClient
 
     __instance = None
 
@@ -695,25 +697,28 @@ class Controller(object):
         remote_client.make_raise(self._remote_error)
         return remote_client
 
-    def get_remote_doc_client(self, server_binding, repository = 'default',
-                              base_folder = None, skip_fetch_api = False):
+    def get_remote_doc_client(self, sb, repository = 'default',
+                              base_folder = None):
         """Return an instance of Nuxeo Document Client"""
         # NOTE: this fails against standard Nuxeo server
         # It was added to workaround permission error (http 401) against CloudDesk
 #        if base_folder is None:
-#            base_folder = self._get_mydocs_folder(server_binding)
-        sb = server_binding
+#            base_folder = self._get_mydocs_folder(sb)
         return self.remote_doc_client_factory(
             sb.server_url, sb.remote_user, self.device_id,
             token = sb.remote_token, password = sb.remote_password,
             repository = repository, base_folder = base_folder,
-            timeout = self.timeout, skip_fetch_api = skip_fetch_api)
+            timeout = self.timeout)
 
     def get_remote_client(self, server_binding, repository = 'default',
-                          base_folder = None, skip_fetch_api = False):
+                          base_folder = None):
         # Backward compat
         return self.get_remote_doc_client(server_binding,
-            repository = repository, base_folder = base_folder, skip_fetch_api = skip_fetch_api)
+            repository = repository, base_folder = base_folder)
+
+    def get_service_client(self, service_url, user = None):
+        return self.remote_doc_client_factory(
+            service_url, user, self.device_id)
 
     def invalidate_client_cache(self, server_url):
         cache = self._get_client_cache()
@@ -965,3 +970,40 @@ class Controller(object):
         return BaseAutomationClient.get_proxy() != ProxyInfo.get_proxy()
 
 
+    def get_upgrade_service_client(self, server_binding):
+        """Return a client for the external software upgrade service."""
+        from nxdrive._version import __version__
+
+        cache = self._get_client_cache()
+        url = Constants.UPGRADE_SERVICE_URL + Constants.SHORT_APP_NAME + '/' + __version__ + '/' + sys.platform
+        cache_key = (url, None, self.device_id)
+        remote_client = cache.get(cache_key)
+
+        if remote_client is None:
+            remote_client = self.remote_service_client_factory(
+                url, None, self.device_id,
+                timeout = self.timeout)
+            cache[cache_key] = remote_client
+        # Make it possible to have the remote client simulate any kind of
+        # failure
+        remote_client.make_raise(self._remote_error)
+        return remote_client
+
+    def get_maint_service_client(self, server_binding):
+        """Return a client for the external maintenance service."""
+
+        cache = self._get_client_cache()
+        netloc = urlparse.urlsplit(server_binding.server_url).netloc
+        url = urlparse.urljoin(Constants.MAINTENANCE_SERVICE_URL, netloc)
+        cache_key = (url, None, self.device_id)
+        remote_client = cache.get(cache_key)
+
+        if remote_client is None:
+            remote_client = self.remote_service_client_factory(
+                url, None, self.device_id,
+                timeout = self.timeout)
+            cache[cache_key] = remote_client
+        # Make it possible to have the remote client simulate any kind of
+        # failure
+        remote_client.make_raise(self._remote_error)
+        return remote_client

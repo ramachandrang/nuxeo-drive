@@ -18,19 +18,19 @@ log = get_logger(__name__)
 
 class Communicator(QObject):
     ancestorChanged = Signal(QStandardItem)
-    
+
 
 class SyncFoldersDlg(QDialog, Ui_Dialog):
-    def __init__(self, frontend=None, parent=None):
+    def __init__(self, frontend = None, parent = None):
         super(SyncFoldersDlg, self).__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setWindowTitle(Constants.APP_NAME + self.tr(' Synced Folders'))
         self.frontend = frontend
         if frontend is None: return
-        
+
         try:
-            self.model = get_model(frontend.controller.get_session(), controller=self.frontend.controller)
+            self.model = get_model(frontend.controller.get_session(), controller = self.frontend.controller)
             self.treeView.setModel(self.model)
             root = self.model.invisibleRootItem().child(0)
             self.clear_all(root)
@@ -39,7 +39,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
             # hide header and all columns but first one
             self.treeView.setHeaderHidden(True)
             self.treeView.resizeColumnToContents(0)
-    
+
             # connect the click event
             self.treeView.clicked[QModelIndex].connect(self.item_clicked)
             # connect event to set the ancestors accordingly
@@ -52,12 +52,12 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
             label.setText("<font size='4' color='red'><bold>%s</bold></font>" % str(ex))
             label.setAlignment(Qt.AlignHCenter)
             self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
-        
+
     def folders_changed(self):
         session = self.frontend.controller.get_session()
         root = self.model.invisibleRootItem().child(0)
         update_model(session, root)
-        
+
     def set_checked_state(self, parent):
         """Initialize the state of all checkboxes based on the model."""
 
@@ -71,7 +71,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
                 self.set_descendant_state(item, Qt.Checked)
 
             self.set_checked_state(item)
-        
+
     def clear_all(self, parent):
         for i in range(parent.rowCount()):
             parent.child(i).setCheckState(Qt.Unchecked)
@@ -81,8 +81,8 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         for i in range(parent.rowCount()):
             parent.child(i).setCheckState(Qt.Checked)
             self.set_all(parent.child(i))
-                    
-    def expand(self, parent=QModelIndex(), level=2):
+
+    def expand(self, parent = QModelIndex(), level = 2):
         if level <= 0:
             return
         level -= 1
@@ -90,9 +90,9 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         for i in range(model.rowCount(parent)):
             index = model.index(i, 0, parent)
             self.treeView.expand(index)
-            self.expand(index, level=level)
-        
-        
+            self.expand(index, level = level)
+
+
     def item_clicked(self, index):
         item = self.model.itemFromIndex(index)
         if not item.isEnabled():
@@ -108,16 +108,16 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
                 next_state = Qt.Unchecked
             else:
                 next_state = Qt.Checked
-                
+
         self.set_descendant_state(item, next_state)
         # THIS CRASHES the Python interpreter
 #        self.communicator.ancestorChanged.emit(item)
-        
+
 
 #    def item_changed(self, item):
 #        item_name = item.data(ID_ROLE)
 #        log.debug('item %s changed', item_name)
-#        
+#
 #        if not item.isEnabled():
 #            return
 #        # get status of all children
@@ -131,35 +131,35 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
 #                next_state = Qt.Unchecked
 #            else:
 #                next_state = Qt.Checked
-#                
+#
 #        self.set_descendant_state(item, next_state)
 #        self.communicator.ancestorChanged.emit(item)
 #        self.set_ascendant_state(item)
-        
+
     def _get_states(self, item):
         if item.rowCount() > 0:
             return [item.checkState(), [self._get_states(item.child(i)) for i in range(item.rowCount())]]
         else:
             return item.checkState()
-        
-    def _get_count(self, states, value, count=0):
+
+    def _get_count(self, states, value, count = 0):
         f = lambda c: 1 if c == value else 0
         count = 0
         if isinstance(states, list):
             for i in range(len(states)):
-                count += self._get_count(states[i], value, count=count)
+                count += self._get_count(states[i], value, count = count)
         else:
             return count + f(states)
-            
+
         return count
-    
+
     def set_descendant_state(self, item, state):
         if state == Qt.PartiallyChecked:
             return
         item.setCheckState(state)
         for i in range(item.rowCount()):
             self.set_descendant_state(item.child(i), state)
-            
+
     @Slot(QStandardItem)
     def set_ascendant_state(self, item):
         item_name = item.data(ID_ROLE)
@@ -180,21 +180,21 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
                     break
             else:
                 parent.setCheckState(states[0])
-                
+
         self.set_ascendant_state(parent)
-        
+
     def accept(self):
         # update the sync_folders db table
         root = self.model.invisibleRootItem().child(0)
         self._update_state(root)
         super(SyncFoldersDlg, self).accept()
-        
-    def _update_state(self, parent, clear=False):
+
+    def _update_state(self, parent, clear = False):
         folder_id = parent.data(ID_ROLE)
         session = self.frontend.controller.get_session()
         sync_folder = session.query(SyncFolders).\
                             filter(SyncFolders.remote_id == folder_id).one()
-                            
+
         if parent.rowCount() == 0:
             if clear:
                 sync_folder.check_state = False
@@ -202,14 +202,14 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
                 sync_folder.check_state = True if parent.checkState() == Qt.Checked else False
             session.commit()
             return
-            
+
         if not folder_id == Constants.OTHERS_DOCS_UID and not folder_id == Constants.CLOUDDESK_UID:
 #            states = [parent.child(i).checkState() for i in range(parent.rowCount())]
 #            first_state = states[0]
-#            other_states = filter(lambda state: state != first_state, states[1:])    
+#            other_states = filter(lambda state: state != first_state, states[1:])
             if clear:
                 sync_folder.check_state = False
-            else:    
+            else:
                 # get status of all children
                 children_state = self._get_states(parent)
                 checked = self._get_count(children_state, Qt.Checked)
@@ -220,7 +220,6 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
                     sync_folder.check_state = True if checked > 0 else False
                     clear = True
             session.commit()
-            
+
         for i in range(parent.rowCount()):
-            self._update_state(parent.child(i), clear=clear)
-        
+            self._update_state(parent.child(i), clear = clear)

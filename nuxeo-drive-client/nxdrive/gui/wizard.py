@@ -459,8 +459,6 @@ class InstallOptionsPage(QWizardPage):
             count = session.query(SyncFolders).\
                    filter(SyncFolders.bind_state == True).count()
             if count == 0:
-                # get alll folders
-                self.wizard().controller.synchronizer.get_folders(session = session)
                 # check top-level folders as sync roots
                 self.wizard().controller.synchronizer.check_toplevel_folders(session = session)
 
