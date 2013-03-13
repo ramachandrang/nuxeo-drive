@@ -24,6 +24,7 @@ from nxdrive.client import LocalClient
 from nxdrive.utils import normalized_path
 from nxdrive.utils import encrypt_password, decrypt_password
 from nxdrive import Constants
+from nxdrive import DEBUG, USE_LOCAL_SERVICE
 
 WindowsError = None
 try:
@@ -225,9 +226,11 @@ class ServerBinding(Base):
         elif datetime.now() > self.next_nag_notification:
             return True
         else:
-            return False
-            # FOR DEBUG ONLY - TO BE REMOVED
-#            return True
+            if USE_LOCAL_SERVICE:
+                # FOR DEBUG ONLY - TO BE REMOVED
+                return True
+            else:
+                return False
 
     def nag_quota_exceeded(self):
         if self.next_nag_quota is None:

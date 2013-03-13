@@ -25,6 +25,7 @@ from sqlalchemy.sql.expression import asc, desc
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
 from nxdrive import Constants
+from nxdrive import DEBUG
 from nxdrive.async.operations import SyncOperations
 # from utils.helpers import Communicator, ProxyInfo, RecoverableError
 from nxdrive.utils import Communicator
@@ -172,9 +173,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionAbout = QtGui.QAction(self.tr("About"), self)
         self.actionAbout.setObjectName("actionAbout")
         # TO BE REMOVED - BEGIN
-        self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
-        self.actionDebug.setObjectName("actionDebug")
-        self.actionDebug.setCheckable(True)
+        if DEBUG:
+            self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
+            self.actionDebug.setObjectName("actionDebug")
+            self.actionDebug.setCheckable(True)
         # TO BE REMOVED - END
         self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
@@ -199,8 +201,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addAction(self.actionNotification)
         self.menuCloudDesk.addAction(self.actionUpgrade)
         # TO BE REMOVED - BEGIN
-        self.menuCloudDesk.addSeparator()
-        self.menuCloudDesk.addAction(self.actionDebug)
+        if DEBUG:
+            self.menuCloudDesk.addSeparator()
+            self.menuCloudDesk.addAction(self.actionDebug)
         # TO BE REMOVED - END
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionHelp)
@@ -225,8 +228,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionUpgrade.triggered.connect(self.show_upgrade_info)
 
         # BEGIN TO BE REMOVED
-        self.actionDebug.setChecked(False)
-        self.actionDebug.toggled.connect(self.enable_trace)
+        if DEBUG:
+            self.actionDebug.setChecked(False)
+            self.actionDebug.toggled.connect(self.enable_trace)
         # END TO BE REMOVED
 
         # copy to local binding
@@ -969,7 +973,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def show_maintenance_info(self):
         msg = self.tr('Maintenance is not available.\n')
-        icon = QMessageBox.Question
+        icon = QMessageBox.Information
         if self.binding_info is not None:
             session = self.controller.get_session()
             try:
@@ -977,16 +981,17 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                 filter(ServerEvent.local_folder == self.server_binding.local_folder).\
                                 filter(ServerEvent.message_type == 'maintenance').\
                                 order_by(desc(ServerEvent.utc_time)).first()
-                msg = server_maint_event.message
-                if self.binding_info.maintenance:
-                    icon = QMessageBox.warning
+                if server_maint_event is not None:
+                    msg = server_maint_event.message
+                    if self.server_binding.maintenance:
+                        icon = QMessageBox.Warning
                 else:
-                    icon = QMessageBox.Information
+                    msg = self.tr('No maintenance is scheduled.\n')
             except NoResultFound:
                 msg = self.tr('No maintenance is scheduled.\n')
-                icon = QMessageBox.Information
             except Exception, e:
                 log.debug("error retrieving maintenance info (%s)", e)
+                return
 
         msgbox = QMessageBox()
         msgbox.setWindowTitle(Constants.APP_NAME)
