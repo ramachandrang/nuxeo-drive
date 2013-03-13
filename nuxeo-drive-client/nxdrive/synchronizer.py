@@ -524,6 +524,8 @@ class Synchronizer(object):
 
     def update_roots(self, server_binding = None, session = None, repository = None):
         """Ensure that the list of bound roots match server-side info"""
+
+        log.debug('start updating roots.')
         session = self.get_session() if session is None else session
         if server_binding is not None:
             server_bindings = [server_binding]
@@ -549,7 +551,7 @@ class Synchronizer(object):
                     folder.check_state = folder.bind_state = True
 
         session.commit()
-
+        log.debug('end updating roots.')
 
     def synchronize_one(self, doc_pair, session = None, status = None):
         """Refresh state and perform network transfer for a pair of documents."""
@@ -1197,8 +1199,11 @@ class Synchronizer(object):
                             self._controller.notify_to_signin(sb)
                         else:
                             continue
-                    if sb.check_for_maintenance():
+                    maint_mode = sb.check_for_maintenance()
+                    if maint_mode == ServerBinding.MAINTENANCE_ON:
                         continue
+                    elif maint_mode == ServerBinding.MAINTENANCE_OVER:
+                        self._reset_maintenance_schedule(sb, session = session)
 
                     n_synchronized += self.update_synchronize_server(
                         sb, session = session, status = status)
@@ -1590,6 +1595,7 @@ class Synchronizer(object):
         If a server is not responding it is skipped.
         """
 
+        log.debug('start retrieving folders.')
         dirty = {}
         dirty['add'] = 0
         dirty['del'] = 0
@@ -1637,6 +1643,7 @@ class Synchronizer(object):
                 # Ignore expected possible network related errors
                 success = self._handle_network_error(sb, e, session = session)
 
+        log.debug('end retrieving folders.')
         if self._frontend is not None and success:
             try:
                 if dirty['add'] > 0 or dirty['del'] > 0:
@@ -1850,6 +1857,7 @@ class Synchronizer(object):
         server_bindings = session.query(ServerBinding).all()
         for sb in server_bindings:
             if sb.nag_maintenance_schedule():
+                self._reset_expired_maint_schedules(sb, session = session)
                 maint_remote_client = self._controller.get_maint_service_client(sb)
                 self.process_maintenance_schedule(sb, schedules = maint_remote_client.get_maintenance_schedule(sb))
 
@@ -1987,3 +1995,26 @@ class Synchronizer(object):
             session.commit()
         except NoResultFound:
             pass
+
+    def _reset_maintenance_schedule(self, sb, session = None):
+        """Reset all maintenance schedules that started before now
+        and all maintenance 'on' events."""
+        if session is None:
+            session = self._controller.get_session()
+
+        maint_events = session.query(ServerEvent).filter(ServerEvent.message_type == 'maintenance').\
+                                    filter(ServerEvent.local_folder == sb.local_folder).\
+                                    filter(or_(ServerEvent.data1 < datetime.now(),
+                                               ServerEvent.data1 == None)).all()
+        map(session.delete, maint_events)
+
+    def _reset_expired_maint_schedules(self, sb, session = None):
+        """Reset all maintenance schedules that ended before now"""
+        if session is None:
+            session = self._controller.get_session()
+
+        maint_schedules = session.query(ServerEvent).filter(ServerEvent.message_type == 'maintenance').\
+                                    filter(ServerEvent.local_folder == sb.local_folder).\
+                                    filter(ServerEvent.data2 < datetime.now()).all()
+        map(session.delete, maint_schedules)
+

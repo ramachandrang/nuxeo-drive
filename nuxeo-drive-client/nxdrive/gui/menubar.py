@@ -239,6 +239,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.get_binding_info(sb.local_folder)
         # save current server binding
         self.server_binding = self.controller.get_server_binding(self._get_local_folder())
+        self._reset_upgrade_info(self.server_binding)
 
         # setup communication from worker thread to application
         self.communicator.icon.connect(self.set_icon_state)
@@ -791,6 +792,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         self.local_folder = self.preferencesDlg.local_folder
         self.server_binding = self.controller.get_server_binding(self.local_folder)
+        self._reset_upgrade_info(self.server_binding)
         self.notifications = self.preferencesDlg.notifications
         self.preferencesDlg = None
 
@@ -1043,6 +1045,18 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 return False
         except Exception, e:
             log.debug("error retrieving upgrade version (%s)", e)
+            
+    def _reset_upgrade_info(self, sb, session=None):
+        """Remove all upgrade info with same or lower version number than the current one."""
+        if session is None:
+            session = self.controller.get_session()
+            
+        versions = session.query(ServerEvent).filter(ServerEvent.message_type == 'upgrade').\
+                            filter(ServerEvent.local_folder == sb.local_folder).all()
+        older_versions = [version for version in versions if not _is_newer_version(version.data1)]
+        if len(older_versions) > 0:
+            map(session.delete, older_versions)
+            session.commit()
 
     def _handle_click_upgrade(self, info):
         self.show_upgrade_info()

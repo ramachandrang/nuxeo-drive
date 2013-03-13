@@ -236,7 +236,7 @@ class BaseAutomationClient(object):
     def __init__(self, server_url, user_id, device_id,
                  password = None, token = None, repository = "default",
                  ignored_prefixes = None, ignored_suffixes = None,
-                 timeout = 60, blob_timeout = None):
+                 timeout = 60, blob_timeout = None, is_automation = True):
         self.timeout = timeout
         self.blob_timeout = blob_timeout
         if ignored_prefixes is not None:
@@ -249,7 +249,7 @@ class BaseAutomationClient(object):
         else:
             self.ignored_suffixes = DEFAULT_IGNORED_SUFFIXES
 
-        if not server_url.endswith('/'):
+        if is_automation and not server_url.endswith('/'):
             server_url += '/'
         self.server_url = server_url
 
@@ -259,7 +259,9 @@ class BaseAutomationClient(object):
 
         self.user_id = user_id
         self.device_id = device_id
-        self._update_auth(password = password, token = token)
+        if user_id is not None:
+            # skip for service w/o authentication (like the external maintenance and upgrade services)
+            self._update_auth(password = password, token = token)
 
         handlers = []
         proxy_support = None
@@ -307,8 +309,9 @@ class BaseAutomationClient(object):
 #        handlers.append(HTTPHandler(debuglevel=1))
 #        handlers.append(HTTPSHandler(debuglevel=1))
         self.opener = urllib2.build_opener(*handlers)
-        self.automation_url = server_url + 'site/automation/'
-        self.fetch_api()
+        if is_automation:
+            self.automation_url = server_url + 'site/automation/'
+            self.fetch_api()
 
 
     def log_request(self, req):

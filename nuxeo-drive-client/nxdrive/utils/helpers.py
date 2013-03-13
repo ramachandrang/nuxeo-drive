@@ -53,12 +53,12 @@ def find_exe_path():
     # Fall-back to the regular method that should work both the ndrive script
     return sys.argv[0]
 
-def get_maintenance_message(status, schedule=None):
+def get_maintenance_message(status, schedule = None):
     from dateutil import tz
     from datetime import datetime
 
     # NOTE only notify about the Cloud Office Portal service.
-    # Ignore the 'Service' in the schedule because the service url is 
+    # Ignore the 'Service' in the schedule because the service url is
     # passed in the request anyway.
     if schedule is None and status == 'maintenance':
         msg = '%s is currently offline.' % Constants.SERVICE_NAME
@@ -77,17 +77,17 @@ def get_maintenance_message(status, schedule=None):
         data1 = start_local = start_utc.astimezone(to_tz)
         data2 = end_local = end_utc.astimezone(to_tz)
         if status == 'maintenance':
-            msg = _("%s is currently offline.") % service                           
-            detail = _("Due to maintenance from %s to %s.") %\
+            msg = _("%s is currently offline.") % service
+            detail = _("Due to maintenance from %s to %s.") % \
                              (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         elif status == 'available':
             msg = _("%s is scheduled for maintenance.") % service
-            detail = _("From %s to %s.") %\
+            detail = _("From %s to %s.") % \
                              (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         else:
-            msg = detail = None       
+            msg = detail = None
     else:
-        msg = detail = dat1 = data2 = None
+        msg = detail = data1 = data2 = None
     return msg, detail, data1, data2
 
 def create_settings():

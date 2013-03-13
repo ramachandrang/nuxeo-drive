@@ -980,9 +980,10 @@ class Controller(object):
         remote_client = cache.get(cache_key)
 
         if remote_client is None:
-            remote_client = self.remote_service_client_factory(
+            is_automation = url.startswith(server_binding.server_url)
+            remote_client = self.remote_upgrade_service_client_factory(
                 url, None, self.device_id,
-                timeout = self.timeout)
+                timeout = self.timeout, is_automation = is_automation)
             cache[cache_key] = remote_client
         # Make it possible to have the remote client simulate any kind of
         # failure
@@ -999,9 +1000,10 @@ class Controller(object):
         remote_client = cache.get(cache_key)
 
         if remote_client is None:
-            remote_client = self.remote_service_client_factory(
+            is_automation = url.startswith(server_binding.server_url)
+            remote_client = self.remote_maint_service_client_factory(
                 url, None, self.device_id,
-                timeout = self.timeout)
+                timeout = self.timeout, is_automation = is_automation)
             cache[cache_key] = remote_client
         # Make it possible to have the remote client simulate any kind of
         # failure
