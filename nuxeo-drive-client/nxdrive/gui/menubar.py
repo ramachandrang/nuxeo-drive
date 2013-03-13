@@ -107,6 +107,7 @@ class BindingInfo(object):
     def __init__(self, folder_path):
         self.folder_path = folder_path
         self.short_name = os.path.basename(folder_path)
+        self.state = Constants.INFO_STATE_NONE
 
     def online_status_change(self):
         return self._online != self._prev_online
@@ -963,12 +964,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def notify_maintenance_mode(self, local_folder, msg, detail):
         # TODO update menu, icon
         self.substate = Constants.APP_SUBSTATE_MAINTENANCE
+        info = self.get_info(local_folder)
+        info.state = Constants.INFO_STATE_MAINTENANCE_SCHEDULE
         self.communicator.message.emit(msg,
                                        detail,
                                        QtGui.QSystemTrayIcon.Warning)
         self.notify_offline(local_folder)
 
-    def _handle_click_main_schedule(self, info):
+    def _handle_click_maint_schedule(self, info):
         self.show_maintenance_info()
 
     def show_maintenance_info(self):

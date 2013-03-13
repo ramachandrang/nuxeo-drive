@@ -433,16 +433,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
                 win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
 
-            notifications = settings.value('preferences/notifications', 'true')
-            if notifications.lower() == 'true':
-                self.notifications = True
-            elif notifications.lower() == 'false':
-                self.notifications = False
-            else:
-                self.notifications = True
-        else:
-            self.notifications = settings.value('preferences/notifications', True)
-
         # Apply other changes
         if self.rbProxy.isChecked():
             useProxy = ProxyInfo.PROXY_SERVER
@@ -530,4 +520,3 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
         if self.result == ProgressDialog.OK_AND_RESTART and self.frontend.state == Constants.APP_STATE_STOPPED:
             self.frontend._doSync()
-            
