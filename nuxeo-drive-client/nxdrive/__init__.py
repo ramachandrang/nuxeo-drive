@@ -7,6 +7,8 @@ USE_LOCAL_SERVICE = False
 DEBUG_QUOTA_EXCEPTION = False
 """Flag for simulating a maintenance exception"""
 DEBUG_MAINTENANCE_EXCEPTION = False
+"""Flag for checking maintenance and upgrade services every loop (iteration)"""
+NAG_EVERY_LOOP = True
 
 """Setup i18n"""
 import gettext

@@ -24,7 +24,7 @@ from nxdrive.client import LocalClient
 from nxdrive.utils import normalized_path
 from nxdrive.utils import encrypt_password, decrypt_password
 from nxdrive import Constants
-from nxdrive import DEBUG, USE_LOCAL_SERVICE
+from nxdrive import DEBUG, USE_LOCAL_SERVICE, NAG_EVERY_LOOP
 
 WindowsError = None
 try:
@@ -85,6 +85,10 @@ class DeviceConfig(Base):
 
 
 class ServerBinding(Base):
+    MAINTENANCE_OFF = 0
+    MAINTENANCE_ON = 1
+    MAINTENANCE_OVER = 2
+    
     __tablename__ = 'server_bindings'
 
     local_folder = Column(String, primary_key = True)
@@ -210,14 +214,21 @@ class ServerBinding(Base):
         elif not self.maintenance and datetime.now() > self.next_nag_notification:
             return True
         else:
-            return False
+            if NAG_EVERY_LOOP:
+                # FOR DEBUG ONLY - TO BE REMOVED
+                return True
+            else:
+                return False
 
     def check_for_maintenance(self):
-        if self.maintenance and datetime.now() > self.next_maintenance_check:
+        now = datetime.now()
+        if self.maintenance and now > self.next_maintenance_check:
             self.maintenance = False
-            return True
+            return ServerBinding.MAINTENANCE_OVER
+        elif self.maintenance and now < self.next_maintenance_check:
+            return ServerBinding.MAINTENANCE_ON
         else:
-            return False
+            return ServerBinding.MAINTENANCE_OFF
 
     def nag_upgrade_schedule(self):
         if self.next_nag_notification is None:
@@ -226,7 +237,7 @@ class ServerBinding(Base):
         elif datetime.now() > self.next_nag_notification:
             return True
         else:
-            if USE_LOCAL_SERVICE:
+            if NAG_EVERY_LOOP:
                 # FOR DEBUG ONLY - TO BE REMOVED
                 return True
             else:
@@ -244,33 +255,6 @@ class ServerBinding(Base):
     def update_storage(self, used, total):
         self.total_storage = total
         self.used_storage = used
-
-# class RootBinding(Base):
-#    __tablename__ = 'root_bindings'
-#
-#    local_root = Column(String, primary_key = True)
-#    remote_repo = Column(String)
-#    remote_root = Column(String, ForeignKey('sync_folders.remote_id'))
-#    local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
-#    server_binding = relationship('ServerBinding')
-#
-#    def __init__(self, local_root, remote_repo, remote_root, local_folder = None):
-#        local_root = normalized_path(local_root)
-#        self.local_root = local_root
-#        self.remote_repo = remote_repo
-#        self.remote_root = remote_root
-#
-#        # expected local folder should be the direct parent of the local root
-#        # MC That's not always the case, example:
-#        # - roots under "Others' Docs" in CloudDesk are under "Others Docs" locally
-#        if local_folder is None:
-#            local_folder = normalized_path(os.path.join(local_root, '..'))
-#        self.local_folder = local_folder
-#
-#    def __repr__(self):
-#        return ("RootBinding<local_root=%r, local_folder=%r, remote_repo=%r,"
-#                "remote_root=%r>" % (self.local_root, self.local_folder,
-#                                     self.remote_repo, self.remote_root))
 
 class SyncFolders(Base):
     __tablename__ = 'sync_folders'

@@ -1197,8 +1197,11 @@ class Synchronizer(object):
                             self._controller.notify_to_signin(sb)
                         else:
                             continue
-                    if sb.check_for_maintenance():
+                    maint_mode = sb.check_for_maintenance()
+                    if maint_mode == ServerBinding.MAINTENANCE_ON:
                         continue
+                    elif maint_mode == ServerBinding.MAINTENANCE_OVER:
+                        self._reset_maintenance_schedule(sb, session=session)
 
                     n_synchronized += self.update_synchronize_server(
                         sb, session = session, status = status)
@@ -1857,6 +1860,7 @@ class Synchronizer(object):
         server_bindings = session.query(ServerBinding).all()
         for sb in server_bindings:
             if sb.nag_maintenance_schedule():
+                self._reset_expired_maint_schedules(sb, session=session)
                 remote_client = self._controller.get_remote_client(sb)
                 self.process_maintenance_schedule(sb, schedules = remote_client._get_maintenance_schedule(sb))
 
@@ -1995,4 +1999,25 @@ class Synchronizer(object):
         except NoResultFound:
             pass
 
+    def _reset_maintenance_schedule(self, sb, session=None):
+        """Reset all maintenance schedules that started before now
+        and all maintenance 'on' events."""
+        if session is None:
+            session = self._controller.get_session()
+            
+        maint_events = session.query(ServerEvent).filter(ServerEvent.message_type == 'maintenance').\
+                                    filter(ServerEvent.local_folder == sb.local_folder).\
+                                    filter(or_(ServerEvent.data1 < datetime.now(),
+                                               ServerEvent.data1 == None)).all()
+        map(session.delete, maint_events)
 
+    def _reset_expired_maint_schedules(self, sb, session=None):
+        """Reset all maintenance schedules that ended before now"""
+        if session is None:
+            session = self._controller.get_session()
+            
+        maint_schedules = session.query(ServerEvent).filter(ServerEvent.message_type == 'maintenance').\
+                                    filter(ServerEvent.local_folder == sb.local_folder).\
+                                    filter(ServerEvent.data2 < datetime.now()).all()
+        map(session.delete, maint_schedules)        
+               
