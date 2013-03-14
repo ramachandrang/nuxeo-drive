@@ -37,7 +37,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "CpoDesktop.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "bin\cpoiconoverlaysynced.dll"; DestDir: "{sys}"; Flags: restartreplace 
+Source: "bin\CpoIconOverlaySynced.dll"; DestDir: "{sys}"; Flags: restartreplace 
+Source: "bin\CpoIconOverlayInProgress.dll"; DestDir: "{sys}"; Flags: restartreplace 
+Source: "bin\CpoIconOverlayConflicted.dll"; DestDir: "{sys}"; Flags: restartreplace 
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

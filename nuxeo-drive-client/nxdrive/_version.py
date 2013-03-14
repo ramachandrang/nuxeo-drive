@@ -1,4 +1,4 @@
-__version__ = '0.1.9'
+__version__ = '0.1.9.1'
 __db_version__ = '0.1'
 
 import re

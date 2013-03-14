@@ -12,6 +12,8 @@ from ui_sync_folders import Ui_Dialog
 from nxdrive.RemoteFolderSystem import get_model, update_model, no_bindings
 from nxdrive.RemoteFolderSystem import ID_ROLE, CHECKED_ROLE
 from nxdrive import Constants
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+
 from nxdrive.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -26,11 +28,18 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setWindowTitle(Constants.APP_NAME + self.tr(' Synced Folders'))
+        if frontend is None:
+            return
         self.frontend = frontend
-        if frontend is None: return
+        self.controller = self.frontend.controller
+        self.server_binding = self.frontend.server_binding
 
         try:
-            self.model = get_model(frontend.controller.get_session(), controller = self.frontend.controller)
+            self.model = get_model(frontend.controller.get_session(), controller = self.controller)
+            if self.model is None:
+                log.debug('cannot retrieve model.')
+                return
+
             self.treeView.setModel(self.model)
             root = self.model.invisibleRootItem().child(0)
             self.clear_all(root)
@@ -192,16 +201,23 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
     def _update_state(self, parent, clear = False):
         folder_id = parent.data(ID_ROLE)
         session = self.frontend.controller.get_session()
-        sync_folder = session.query(SyncFolders).\
-                            filter(SyncFolders.remote_id == folder_id).one()
+        try:
+            sync_folder = session.query(SyncFolders).\
+                                filter(SyncFolders.remote_id == folder_id).\
+                                filter(SyncFolders.local_folder == self.server_binding.local_folder).\
+                                one()
 
-        if parent.rowCount() == 0:
-            if clear:
-                sync_folder.check_state = False
-            else:
-                sync_folder.check_state = True if parent.checkState() == Qt.Checked else False
-            session.commit()
-            return
+            if parent.rowCount() == 0:
+                if clear:
+                    sync_folder.check_state = False
+                else:
+                    sync_folder.check_state = True if parent.checkState() == Qt.Checked else False
+                session.commit()
+                return
+        except MultipleResultsFound:
+            log.debug('multiple folders with id %s found', folder_id)
+        except NoResultFound:
+            log.debug('folder with id %s not found', folder_id)
 
         if not folder_id == Constants.OTHERS_DOCS_UID and not folder_id == Constants.CLOUDDESK_UID:
 #            states = [parent.child(i).checkState() for i in range(parent.rowCount())]

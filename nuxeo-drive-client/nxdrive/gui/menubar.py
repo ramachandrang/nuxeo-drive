@@ -239,7 +239,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.get_binding_info(sb.local_folder)
         # save current server binding
         self.server_binding = self.controller.get_server_binding(self._get_local_folder())
-        self._reset_upgrade_info(self.server_binding)
 
         # setup communication from worker thread to application
         self.communicator.icon.connect(self.set_icon_state)
@@ -792,7 +791,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         self.local_folder = self.preferencesDlg.local_folder
         self.server_binding = self.controller.get_server_binding(self.local_folder)
-        self._reset_upgrade_info(self.server_binding)
         self.notifications = self.preferencesDlg.notifications
         self.preferencesDlg = None
 
@@ -910,7 +908,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def handle_message_clicked(self):
         info = self.get_binding_info(self.local_folder)
-        handler = getattr(self, '_handle_click_%s' % info.state, Constants.INFO_STATE_NONE)
+        handler = getattr(self, '_handle_click_%s' % info.state, self._handle_click_none)
         handler(info)
         info.state = Constants.INFO_STATE_NONE
 
@@ -937,7 +935,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         self._common_click_handler(local_folder, Constants.INFO_STATE_INVALID_CREDENTIALS)
 
-    def _handle_click_invalid_cred(self, info):
+    def _handle_click_invalid_cred(self, info = None):
         if not self.get_binding_info(self.local_folder).online:
             if self._authenticate():
                 self.doWork()
@@ -950,7 +948,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         self._common_click_handler(local_folder, Constants.INFO_STATE_INVALID_PROXY)
 
-    def _handle_click_invalid_proxy(self, info):
+    def _handle_click_invalid_proxy(self, info = None):
         if self.proxyDlg is None:
             self.proxyDlg = ProxyDlg(frontend = self)
             self.proxyDlg.exec_()
@@ -973,8 +971,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                        QtGui.QSystemTrayIcon.Warning)
         self.notify_offline(local_folder)
 
-    def _handle_click_maint_schedule(self, info):
+    def _handle_click_maint_schedule(self, info = None):
         self.show_maintenance_info()
+
+    def _handle_click_none(self, info = None):
+        pass
 
     def show_maintenance_info(self):
         msg = self.tr('Maintenance is not available.\n')
@@ -1045,20 +1046,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 return False
         except Exception, e:
             log.debug("error retrieving upgrade version (%s)", e)
-            
-    def _reset_upgrade_info(self, sb, session=None):
-        """Remove all upgrade info with same or lower version number than the current one."""
-        if session is None:
-            session = self.controller.get_session()
-            
-        versions = session.query(ServerEvent).filter(ServerEvent.message_type == 'upgrade').\
-                            filter(ServerEvent.local_folder == sb.local_folder).all()
-        older_versions = [version for version in versions if not _is_newer_version(version.data1)]
-        if len(older_versions) > 0:
-            map(session.delete, older_versions)
-            session.commit()
 
-    def _handle_click_upgrade(self, info):
+    def _handle_click_upgrade(self, info = None):
         self.show_upgrade_info()
 
     def _getUserName(self):

@@ -32,11 +32,13 @@ from nxdrive.model import DeviceConfig
 from nxdrive.model import ServerBinding
 from nxdrive.model import LastKnownState
 from nxdrive.model import SyncFolders
+from nxdrive.model import ServerEvent
 from nxdrive.synchronizer import Synchronizer
 from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
 from nxdrive.utils import safe_long_path
+from nxdrive._version import _is_newer_version
 from nxdrive import Constants
 from nxdrive.http_server import HttpServer
 from nxdrive.http_server import http_server_loop
@@ -340,9 +342,14 @@ class Controller(object):
         # Check for bindings that are prefix of local_path
         session = self.get_session()
         all_bindings = session.query(ServerBinding).all()
-        matching_bindings = [sb for sb in all_bindings
-                             if local_path.startswith(
-                                sb.local_folder + os.path.sep)]
+        if sys.platform == 'win32':
+            matching_bindings = [sb for sb in all_bindings
+                                 if local_path.lower().startswith(
+                                    sb.local_folder.lower() + os.path.sep)]
+        else:
+            matching_bindings = [sb for sb in all_bindings
+                                 if local_path.startswith(
+                                    sb.local_folder + os.path.sep)]
         if len(matching_bindings) == 0:
             raise NotFound(_("Could not find any server binding for ")
                                + local_path)
@@ -445,6 +452,10 @@ class Controller(object):
                                    remote_info = remote_info,
                                    remote_state = 'synchronized')
             session.add(state)
+
+            # clear old version upgrade events
+            self._reset_upgrade_info(server_binding)
+
             session.commit()
             return server_binding
         except Exception as e:
@@ -1009,3 +1020,15 @@ class Controller(object):
         # failure
         remote_client.make_raise(self._remote_error)
         return remote_client
+
+    def _reset_upgrade_info(self, sb, session = None):
+        """Remove all upgrade info with same or lower version number than the current one."""
+        if session is None:
+            session = self.get_session()
+
+        versions = session.query(ServerEvent).filter(ServerEvent.message_type == 'upgrade').\
+                            filter(ServerEvent.local_folder == sb.local_folder).all()
+        older_versions = [version for version in versions if not _is_newer_version(version.data1)]
+        if len(older_versions) > 0:
+            map(session.delete, older_versions)
+

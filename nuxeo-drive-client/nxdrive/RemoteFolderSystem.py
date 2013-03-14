@@ -29,20 +29,28 @@ def get_model(session, controller = None):
         server_binding = controller.get_server_binding()
         controller.synchronizer.get_folders(server_binding = server_binding, session = session)
         controller.synchronizer.update_roots(server_binding = server_binding, session = session)
+
+        sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).\
+                                                filter(SyncFolders.local_folder == server_binding.local_folder).\
+                                                one()
+        item = QStandardItem(sync_folder.remote_name)
+        item.setCheckable(False)
+        item.setEnabled(False)
+        item.setSelectable(False)
+        item.setIcon(QIcon(Constants.APP_ICON_DIALOG))
+        item.setData(sync_folder.remote_id, ID_ROLE)
+        rootItem.appendRow(item)
+        add_subfolders(session, item, sync_folder.remote_id)
+        return model
+    except NoResultFound:
+        log.debug('Cloud Portal Office root not found.')
+        return None
+    except MultipleResultsFound:
+        log.debug('more than one Cloud Portal Office root found.')
+        return None
     except Exception, e:
         log.debug("failed to retrieve folders or sync roots (%s)", str(e))
-
-    sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).one()
-    item = QStandardItem(sync_folder.remote_name)
-    item.setCheckable(False)
-    item.setEnabled(False)
-    item.setSelectable(False)
-    item.setIcon(QIcon(Constants.APP_ICON_DIALOG))
-    item.setData(sync_folder.remote_id, ID_ROLE)
-    rootItem.appendRow(item)
-    add_subfolders(session, item, sync_folder.remote_id)
-    return model
-
+        return None
 
 def add_subfolders(session, root, data):
     sync_folders = session.query(SyncFolders).\
