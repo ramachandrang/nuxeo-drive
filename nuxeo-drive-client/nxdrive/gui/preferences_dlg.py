@@ -188,11 +188,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         app.setOverrideCursor(Qt.WaitCursor)
         self.installEventFilter(process_filter)
         try:
-            self.controller.synchronizer.set_roots()
-
+            self.controller.synchronizer.set_roots(self.server_binding)
         except Exception as e:
             log.error(self.tr('Unable to set roots for %s (%s)'), self.server_binding.server_url, str(e))
-
         finally:
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)

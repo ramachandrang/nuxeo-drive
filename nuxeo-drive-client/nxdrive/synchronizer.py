@@ -1610,7 +1610,7 @@ class Synchronizer(object):
                 # Skip servers with missing credentials
                 continue
             try:
-                nxclient = self._controller.get_remote_fs_client(sb)
+                nxclient = self._controller.get_remote_client(sb)
                 if not nxclient.is_addon_installed():
                     continue
 

@@ -14,17 +14,6 @@ from nxdrive.client.base_automation_client import BaseAutomationClient
 
 log = get_logger(__name__)
 
-class FolderInfo(object):
-    """Folder node for retrieving folder hierarchy"""
-
-    def __init__(self, docId, title, parentId):
-        self.docId = docId
-        self.title = title
-        self.parentId = parentId
-
-    def __str__(self):
-        return "folder '%s', docId=%s, parentId=%s" % (self.title, self.docId, self.parentId)
-
 # Data transfer objects
 
 BaseRemoteFileInfo = namedtuple('RemoteFileInfo', [
@@ -213,40 +202,3 @@ class RemoteFileSystemClient(BaseAutomationClient):
             'NuxeoDrive.GetChangeSummary',
             lastSyncDate = last_sync_date,
             lastSyncActiveRootDefinitions = last_root_definitions)
-
-    def get_mydocs(self):
-        return self.execute("UserWorkspace.Get")
-
-    def get_othersdocs(self):
-        query = """SELECT * FROM Document WHERE
-                   sh:rootshared = 1 AND
-                   sh:isWritePermission = 1 AND
-                   ecm:currentLifeCycleState!= 'deleted' AND
-                   ecm:mixinType = 'Folderish' AND
-                   dc:creator != 'system' AND
-                   ecm:name != 'Guest Folder' AND
-                   ecm:primaryType!='Domain' AND
-                   ecm:primaryType!='SocialDomain' AND
-                   ecm:mixinType != 'HiddenInNavigation'
-                   AND ecm:mixinType!='HiddenInFacetedSearch' AND
-                   dc:creator != '"+username+"'
-                   """
-
-        return self.execute('Document.Query', query = query)[u'entries']
-        # TODO return result - any filtering needed?
-
-    def get_subfolders(self, parent, nodes):
-        docId = parent[u'uid']
-        query = """SELECT * FROM Document WHERE
-                ecm:parentId = '%s' AND
-                ecm:currentLifeCycleState != 'deleted' AND
-                ecm:mixinType = 'Folderish' AND
-                sh:isWritePermission = 1 AND
-                ecm:mixinType != 'HiddenInNavigation' AND
-                ecm:isCheckedInVersion = 0""" % docId
-
-        subfolders = self.execute('Document.Query', query = query)[u'entries']
-        for sf in subfolders:
-            nodes[sf[u'title']]['value'] = FolderInfo(sf[u'uid'], sf[u'title'], docId)
-            self.get_subfolders(sf, nodes[sf[u'title']])
-
