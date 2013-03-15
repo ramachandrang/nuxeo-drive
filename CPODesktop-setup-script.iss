@@ -46,7 +46,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "Cloud Portal Office Desktop\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "Cloud Portal Office Desktop\bin\64bit\cpoiconoverlaysynced.dll"; DestDir: "{sys}";   
+Source: "Cloud Portal Office Desktop\bin\cpoiconoverlaysynced.dll"; DestDir: "{sys}";   
+Source: "Cloud Portal Office Desktop\bin\cpoiconoverlayinprogress.dll"; DestDir: "{sys}";   
+Source: "Cloud Portal Office Desktop\bin\cpoiconoverlayconflicted.dll"; DestDir: "{sys}";   
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]                                                                                                        
