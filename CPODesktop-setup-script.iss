@@ -7,7 +7,7 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{5D0411E3-47F5-441A-B595-C1DCE87519C2}}
 AppName=Cloud Portal Office Desktop
-AppVersion=0.1.8.1
+AppVersion=0.1.9
 AppPublisher=Sharp
 AppPublisherURL=http://www.sharp.com/
 AppSupportURL=http://www.sharp.com/
@@ -15,16 +15,26 @@ AppUpdatesURL=http://www.sharp.com/
 DefaultDirName={pf}\Cloud Portal Office Desktop
 DefaultGroupName=Cloud Portal Office Desktop
 OutputDir=dist
-OutputBaseFilename=CPODesktop-0.1.8-Win32-setup
-SetupIconFile=icons\CP_Red_Office_64.ico
+OutputBaseFilename=CPODesktop-0.1.9-Win32-setup
+SetupIconFile=Cloud Portal Office Desktop\icons\CP_Red_Office_64.ico
 Compression=lzma
 SolidCompression=yes
+ChangesEnvironment=yes
+
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [InstallDelete]
-      ;The following 2 lines will delete the Nuxeo's DB file and the directory
+      ;Before Installation: The following lines will delete the Nuxeo's DB file and the directory
+Type: files; Name: "{sd}\Users\{username}\.nuxeo-drive\nxdrive.db"; 
+Type: filesandordirs; Name: "{sd}\Users\{username}\.nuxeo-drive";   
+             ;  The following 2 lines will delete the 2 short cuts created by the installer
+Type: files; Name: "{sd}\Users\{username}\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\CpoDesktop.lnk";   
+Type: files; Name: "{sd}\Users\{username}\Links\Cloud Portal Office.lnk";
+
+[UninstallDelete]
+      ;During Uninstall: The following lines will delete the Nuxeo's DB file and the directory
 Type: files; Name: "{sd}\Users\{username}\.nuxeo-drive\nxdrive.db"; 
 Type: filesandordirs; Name: "{sd}\Users\{username}\.nuxeo-drive";   
              ;  The following 2 lines will delete the 2 short cuts created by the installer
@@ -35,20 +45,23 @@ Type: files; Name: "{sd}\Users\{username}\Links\Cloud Portal Office.lnk";
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "CpoDesktop.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "bin\CpoIconOverlaySynced.dll"; DestDir: "{sys}"; Flags: restartreplace 
-Source: "bin\CpoIconOverlayInProgress.dll"; DestDir: "{sys}"; Flags: restartreplace 
-Source: "bin\CpoIconOverlayConflicted.dll"; DestDir: "{sys}"; Flags: restartreplace 
+Source: "Cloud Portal Office Desktop\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "Cloud Portal Office Desktop\bin\64bit\cpoiconoverlaysynced.dll"; DestDir: "{sys}";   
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
-[Icons]
+[Icons]                                                                                                        
 Name: "{group}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"
 Name: "{group}\{cm:UninstallProgram,Cloud Portal Office Desktop}"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Description: "{cm:LaunchProgram,Unregister Synch DLL}"; Flags: nowait runhidden 
+Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: nowait runhidden  
+Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent  unchecked
+
+[UninstallRun]
+Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Flags: nowait runhidden 
+
 
 [Registry]
 Root: HKCU; Subkey: "Software\SHARP\CLOUD PORTAL OFFICE Desktop"; Flags: uninsdeletekey
