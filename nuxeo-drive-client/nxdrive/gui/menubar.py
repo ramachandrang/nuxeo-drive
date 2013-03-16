@@ -282,10 +282,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def about(self):
         msgbox = QMessageBox()
+        msgbox.setWindowTitle(Constants.APP_NAME)
         msgbox.setText(self.tr("About %s") % Constants.APP_NAME)
         msgbox.setStandardButtons(QMessageBox.Ok)
         msgbox.setInformativeText(self.tr("""version<b> %s</b>
-                <p>Copyright &copy; 2012 SHARP CORPORATION
+                <p>Copyright &copy; 2013 SHARP CORPORATION
                 All Rights Reserved.
                 <p>Platform Details: %s</p>
                 <p style="font-size: small">Python %s</p>
@@ -457,7 +458,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def _startAnimation(self):
         assert not self.startDelay  # this shouldn't happen, delay is reset before
         self.timer.start(Constants.ICON_ANIMATION_DELAY)
-        self.iterator = itertools.cycle('2341')
+        self.iterator = itertools.cycle('123')
 
     def _onTimerDelay(self):
         assert self.startDelay
@@ -835,7 +836,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.actionCommand.setEnabled(False)
             return self.tr("Resume")
         elif self.state == Constants.APP_STATE_RUNNING:
-            self.actionCommand.setEnabled(any(i.online for i in infos))
+            # allow pause/resume even if off-line (is still looping...)
+#            self.actionCommand.setEnabled(any(i.online for i in infos))
             return self.tr("Pause")
 
     def _syncStatus(self):

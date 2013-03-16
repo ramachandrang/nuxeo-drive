@@ -8,7 +8,7 @@
 AppId={{5D0411E3-47F5-441A-B595-C1DCE87519C2}}
 AppName=Cloud Portal Office Desktop
 AppVersion=0.1.9
-AppPublisher=Sharp
+AppPublisher=SHARP
 AppPublisherURL=http://www.sharp.com/
 AppSupportURL=http://www.sharp.com/
 AppUpdatesURL=http://www.sharp.com/
@@ -17,9 +17,15 @@ DefaultGroupName=Cloud Portal Office Desktop
 OutputDir=dist
 OutputBaseFilename=CPODesktop-0.1.9-Win32-setup
 SetupIconFile=Cloud Portal Office Desktop\icons\CP_Red_Office_64.ico
+UninstallDisplayIcon={app}\icons\CP_Red_Office_64.ico
+UninstallDisplayName=Cloud Portal Office Desktop
 Compression=lzma
 SolidCompression=yes
 ChangesEnvironment=yes
+  ;If the machine is x64, then install in x64 bit mode; Else in 32 bit mode
+ArchitecturesInstallIn64BitMode=x64 
+PrivilegesRequired=admin
+; AlwaysRestart=yes
 
 
 [Languages]
@@ -46,10 +52,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "Cloud Portal Office Desktop\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "Cloud Portal Office Desktop\bin\cpoiconoverlaysynced.dll"; DestDir: "{sys}";   
-Source: "Cloud Portal Office Desktop\bin\cpoiconoverlayinprogress.dll"; DestDir: "{sys}";   
-Source: "Cloud Portal Office Desktop\bin\cpoiconoverlayconflicted.dll"; DestDir: "{sys}";   
-; NOTE: Don't use "Flags: ignoreversion" on any shared system files
+Source: "BatchFiles\*"; DestDir: "{app}\BatchFiles\"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "PreReqDll\*"; DestDir: "{sys}"; Flags: recursesubdirs createallsubdirs
+Source: "dll\64bit\*"; DestDir: "{app}\bin\"; Flags: ignoreversion;  Check: Is64BitInstallMode
+Source: "dll\32bit\*"; DestDir: "{app}\bin\"; Flags: ignoreversion;  Check: not Is64BitInstallMode
+Source: "dll\64bit\*"; DestDir: "{sys}\";  Check: Is64BitInstallMode
+Source: "dll\32bit\*"; DestDir: "{sys}\";  Check: not Is64BitInstallMode
 
 [Icons]                                                                                                        
 Name: "{group}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"
@@ -57,17 +65,17 @@ Name: "{group}\{cm:UninstallProgram,Cloud Portal Office Desktop}"; Filename: "{u
 Name: "{commondesktop}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Description: "{cm:LaunchProgram,Unregister Synch DLL}"; Flags: nowait runhidden 
-Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: nowait runhidden  
-Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent  unchecked
+Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: runhidden  
+Filename: "{app}\BatchFiles\RestartExplorer.bat"; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: runhidden waituntilterminated  
+Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent  
 
 [UninstallRun]
-Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Flags: nowait runhidden 
+Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Flags: runhidden 
+Filename: "{app}\BatchFiles\RestartExplorer.bat"; Flags: runhidden waituntilterminated  
 
 
 [Registry]
 Root: HKCU; Subkey: "Software\SHARP\CLOUD PORTAL OFFICE Desktop"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\SHARP\CpoDesktop\preferences"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\SHARP\CpoDesktop"; Flags: uninsdeletekey
-
 

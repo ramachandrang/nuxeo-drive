@@ -1,26 +1,21 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
-     <file alias="icon_dlg.png">nxdrive/data/icons/CP_Red_Office_16.png</file>
-     <file alias="indicator_icon_enabled.png">nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png</file>
-<!--
-     <file alias="indicator_icon_enabled.png">nxdrive/data/icons/CP_Red_Office_48x48.png</file>
--->
-     <file alias="indicator_icon_disabled.png">nxdrive/data/icons/nuxeo_drive_icon_16_disabled.png</file> 
-     <file alias="indicator_icon_paused.png">nxdrive/data/icons/nuxeo_drive_icon_16_paused.png</file>
-     <file alias="indicator_icon_transferring_1.png">nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png</file>
-     <file alias="indicator_icon_transferring_2.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R90.png</file>
-     <file alias="indicator_icon_transferring_3.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R180.png</file>
-     <file alias="indicator_icon_transferring_4.png">nxdrive/data/icons/nuxeo_drive_icon_16_transferring_R270.png</file>
-<!--
-     <file alias="about_icon.png">nxdrive/data/icons/nuxeo_drive_icon_48.png</file>
--->
+     <file alias="icon_dlg.png">nxdrive/data/icons/CP_Red_Office_16x16.png</file>
+     <file alias="indicator_icon_enabled.png">nxdrive/data/icons/CP_Red_Office_16x16_Online.png</file>
+     <file alias="indicator_icon_disabled.png">nxdrive/data/icons/CP_Red_Office_16x16_Offline.png</file> 
+     <file alias="indicator_icon_paused.png">nxdrive/data/icons/CP_Red_Office_16x16_Online_Pause.png</file>
+     <file alias="indicator_icon_transferring_1.png">nxdrive/data/icons/CP_Red_Office_16x16_Online_Sync_1.png</file>
+     <file alias="indicator_icon_transferring_2.png">nxdrive/data/icons/CP_Red_Office_16x16_Online_Sync_2.png</file>
+     <file alias="indicator_icon_transferring_3.png">nxdrive/data/icons/CP_Red_Office_16x16_Online_Sync_3.png</file>
 	 <file alias="about_icon.png">nxdrive/data/icons/CP_Red_Office_48x48.png</file>
      <file alias="wheel.gif">nxdrive/data/icons/animation.gif</file>
-     <file alias="general.png">nxdrive/data/icons/general-configuration.png</file>
-     <file alias="account.png">nxdrive/data/icons/user-account.png</file>
-     <file alias="network.png">nxdrive/data/icons/network-proxy.png</file>
-     <file alias="advanced.png">nxdrive/data/icons/advanced.png</file>
-     <file alias="rb_icon.png">nxdrive/data/icons/CP_Red_Office_32.png</file>
+     
+     <file alias="general.png">nxdrive/data/icons/GeneralSettings.png</file>
+     <file alias="account.png">nxdrive/data/icons/UserAccount.png</file>
+     <file alias="network.png">nxdrive/data/icons/Network.png</file>
+     <file alias="advanced.png">nxdrive/data/icons/AdvancedSettings.png</file>
+     
+     <file alias="rb_icon.png">nxdrive/data/icons/CP_Red_Office_32x32.png</file>
      <file alias="banner.png">nxdrive/data/images/banner-small.png</file>
      <file alias="bkgrnd.png">nxdrive/data/images/background_darwin.png</file>
      <file alias="watermark.png">nxdrive/data/images/watermark_win32.png</file>

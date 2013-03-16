@@ -1,4 +1,4 @@
 @echo off
-taskkill /f /IM explorer.exe
-explorer.exe
+START /WAIT taskkill /F /IM explorer.exe 
+START explorer.exe 
 EXIT

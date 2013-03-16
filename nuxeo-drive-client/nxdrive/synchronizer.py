@@ -1493,8 +1493,10 @@ class Synchronizer(object):
         log.trace("Traceback of ignored network error:",
                   exc_info = True)
         if self._frontend is not None:
-            self._frontend.notify_offline(
-                server_binding.local_folder, e)
+            # skip if called from wizard
+            if hasattr(self._frontend, 'notify_offline'):
+                self._frontend.notify_offline(
+                    server_binding.local_folder, e)
 
         self._controller.invalidate_client_cache(
             server_binding.server_url)
@@ -1527,18 +1529,10 @@ class Synchronizer(object):
             return True
 
         else:
-            if not self._controller.recover_from_invalid_credentials(server_binding, e):
-                if self._frontend is not None:
-                    # skip if called from wizard
-                    if hasattr(self._frontend, 'notify_offline'):
-                        self._frontend.notify_offline(
-                            server_binding.local_folder, e)
-
-                self._controller.invalidate_client_cache(
-                    server_binding.server_url)
-                return False
-            else:
+            if self._controller.recover_from_invalid_credentials(server_binding, e):
                 return True
+            else:
+                return False
 
     def get_remote_client(self, server_binding, base_folder = None,
                           repository = 'default'):
