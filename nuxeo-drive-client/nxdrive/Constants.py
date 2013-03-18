@@ -44,8 +44,8 @@ if USE_LOCAL_SERVICE:
     UPGRADE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/SoftwareUpdates.svc/json/'
     #UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
 else:
-    MAINTENANCE_SERVICE_URL = r'https://qa-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
-    UPGRADE_SERVICE_URL = r'https://qa-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
+    MAINTENANCE_SERVICE_URL = r'https://dev-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
+    UPGRADE_SERVICE_URL = r'https://dev-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
 
 INTERNAL_HTTP_PORT = 63111
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
@@ -93,7 +93,7 @@ elif sys.platform == 'win32':
     APP_IMG_WIZARD_WATERMARK = ':/watermark.png'
     APP_IMG_WIZARD_BANNER = ':/banner.png'
 
-COPYRIGHT_FILE = r'data/CloudDesk_EULA.txt'
+COPYRIGHT_FILE = r'CloudDesk_EULA.txt'
 ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
 ICON_APP_ENABLED = R'nuxeo_drive_icon_16_enabled.png'
 ICON_APP_DISABLED = R'nuxeo_drive_icon_16_disabled.png'

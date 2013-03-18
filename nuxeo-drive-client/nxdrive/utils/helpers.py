@@ -53,6 +53,27 @@ def find_exe_path():
     # Fall-back to the regular method that should work both the ndrive script
     return sys.argv[0]
 
+def find_data_path():
+    """Introspect the Python runtime to find the frozen 'data' path."""
+
+    import nxdrive
+    nxdrive_path = os.path.realpath(os.path.dirname(nxdrive.__file__))
+
+    # Detect frozen win32 executable under Windows
+    if nxdrive_path.endswith(WIN32_SUFFIX):
+        exe_path = nxdrive_path.replace(WIN32_SUFFIX, 'data')
+        if os.path.exists(exe_path):
+            return exe_path
+
+    # Detect OSX frozen app
+    if nxdrive_path.endswith(OSX_SUFFIX):
+        exe_path = nxdrive_path.replace(OSX_SUFFIX, 'Contents/MacOS/Resources/data')
+        if os.path.exists(exe_path):
+            return exe_path
+
+    # Fall-back to the regular method that should work both the ndrive script
+    return os.path.join(os.path.split(sys.argv[0])[0], 'data')
+    
 def get_maintenance_message(status, schedule = None):
     from dateutil import tz
     from datetime import datetime

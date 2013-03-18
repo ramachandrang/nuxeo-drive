@@ -5,6 +5,7 @@ Created on Dec 21, 2012
 '''
 
 import os
+from PySide.QtCore import QObject
 from PySide.QtGui import QStandardItemModel, QStandardItem, QIcon
 from PySide.QtCore import Qt
 
@@ -20,6 +21,11 @@ log = get_logger(__name__)
 ID_ROLE = Qt.UserRole + 1
 CHECKED_ROLE = Qt.UserRole + 2
 
+class ModelUpdater(QObject):
+    def __init__(self, model, server_binding, controller):
+        self.model = model
+        self.server_binding = server_binding
+        self.controller = controller
 
 def get_model(session, controller = None):
     model = QStandardItemModel()

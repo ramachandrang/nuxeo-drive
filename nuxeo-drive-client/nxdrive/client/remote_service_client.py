@@ -69,5 +69,5 @@ class RemoteUpgradeServiceClient(BaseAutomationClient):
             assert(info['AppName'].lower() == Constants.SHORT_APP_NAME.lower())
             return info['CreationDate'], info['Version'], info['DownloadUrl']
         except Exception, e:
-            log.debug('error retrieving upgrade version: %s', str(e))
+            log.debug('error retrieving upgrade version: %s', e)
             return None, None, None

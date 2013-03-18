@@ -36,7 +36,7 @@ from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import create_settings
-from nxdrive.utils import find_exe_path
+from nxdrive.utils import find_data_path
 from nxdrive.model import RecentFiles
 from nxdrive.model import ServerEvent
 from nxdrive.gui.proxy_dlg import ProxyDlg
@@ -239,7 +239,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.get_binding_info(sb.local_folder)
         # save current server binding
         self.server_binding = self.controller.get_server_binding(self._get_local_folder())
-
+        if self.server_binding is not None:
+            session = self.controller.get_session()
+            # reset older version events
+            self.controller._reset_upgrade_info(self.server_binding, session=session)
+            # reset the nag schedules
+            self.server_binding.reset_nags()
+            session.commit()
+        
         # setup communication from worker thread to application
         self.communicator.icon.connect(self.set_icon_state)
         self.communicator.menu.connect(self.update_menu)
@@ -295,7 +302,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                             platform.python_version(), PySide.__version__, QtCore.__version__))
         icon = QIcon(Constants.APP_ICON_ABOUT)
         msgbox.setIconPixmap(icon.pixmap(48, 48))
-        path = os.path.split(find_exe_path())[0]
+        path = find_data_path()
         msgbox.setDetailedText(open(os.path.join(path, Constants.COPYRIGHT_FILE)).read())
         msgbox.setDefaultButton(QMessageBox.Ok)
         msgbox.exec_()
@@ -539,10 +546,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         else:
             reason = str(exception)
 
+        log.debug('Switching to offline mode (reason: %s) for: %s',
+                  reason, local_folder)
         if info.online:
             # Mark binding as offline and update UI
-            log.debug('Switching to offline mode (reason: %s) for: %s',
-                      reason, local_folder)
             info.online = False
             self.update_running_icon()
             self.communicator.menu.emit()
@@ -1075,6 +1082,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         painter.end()
         return imageWithOverlay
+    
+    def commitData(self, sm):
+        log.trace("app quitting")
+        self.quit()
+        
 
 
 from nxdrive.utils import QApplicationSingleton
@@ -1083,6 +1095,7 @@ def startApp(controller, options):
     app = QApplicationSingleton()
     app.setQuitOnLastWindowClosed(False)
     i = CloudDeskTray(controller, options)
+    app.commitData = i.commitData
     i.show()
     return app.exec_()
 

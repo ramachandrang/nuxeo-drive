@@ -24,7 +24,7 @@ from nxdrive.client import LocalClient
 from nxdrive.utils import normalized_path
 from nxdrive.utils import encrypt_password, decrypt_password
 from nxdrive import Constants
-from nxdrive import DEBUG, USE_LOCAL_SERVICE, NAG_EVERY_LOOP
+from nxdrive import NAG_EVERY_LOOP
 
 WindowsError = None
 try:
@@ -98,7 +98,8 @@ class ServerBinding(Base):
     quota_exceeded = Column(Boolean)
     maintenance = Column(Boolean)
     next_nag_quota = Column(DateTime)
-    next_nag_notification = Column(DateTime)
+    next_nag_maint_notification = Column(DateTime)
+    next_nag_upgrade_notification = Column(DateTime)
     next_maintenance_check = Column(DateTime)
     remote_password = Column(String)
     __remote_password = Column('remote_password', String)
@@ -126,7 +127,8 @@ class ServerBinding(Base):
         self.quota_exceeded = False
         self.maintenance = False
         self.next_nag_quota = None
-        self.next_nag_notification = datetime.now()
+        self.next_nag_maint_notification = None
+        self.next_nag_upgrade_notification = None
         self.next_maintenance_check = None
         # Password is only stored if the server does not support token based authentication
         # CHANGED: Password IS currently stored for (1) refresh the token when it expires,
@@ -202,16 +204,19 @@ class ServerBinding(Base):
             self.maintenance = False
         self.next_maintenance_check = datetime.now() + timedelta(seconds = retry_after)
 
-    def update_server_notification_schedule(self):
-        self.next_nag_notification = datetime.now() + timedelta(seconds = Constants.SERVICE_NOTIFICATION_INTERVAL)
+    def update_maint_nag_schedule(self):
+        self.next_nag_maint_notification = datetime.now() + timedelta(seconds = Constants.SERVICE_NOTIFICATION_INTERVAL)
+        
+    def update_upgrade_nag_schedule(self):
+        self.next_nag_upgrade_notification = datetime.now() + timedelta(seconds = Constants.SERVICE_NOTIFICATION_INTERVAL)
 
     def nag_maintenance_schedule(self):
         if self.maintenance:
             return False
-        elif self.next_nag_notification is None:
+        elif self.next_nag_maint_notification is None:
             # check with a clean db
             return True
-        elif not self.maintenance and datetime.now() > self.next_nag_notification:
+        elif not self.maintenance and datetime.now() > self.next_nag_maint_notification:
             return True
         else:
             if NAG_EVERY_LOOP:
@@ -231,10 +236,10 @@ class ServerBinding(Base):
             return ServerBinding.MAINTENANCE_OFF
 
     def nag_upgrade_schedule(self):
-        if self.next_nag_notification is None:
+        if self.next_nag_upgrade_notification is None:
             # check if a clean db
             return True
-        elif datetime.now() > self.next_nag_notification:
+        elif datetime.now() > self.next_nag_upgrade_notification:
             return True
         else:
             if NAG_EVERY_LOOP:
@@ -243,6 +248,11 @@ class ServerBinding(Base):
             else:
                 return False
 
+    def reset_nags(self):
+        self.next_maint_nag_notification = None
+        self.next_nag_upgrade_notification = None
+        self.nag_signin = False
+        
     def nag_quota_exceeded(self):
         if self.next_nag_quota is None:
             return False

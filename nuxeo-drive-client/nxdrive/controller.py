@@ -15,6 +15,7 @@ from datetime import datetime
 from datetime import timedelta
 from threading import local
 from threading import Thread
+from threading import Condition
 import logging
 
 import nxdrive
@@ -33,6 +34,7 @@ from nxdrive.model import ServerBinding
 from nxdrive.model import LastKnownState
 from nxdrive.model import SyncFolders
 from nxdrive.model import ServerEvent
+from nxdrive.model import RecentFiles
 from nxdrive.synchronizer import Synchronizer
 from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
 from nxdrive.logging_config import get_logger
@@ -48,8 +50,8 @@ from sqlalchemy import func
 from sqlalchemy import asc
 from sqlalchemy import or_
 
-
 # states used by the icon overlay status requests
+SYNC_STATES = ['synchronized']
 PROGRESS_STATES = ['unknown',
                    'locally_created',
                    'remotely_created',
@@ -57,8 +59,8 @@ PROGRESS_STATES = ['unknown',
                    'remotely_modified',
                    'remotely_deleted',
                    ]
-
 CONFLICTED_STATES = [ 'conflicted', ]
+TRANSITION_STATES = PROGRESS_STATES + CONFLICTED_STATES
 
 schema_url = r'federatedloginservices.xml'
 # service_url = 'https://swee.sharpb2bcloud.com/login/auth.ejs'
@@ -167,7 +169,6 @@ class Controller(object):
     remote_fs_client_factory = RemoteFileSystemClient
     remote_maint_service_client_factory = RemoteMaintServiceClient
     remote_upgrade_service_client_factory = RemoteUpgradeServiceClient
-
     __instance = None
 
     @staticmethod
@@ -175,7 +176,7 @@ class Controller(object):
         # not exactly a singleton
         return Controller.__instance
 
-    def __init__(self, config_folder, echo = None, poolclass = None, timeout = 20):
+    def __init__(self, config_folder, echo = None, poolclass = None, timeout = 60):
 
         if Controller.__instance:
             raise Controller.__instance
@@ -210,6 +211,7 @@ class Controller(object):
         self.http_server = None
         self.status_thread = None
         Controller.__instance = self
+        self.sync_condition = Condition()
 
     def get_session(self):
         """Reuse the thread local session for this controller
@@ -261,7 +263,7 @@ class Controller(object):
         else:
             log.info("Failed to get process id, app will not quit.")
 
-    def children_states(self, folder_path):
+    def _children_states(self, folder_path):
         """List the status of the children of a folder
 
         The state of the folder is a summary of their descendant rather
@@ -274,7 +276,7 @@ class Controller(object):
         try:
             binding, path = self._binding_path(folder_path, session = session)
         except NotFound:
-            return []
+            return [], None
 
         try:
             folder_state = session.query(LastKnownState).filter_by(
@@ -282,14 +284,33 @@ class Controller(object):
                 local_path = path,
             ).one()
         except NoResultFound:
-            return []
+            return [], path
 
         states = self._pair_states_recursive(session, folder_state)
+        return states, path
+        
+    def children_states_as_files(self, folder_path):
+        states, path = self._children_states(folder_path)
+        if not path or not states:
+            return states
+        else:
+            return [(os.path.basename(s.local_path), pair_state)
+                    for s, pair_state in states
+                    if s.local_parent_path == path]
 
-        return [(os.path.basename(s.local_path), pair_state)
-                for s, pair_state in states
-                if s.local_parent_path == path]
-
+    def children_states_as_paths(self, folder_path):
+        states, path = self._children_states(folder_path)
+        if not path or not states:
+            return states
+        else:
+            return [(s.local_path, pair_state)
+                    for s, pair_state in states
+                    if s.local_parent_path == path]
+            
+    def children_states(self, folder_path):
+        """For backward compatibility"""
+        return self.chidren_states_as_files(folder_path)
+    
     def _pair_states_recursive(self, session, doc_pair):
         """Recursive call to collect pair state under a given location."""
         if not doc_pair.folderish:
@@ -423,7 +444,10 @@ class Controller(object):
                         username, server_url)
                 # Update the token info if required
                 server_binding.remote_token = token
-            server_binding.nag_signin = False
+            # reset the nag schedules
+            server_binding.reset_nags()
+            # clear old version upgrade events
+            self._reset_upgrade_info(server_binding)
 
         except NoResultFound:
             log.info("Binding '%s' to '%s' with account '%s'",
@@ -452,10 +476,6 @@ class Controller(object):
                                    remote_info = remote_info,
                                    remote_state = 'synchronized')
             session.add(state)
-
-            # clear old version upgrade events
-            self._reset_upgrade_info(server_binding)
-
             session.commit()
             return server_binding
         except Exception as e:
@@ -500,11 +520,20 @@ class Controller(object):
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
 
-        # delete all sync folders
+        # delete all sync folders but do not clear sync roots on server
+        # other device(s) may be linked to the same server, using the same account
         sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == binding.local_folder).all()
         for sf in sync_folders:
             session.delete(sf)
-
+        # delete recent files
+        recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == binding.local_folder).all()
+        for f in recent_files:
+            session.delete(f)
+        # delete server events
+        server_events = session.query(ServerEvent).filter(ServerEvent.local_folder == binding.local_folder).all()
+        for se in server_events:
+            session.delete(se)
+                
         session.delete(binding)
         session.commit()
 
@@ -530,18 +559,6 @@ class Controller(object):
 
     def _update_hash(self, password):
         return md5.new(password).digest()
-
-    def find_data_path(self):
-        """Introspect the Python runtime to find the frozen 'data' path."""
-
-        nxdrive_path = os.path.dirname(nxdrive.__file__)
-        data_path = os.path.join(nxdrive_path, 'data')
-        frozen_suffix = os.path.join('library.zip', 'nxdrive')
-        if nxdrive_path.endswith(frozen_suffix):
-            # installed version
-            data_path = os.path.join(os.path.dirname(os.path.dirname(nxdrive_path)), 'data')
-        # TODO: handle the python.exe + python script as sys.argv[0] case as well
-        return data_path
 
     def _rerequest_clouddesk_token(self, username, pwdhash):
         """Request and return a token for CloudDesk (federated authentication)"""
@@ -922,6 +939,7 @@ class Controller(object):
         d = parse_qs(environ['QUERY_STRING'])
         # select the first state
         state = d.get('state', [''])[0]
+        transition = d.get('transition', False)
         folders = d.get('folder', [])
 
         # Always escape user input to avoid script injection
@@ -946,23 +964,36 @@ class Controller(object):
 
         json_struct = { 'list': {}}
         folder_list = []
+        
         for folder in folders:
-
+            # force a local scan
+            self.synchronizer.scan_local(folder)
             folder_struct = {}
             folder_struct['name'] = folder
-            states = self.children_states(folder)
             if state == 'synchronized':
+                states = self.children_states_as_files(folder)
                 files = [f for f, status in states if status == state]
-            elif state == 'progress':
+            elif state == 'progress' and not transition:
+                states = self.children_states_as_files(folder)
                 files = [f for f, status in states if status in PROGRESS_STATES]
-            elif state == 'conflicted':
+            elif state == 'progress' and transition:
+                states = self.children_states_as_paths(folder)
+                files = [f for f, status in states if status in PROGRESS_STATES]
+                files = self.get_next_synced_files(files)
+            elif state == 'conflicted' and not transition:
+                states = self.children_states_as_files(folder)
                 files = [f for f, status in states if status in CONFLICTED_STATES]
+            elif state == 'conflicted' and transition:
+                states = self.children_states_as_paths(folder)
+                files = [f for f, status in states if status in CONFLICTED_STATES]
+                files = self.get_next_synced_files(files)
             else:
                 files = []
+                
             folder_struct['files'] = files
             folder_list.append({'folder': folder_struct})
+            
         json_struct['list'] = folder_list
-
         response_body = json.dumps(json_struct)
         http_status = '200 OK'
         response_headers = [('Content-Type', 'application/json'),
@@ -970,6 +1001,21 @@ class Controller(object):
 
         start_response(http_status, response_headers)
         return [response_body]
+    
+    def get_next_synced_files(self, paths):
+        """Called from the http thread to return file(s) which transitioned from 
+        'in progress' or 'conflicted' state to 'synchronized' state."""
+
+        session = self.get_session()
+        self.sync_condition.acquire()
+        num_synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
+                                filter(LastKnownState.local_path.in_(paths)).count()
+        if num_synced == 0:
+            self.sync_condition.wait()
+        synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
+                                filter(LastKnownState.local_path in paths).all()
+        self.sync_condition.release()
+        return synced               
 
     def reset_proxy(self):
         BaseAutomationClient.set_proxy()
@@ -1032,3 +1078,12 @@ class Controller(object):
         if len(older_versions) > 0:
             map(session.delete, older_versions)
 
+    def _get_folders_and_sync_roots(self, controller, server_binding):
+        session = controller.get_session()
+        controller.synchronizer.get_folders(server_binding = server_binding, session = session)
+        controller.synchronizer.update_roots(server_binding = server_binding, session = session)
+
+    def start_folders_thread(self, server_binding):
+            Thread(target = self._get_folders_and_sync_roots,
+                                      args = (self, server_binding,)).start()
+            

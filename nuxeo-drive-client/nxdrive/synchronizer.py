@@ -255,7 +255,7 @@ class Synchronizer(object):
                 return
 
         client = from_state.get_local_client()
-        info = client.get_info('/')
+        info = client.get_info(from_state.local_path)
         # recursive update
         self._scan_local_recursive(session, client, from_state, info)
         session.commit()
@@ -603,6 +603,15 @@ class Synchronizer(object):
         # progress
         if len(session.dirty) != 0 or len(session.deleted) != 0:
             session.commit()
+            
+        # signal the http thread to update file(s) sync state
+        # WIP - TO BE REVIEWD
+#        if len(session.dirty):     
+#            if doc_pair.pair_state == 'synchronized':
+#                condition = self._controller.sync_condition
+#                condition.acquire()
+#                condition.notify()
+#                condition.release()
 
     def _synchronize_locally_modified(self, doc_pair, session,
         local_client, remote_client, local_info, remote_info, status = None):
@@ -1185,7 +1194,7 @@ class Synchronizer(object):
 
                 bindings = session.query(ServerBinding).all()
                 if len(bindings) == 0:
-                    self._controller.notify_to_signin()
+                    self.notify_to_signin()
                     break
                 if self._frontend is not None:
                     local_folders = [sb.local_folder for sb in bindings]
@@ -1196,7 +1205,7 @@ class Synchronizer(object):
                     if sb.has_invalid_credentials():
                         if len(bindings) == 1:
                             # Let's wait for the user to (re-)enter valid credentials
-                            self._controller.notify_to_signin(sb)
+                            self.notify_to_signin(sb)
                         else:
                             continue
                     maint_mode = sb.check_for_maintenance()
@@ -1539,50 +1548,50 @@ class Synchronizer(object):
         return self._controller.get_remote_client(
             server_binding, base_folder = base_folder, repository = 'default')
 
-    def children_states(self, folder_path):
-        """List the status of the children of a folder
-
-        The state of the folder is a summary of their descendant rather
-        than their own instric synchronization step which is of little
-        use for the end user.
-
-        """
-        session = self.get_session()
-        server_binding = self.get_server_binding(folder_path, session = session)
-        if server_binding is not None:
-            # if folder_path is the top level Nuxeo Drive folder, list
-            # all the root binding states
-            root_states = []
-            for rb in server_binding.roots:
-                root_state = 'synchronized'
-                for _, child_state in self.children_states(rb.local_root):
-                    if child_state != 'synchronized':
-                        root_state = 'children_modified'
-                        break
-                root_states.append(
-                        (os.path.basename(rb.local_root), root_state))
-            return root_states
-
-        # Find the root binding for this absolute path
-        try:
-            binding, path = self._binding_path(folder_path, session = session)
-        except NotFound:
-            return []
-
-        try:
-            folder_state = session.query(LastKnownState).filter_by(
-                local_root = binding.local_root,
-                path = path,
-            ).one()
-        except NoResultFound:
-            return []
-
-        states = self._pair_states_recursive(binding.local_root, session,
-                                             folder_state)
-
-        return [(os.path.basename(s.path), pair_state)
-                for s, pair_state in states
-                if s.parent_path == path]
+#    def children_states(self, folder_path):
+#        """List the status of the children of a folder
+#
+#        The state of the folder is a summary of their descendant rather
+#        than their own instric synchronization step which is of little
+#        use for the end user.
+#
+#        """
+#        session = self.get_session()
+#        server_binding = self.get_server_binding(folder_path, session = session)
+#        if server_binding is not None:
+#            # if folder_path is the top level Nuxeo Drive folder, list
+#            # all the root binding states
+#            root_states = []
+#            for rb in server_binding.roots:
+#                root_state = 'synchronized'
+#                for _, child_state in self.children_states(rb.local_root):
+#                    if child_state != 'synchronized':
+#                        root_state = 'children_modified'
+#                        break
+#                root_states.append(
+#                        (os.path.basename(rb.local_root), root_state))
+#            return root_states
+#
+#        # Find the root binding for this absolute path
+#        try:
+#            binding, path = self._binding_path(folder_path, session = session)
+#        except NotFound:
+#            return []
+#
+#        try:
+#            folder_state = session.query(LastKnownState).filter_by(
+#                local_root = binding.local_root,
+#                path = path,
+#            ).one()
+#        except NoResultFound:
+#            return []
+#
+#        states = self._pair_states_recursive(binding.local_root, session,
+#                                             folder_state)
+#
+#        return [(os.path.basename(s.path), pair_state)
+#                for s, pair_state in states
+#                if s.parent_path == path]
 
     def get_folders(self, session = None, server_binding = None):
         """Retrieve all folder hierarchy from server.
@@ -1916,7 +1925,7 @@ class Synchronizer(object):
                 elif status == 'maintenance':
                     self._frontend.notify_maintenance_mode(sb.local_folder, msg, detail)
         finally:
-            sb.update_server_notification_schedule()
+            sb.update_maint_nag_schedule()
 
     def process_upgrade_schedule(self, sb, creation_utc, version, url, session = None):
         from _version import _is_newer_version
@@ -1958,7 +1967,7 @@ class Synchronizer(object):
                     self._frontend.notify_upgrade(sb.local_folder, main, detail)
 
         finally:
-            sb.update_server_notification_schedule()
+            sb.update_upgrade_nag_schedule()
 
     def persist_server_event(self, server_binding, message, message_type, utc_time = None,
                              data1 = None, data2 = None, session = None):
@@ -2012,3 +2021,4 @@ class Synchronizer(object):
                                     filter(ServerEvent.data2 < datetime.now()).all()
         map(session.delete, maint_schedules)
 
+    

@@ -227,7 +227,7 @@ elif sys.platform == 'darwin':
     freeze_options = dict(
         app = [script],
         data_files = [('icons', icons_files),
-                    ('nxdrive/data', others_files)],
+                    ('data', others_files)],
         options = dict(
             py2app = dict(
                 iconfile = icon,
