@@ -381,7 +381,6 @@ class RemoteDocumentClient(BaseAutomationClient):
                 ecm:parentId = '%s' AND
                 ecm:currentLifeCycleState != 'deleted' AND
                 ecm:mixinType = 'Folderish' AND
-                sh:isWritePermission = 1 AND
                 ecm:mixinType != 'HiddenInNavigation' AND
                 ecm:isCheckedInVersion = 0""" % docId
 

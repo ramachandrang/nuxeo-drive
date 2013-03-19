@@ -46,6 +46,7 @@ from nxdrive.http_server import HttpServer
 from nxdrive.http_server import http_server_loop
 
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy import func
 from sqlalchemy import asc
 from sqlalchemy import or_
@@ -915,6 +916,10 @@ class Controller(object):
             else:
                 return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
         except KeyError:
+            return None
+        except InvalidRequestError:
+            session = self.get_session()
+            session.rollback()
             return None
 
     def enable_trace(self, state):
