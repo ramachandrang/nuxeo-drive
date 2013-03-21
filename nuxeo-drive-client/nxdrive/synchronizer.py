@@ -31,6 +31,7 @@ from nxdrive.model import LastKnownState
 from nxdrive.model import RecentFiles
 from nxdrive.model import SyncFolders
 from nxdrive.model import ServerEvent
+from nxdrive.model import SYNC_STATES, TRANSITION_STATES
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
 from nxdrive.utils import exceptions
@@ -589,6 +590,7 @@ class Synchronizer(object):
         # TODO: refactor blob access API to avoid loading content in memory
         # as python strings
 
+        prev_doc_pair_state = doc_pair.pair_state
         handler_name = '_synchronize_' + doc_pair.pair_state
         sync_handler = getattr(self, handler_name, None)
 
@@ -606,12 +608,12 @@ class Synchronizer(object):
             
         # signal the http thread to update file(s) sync state
         # WIP - TO BE REVIEWD
-#        if len(session.dirty):     
-#            if doc_pair.pair_state == 'synchronized':
-#                condition = self._controller.sync_condition
-#                condition.acquire()
-#                condition.notify()
-#                condition.release()
+        if prev_doc_pair_state in TRANSITION_STATES and\
+           doc_pair.pair_state in SYNC_STATES:
+            condition = self._controller.sync_condition
+            condition.acquire()
+            condition.notify()
+            condition.release()
 
     def _synchronize_locally_modified(self, doc_pair, session,
         local_client, remote_client, local_info, remote_info, status = None):
@@ -1147,6 +1149,8 @@ class Synchronizer(object):
         previous_time = time()
         session = self.get_session()
         self.loop_count = 0
+        # start status thread used to provide file status for icon overlays
+        self._controller.start_status_thread()
 
         try:
             self.get_folders(server_binding = server_binding, session = session)
@@ -1168,10 +1172,7 @@ class Synchronizer(object):
         # TODO temporary fix - eat exception
         except Exception, e:
             log.debug("error retrieving folders: %s", str(e))
-
-        # start status thread used to provide file status for icon overlays
-        self._controller.start_status_thread()
-
+            
         try:
             while True:
                 n_synchronized = 0

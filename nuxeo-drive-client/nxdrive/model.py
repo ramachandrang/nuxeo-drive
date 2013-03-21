@@ -70,6 +70,18 @@ PAIR_STATES = {
     ('created', 'created'): 'conflicted',
 }
 
+# states used by the icon overlay status requests
+SYNC_STATES = ['synchronized']
+PROGRESS_STATES = ['unknown',
+                   'locally_created',
+                   'remotely_created',
+                   'locally_modified',
+                   'remotely_modified',
+                   'remotely_deleted',
+                   ]
+CONFLICTED_STATES = [ 'conflicted', ]
+TRANSITION_STATES = PROGRESS_STATES + CONFLICTED_STATES
+
 
 class DeviceConfig(Base):
     """Holds Nuxeo Drive configuration parameters

@@ -2,7 +2,6 @@
 
 from __future__ import division
 
-import os
 import sys
 import os.path
 import urllib2
@@ -35,6 +34,7 @@ from nxdrive.model import LastKnownState
 from nxdrive.model import SyncFolders
 from nxdrive.model import ServerEvent
 from nxdrive.model import RecentFiles
+from nxdrive.model import PROGRESS_STATES, CONFLICTED_STATES
 from nxdrive.synchronizer import Synchronizer
 from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
 from nxdrive.logging_config import get_logger
@@ -50,18 +50,6 @@ from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy import func
 from sqlalchemy import asc
 from sqlalchemy import or_
-
-# states used by the icon overlay status requests
-SYNC_STATES = ['synchronized']
-PROGRESS_STATES = ['unknown',
-                   'locally_created',
-                   'remotely_created',
-                   'locally_modified',
-                   'remotely_modified',
-                   'remotely_deleted',
-                   ]
-CONFLICTED_STATES = [ 'conflicted', ]
-TRANSITION_STATES = PROGRESS_STATES + CONFLICTED_STATES
 
 schema_url = r'federatedloginservices.xml'
 # service_url = 'https://swee.sharpb2bcloud.com/login/auth.ejs'
@@ -729,10 +717,7 @@ class Controller(object):
     def get_remote_doc_client(self, sb, repository = 'default',
                               base_folder = None):
         """Return an instance of Nuxeo Document Client"""
-        # NOTE: this fails against standard Nuxeo server
-        # It was added to workaround permission error (http 401) against CloudDesk
-#        if base_folder is None:
-#            base_folder = self._get_mydocs_folder(sb)
+
         return self.remote_doc_client_factory(
             sb.server_url, sb.remote_user, self.device_id,
             token = sb.remote_token, password = sb.remote_password,
@@ -744,10 +729,6 @@ class Controller(object):
         # Backward compat
         return self.get_remote_doc_client(server_binding,
             repository = repository, base_folder = base_folder)
-
-    def get_service_client(self, service_url, user = None):
-        return self.remote_doc_client_factory(
-            service_url, user, self.device_id)
 
     def invalidate_client_cache(self, server_url):
         cache = self._get_client_cache()
@@ -912,15 +893,16 @@ class Controller(object):
         try:
             used, total = server_binding.used_storage, server_binding.total_storage
             if total == 0:
-                return None
+                return None, False
             else:
-                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
+                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000),\
+                        used >= total
         except KeyError:
-            return None
+            return None, False
         except InvalidRequestError:
             session = self.get_session()
             session.rollback()
-            return None
+            return None, False
 
     def enable_trace(self, state):
         BaseAutomationClient._enable_trace = state
@@ -934,24 +916,26 @@ class Controller(object):
 
     def stop_status_thread(self):
         if self.http_server:
-            self.http_server.stop()
+            try:
+                url = 'http://localhost:%d/stop' % self.http_server.port
+                urllib2.urlopen(url, None, 10)
+            except:
+                log.trace("terminating the http thread with an error.")
 
-    def sync_status_app(self, environ, start_response):
+    def sync_status_app(self, state, folder, transition):
         import json
-        from cgi import parse_qs, escape
+        from cgi import escape
+        import cherrypy
 
-        # Returns a dictionary containing lists as values.
-        d = parse_qs(environ['QUERY_STRING'])
-        # select the first state
-        state = d.get('state', [''])[0]
-        transition = d.get('transition', False)
-        folders = d.get('folder', [])
-
+        if state is None or folder is None or\
+                transition.lower() not in ("yes", "true", "t", "1", "no", "false", "f", "0"):
+            cherrypy.response.status = '400 Bad Request'
+            return None
+        
         # Always escape user input to avoid script injection
         state = escape(state)
-        folders = [escape(folder) for folder in folders]
-
-        status = '200 OK'
+        folder = escape(folder)
+        transition = transition.lower() in ("yes", "true", "t", "1")
 
         # response is json in the following format:
         # { "list": ["folder" : {"name": "/users/bob/loud portal office desktop/My Docs/work",
@@ -966,51 +950,48 @@ class Controller(object):
         #                        }
         #            ]
         # }
-
+            
         json_struct = { 'list': {}}
         folder_list = []
         
-        for folder in folders:
-            # force a local scan
-            self.synchronizer.scan_local(folder)
-            folder_struct = {}
-            folder_struct['name'] = folder
-            if state == 'synchronized':
-                states = self.children_states_as_files(folder)
-                files = [f for f, status in states if status == state]
-            elif state == 'progress' and not transition:
-                states = self.children_states_as_files(folder)
-                files = [f for f, status in states if status in PROGRESS_STATES]
-            elif state == 'progress' and transition:
-                states = self.children_states_as_paths(folder)
-                files = [f for f, status in states if status in PROGRESS_STATES]
-                files = self.get_next_synced_files(files)
-            elif state == 'conflicted' and not transition:
-                states = self.children_states_as_files(folder)
-                files = [f for f, status in states if status in CONFLICTED_STATES]
-            elif state == 'conflicted' and transition:
-                states = self.children_states_as_paths(folder)
-                files = [f for f, status in states if status in CONFLICTED_STATES]
-                files = self.get_next_synced_files(files)
-            else:
-                files = []
-                
-            folder_struct['files'] = files
-            folder_list.append({'folder': folder_struct})
+        # force a local scan
+        self.synchronizer.scan_local(folder)
+        folder_struct = {}
+        folder_struct['name'] = folder
+        if state == 'synchronized':
+            states = self.children_states_as_files(folder)
+            files = [f for f, status in states if status == state]
+        elif state == 'progress' and not transition:
+            states = self.children_states_as_files(folder)
+            files = [f for f, status in states if status in PROGRESS_STATES]
+        elif state == 'progress' and transition:
+            states = self.children_states_as_paths(folder)
+            files = [f for f, status in states if status in PROGRESS_STATES]
+            files = self.get_next_synced_files(files)
+        elif state == 'conflicted' and not transition:
+            states = self.children_states_as_files(folder)
+            files = [f for f, status in states if status in CONFLICTED_STATES]
+        elif state == 'conflicted' and transition:
+            states = self.children_states_as_paths(folder)
+            files = [f for f, status in states if status in CONFLICTED_STATES]
+            files = self.get_next_synced_files(files)
+        else:
+            files = []
+            
+        folder_struct['files'] = files
+        folder_list.append({'folder': folder_struct})
             
         json_struct['list'] = folder_list
-        response_body = json.dumps(json_struct)
-        http_status = '200 OK'
-        response_headers = [('Content-Type', 'application/json'),
-                            ('Content-Length', str(len(response_body)))]
+        cherrypy.response.status = '200 OK'
+        return json_struct
 
-        start_response(http_status, response_headers)
-        return [response_body]
-    
     def get_next_synced_files(self, paths):
         """Called from the http thread to return file(s) which transitioned from 
         'in progress' or 'conflicted' state to 'synchronized' state."""
 
+        if len(paths) == 0:
+            return paths
+        
         session = self.get_session()
         self.sync_condition.acquire()
         num_synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
@@ -1018,16 +999,17 @@ class Controller(object):
         if num_synced == 0:
             self.sync_condition.wait()
         synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
-                                filter(LastKnownState.local_path in paths).all()
+                                filter(LastKnownState.local_path.in_(paths)).all()
         self.sync_condition.release()
-        return synced               
+        files = [state.local_name for state in synced]
+        return files               
 
     def reset_proxy(self):
         BaseAutomationClient.set_proxy()
 
     def setProxy(self):
         BaseAutomationClient.set_proxy(ProxyInfo.get_proxy())
-
+        
     def proxy_changed(self):
         return BaseAutomationClient.get_proxy() != ProxyInfo.get_proxy()
 
