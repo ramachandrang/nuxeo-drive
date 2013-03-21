@@ -7,7 +7,7 @@ import sys
 import os.path
 import urllib2
 import md5
-import suds
+#import suds
 import base64
 import socket
 import httplib
@@ -16,6 +16,7 @@ from datetime import datetime
 from datetime import timedelta
 from threading import local
 from threading import Thread
+from threading import Condition
 import logging
         
 import nxdrive
@@ -24,6 +25,8 @@ from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import RemoteDocumentClient
 from nxdrive.client import Unauthorized
 from nxdrive.client import BaseAutomationClient
+from nxdrive.client import RemoteMaintServiceClient
+from nxdrive.client import RemoteUpgradeServiceClient
 from nxdrive.client import ProxyInfo
 from nxdrive.client import NotFound
 from nxdrive.model import init_db
@@ -31,23 +34,28 @@ from nxdrive.model import DeviceConfig
 from nxdrive.model import ServerBinding
 from nxdrive.model import LastKnownState
 from nxdrive.model import SyncFolders
+from nxdrive.model import ServerEvent
+from nxdrive.model import RecentFiles
 from nxdrive.synchronizer import Synchronizer
 from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
 from nxdrive.utils import safe_long_path
+from nxdrive._version import _is_newer_version
 from nxdrive import Constants
 from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.http_server import HttpServer
 from nxdrive.http_server import http_server_loop
 
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy import func
 from sqlalchemy import asc
 from sqlalchemy import or_
 
 
 # states used by the icon overlay status requests
+SYNC_STATES = ['synchronized']
 PROGRESS_STATES = ['unknown',
                    'locally_created',
                    'remotely_created',
@@ -55,8 +63,8 @@ PROGRESS_STATES = ['unknown',
                    'remotely_modified',
                    'remotely_deleted',
                    ]
-
 CONFLICTED_STATES = [ 'conflicted', ]
+TRANSITION_STATES = PROGRESS_STATES + CONFLICTED_STATES
 
 schema_url = r'federatedloginservices.xml'
 # service_url = 'https://swee.sharpb2bcloud.com/login/auth.ejs'
@@ -163,7 +171,8 @@ class Controller(object):
 
     # Used for FS synchronization operations
     remote_fs_client_factory = RemoteFileSystemClient
-
+    remote_maint_service_client_factory = RemoteMaintServiceClient
+    remote_upgrade_service_client_factory = RemoteUpgradeServiceClient
     __instance = None
 
     @staticmethod
@@ -171,7 +180,7 @@ class Controller(object):
         # not exactly a singleton
         return Controller.__instance
 
-    def __init__(self, config_folder, echo=None, poolclass=None, timeout=20):
+    def __init__(self, config_folder, echo = None, poolclass = None, timeout = 60):
 
         if Controller.__instance:
             raise Controller.__instance
@@ -206,6 +215,7 @@ class Controller(object):
         self.http_server = None
         self.status_thread = None
         Controller.__instance = self
+        self.sync_condition = Condition()
 
     def get_session(self):
         """Reuse the thread local session for this controller
@@ -241,6 +251,13 @@ class Controller(object):
 
         """
         pid = self.synchronizer.check_running(process_name = "sync")
+        if pid is None:
+            # this could happen if the nxdrive_sync.pid file is in use
+            # and the pid could not be written into it at startup
+            # TODO Assume there is this process running, investigate...
+            log.info("No running synchronization process to stop.")
+            pid = os.getpid()
+
         if pid is not None:
             # Create a stop file marker for the running synchronization
             # process
@@ -248,9 +265,9 @@ class Controller(object):
             stop_file = os.path.join(self.config_folder, "stop_%d" % pid)
             open(safe_long_path(stop_file), 'wb').close()
         else:
-            log.info("No running synchronization process to stop.")
+            log.info("Failed to get process id, app will not quit.")
 
-    def children_states(self, folder_path):
+    def _children_states(self, folder_path):
         """List the status of the children of a folder
 
         The state of the folder is a summary of their descendant rather
@@ -263,7 +280,7 @@ class Controller(object):
         try:
             binding, path = self._binding_path(folder_path, session=session)
         except NotFound:
-            return []
+            return [], None
 
         try:
             folder_state = session.query(LastKnownState).filter_by(
@@ -271,14 +288,33 @@ class Controller(object):
                 local_path=path,
             ).one()
         except NoResultFound:
-            return []
+            return [], path
 
         states = self._pair_states_recursive(session, folder_state)
+        return states, path
+        
+    def children_states_as_files(self, folder_path):
+        states, path = self._children_states(folder_path)
+        if not path or not states:
+            return states
+        else:
+            return [(os.path.basename(s.local_path), pair_state)
+                    for s, pair_state in states
+                    if s.local_parent_path == path]
 
-        return [(os.path.basename(s.local_path), pair_state)
-                for s, pair_state in states
-                if s.local_parent_path == path]
-
+    def children_states_as_paths(self, folder_path):
+        states, path = self._children_states(folder_path)
+        if not path or not states:
+            return states
+        else:
+            return [(s.local_path, pair_state)
+                    for s, pair_state in states
+                    if s.local_parent_path == path]
+            
+    def children_states(self, folder_path):
+        """For backward compatibility"""
+        return self.chidren_states_as_files(folder_path)
+    
     def _pair_states_recursive(self, session, doc_pair):
         """Recursive call to collect pair state under a given location."""
         if not doc_pair.folderish:
@@ -331,9 +367,14 @@ class Controller(object):
         # Check for bindings that are prefix of local_path
         session = self.get_session()
         all_bindings = session.query(ServerBinding).all()
-        matching_bindings = [sb for sb in all_bindings
-                             if local_path.startswith(
-                                sb.local_folder + os.path.sep)]
+        if sys.platform == 'win32':
+            matching_bindings = [sb for sb in all_bindings
+                                 if local_path.lower().startswith(
+                                    sb.local_folder.lower() + os.path.sep)]
+        else:
+            matching_bindings = [sb for sb in all_bindings
+                                 if local_path.startswith(
+                                    sb.local_folder + os.path.sep)]
         if len(matching_bindings) == 0:
             raise NotFound(_("Could not find any server binding for ")
                                + local_path)
@@ -348,13 +389,14 @@ class Controller(object):
     def get_server_binding(self, local_folder = None, raise_if_missing = False,
                            session = None):
         """Find the ServerBinding instance for a given local_folder"""
-        local_folder = normalized_path(local_folder)
+
         if session is None:
             session = self.get_session()
         try:
             if local_folder is None:
                 server_binding = session.query(ServerBinding).first()
             else:
+                local_folder = normalized_path(local_folder)
                 server_binding = session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
             return server_binding
@@ -406,7 +448,10 @@ class Controller(object):
                         username, server_url)
                 # Update the token info if required
                 server_binding.remote_token = token
-            server_binding.nag_signin = False
+            # reset the nag schedules
+            server_binding.reset_nags()
+            # clear old version upgrade events
+            self._reset_upgrade_info(server_binding)
 
         except NoResultFound:
             log.info("Binding '%s' to '%s' with account '%s'",
@@ -479,11 +524,20 @@ class Controller(object):
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
 
-        # delete all sync folders
+        # delete all sync folders but do not clear sync roots on server
+        # other device(s) may be linked to the same server, using the same account
         sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == binding.local_folder).all()
         for sf in sync_folders:
             session.delete(sf)
-
+        # delete recent files
+        recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == binding.local_folder).all()
+        for f in recent_files:
+            session.delete(f)
+        # delete server events
+        server_events = session.query(ServerEvent).filter(ServerEvent.local_folder == binding.local_folder).all()
+        for se in server_events:
+            session.delete(se)
+                
         session.delete(binding)
         session.commit()
 
@@ -509,18 +563,6 @@ class Controller(object):
 
     def _update_hash(self, password):
         return md5.new(password).digest()
-
-    def find_data_path(self):
-        """Introspect the Python runtime to find the frozen 'data' path."""
-
-        nxdrive_path = os.path.dirname(nxdrive.__file__)
-        data_path = os.path.join(nxdrive_path, 'data')
-        frozen_suffix = os.path.join('library.zip', 'nxdrive')
-        if nxdrive_path.endswith(frozen_suffix):
-            # installed version
-            data_path = os.path.join(os.path.dirname(os.path.dirname(nxdrive_path)), 'data')
-        # TODO: handle the python.exe + python script as sys.argv[0] case as well
-        return data_path
 
     def _rerequest_clouddesk_token(self, username, pwdhash):
         """Request and return a token for CloudDesk (federated authentication)"""
@@ -687,14 +729,10 @@ class Controller(object):
         remote_client.make_raise(self._remote_error)
         return remote_client
 
-    def get_remote_doc_client(self, server_binding, repository='default',
-                              base_folder=None):
+    def get_remote_doc_client(self, sb, repository = 'default',
+                              base_folder = None):
         """Return an instance of Nuxeo Document Client"""
-        # NOTE: this fails against standard Nuxeo server
-        # It was added to workaround permission error (http 401) against CloudDesk
-#        if base_folder is None:
-#            base_folder = self._get_mydocs_folder(server_binding)
-        sb = server_binding
+
         return self.remote_doc_client_factory(
             sb.server_url, sb.remote_user, self.device_id,
             token=sb.remote_token, password=sb.remote_password,
@@ -875,7 +913,11 @@ class Controller(object):
                 return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000)
         except KeyError:
             return None
-        
+        except InvalidRequestError:
+            session = self.get_session()
+            session.rollback()
+            return None
+
     def enable_trace(self, state):
         BaseAutomationClient._enable_trace = state
 
@@ -889,23 +931,87 @@ class Controller(object):
     def stop_status_thread(self):
         if self.http_server:
             self.http_server.stop()
-        
-    def sync_status_app(self, environ, start_response):
+
+#    def sync_status_app(self, environ, start_response):
+#        import json
+#        from cgi import parse_qs, escape
+#
+#        # Returns a dictionary containing lists as values.
+#        d = parse_qs(environ['QUERY_STRING'])
+#        # select the first state
+#        state = d.get('state', [''])[0]
+#        transition = d.get('transition', False)
+#        folders = d.get('folder', [])
+#
+#        # Always escape user input to avoid script injection
+#        state = escape(state)
+#        folders = [escape(folder) for folder in folders]
+#
+#        status = '200 OK'
+#
+#        # response is json in the following format:
+#        # { "list": ["folder" : {"name": "/users/bob/loud portal office desktop/My Docs/work",
+#        #                         "files": ["foo.txt",
+#        #                                   "bar.doc"
+#        #                                  ]
+#        #                        },
+#        #             "folder" : {"name": "/users/bob/loud portal office desktop/My Docs/hobby",
+#        #                         "files": ["itinerary.doc",
+#        #                                   "reservation.html"
+#        #                                  ]
+#        #                        }
+#        #            ]
+#        # }
+#
+#        json_struct = { 'list': {}}
+#        folder_list = []
+#        
+#        for folder in folders:
+#            # force a local scan
+#            self.synchronizer.scan_local(folder)
+#            folder_struct = {}
+#            folder_struct['name'] = folder
+#            if state == 'synchronized':
+#                states = self.children_states_as_files(folder)
+#                files = [f for f, status in states if status == state]
+#            elif state == 'progress' and not transition:
+#                states = self.children_states_as_files(folder)
+#                files = [f for f, status in states if status in PROGRESS_STATES]
+#            elif state == 'progress' and transition:
+#                states = self.children_states_as_paths(folder)
+#                files = [f for f, status in states if status in PROGRESS_STATES]
+#                files = self.get_next_synced_files(files)
+#            elif state == 'conflicted' and not transition:
+#                states = self.children_states_as_files(folder)
+#                files = [f for f, status in states if status in CONFLICTED_STATES]
+#            elif state == 'conflicted' and transition:
+#                states = self.children_states_as_paths(folder)
+#                files = [f for f, status in states if status in CONFLICTED_STATES]
+#                files = self.get_next_synced_files(files)
+#            else:
+#                files = []
+#                
+#            folder_struct['files'] = files
+#            folder_list.append({'folder': folder_struct})
+#            
+#        json_struct['list'] = folder_list
+#        response_body = json.dumps(json_struct)
+#        http_status = '200 OK'
+#        response_headers = [('Content-Type', 'application/json'),
+#                            ('Content-Length', str(len(response_body)))]
+#
+#        start_response(http_status, response_headers)
+#        return [response_body]
+
+    def sync_status_app(self, state=None, folders=None, transition=False):
         import json
-        from cgi import parse_qs, escape
-        
-        # Returns a dictionary containing lists as values.
-        d = parse_qs(environ['QUERY_STRING'])
-        # select the first state
-        state = d.get('state', [''])[0]
-        folders = d.get('folder', [])
-        
+        from cgi import escape
+        import cherrypy
+
         # Always escape user input to avoid script injection
         state = escape(state)
         folders = [escape(folder) for folder in folders]
-        
-        status = '200 OK'
-        
+
         # response is json in the following format:
         # { "list": ["folder" : {"name": "/users/bob/loud portal office desktop/My Docs/work",
         #                         "files": ["foo.txt",
@@ -922,38 +1028,125 @@ class Controller(object):
             
         json_struct = { 'list': {}}
         folder_list = []
+        
         for folder in folders:
-            
+            # force a local scan
+            self.synchronizer.scan_local(folder)
             folder_struct = {}
             folder_struct['name'] = folder
-            states = self.children_states(folder)
             if state == 'synchronized':
+                states = self.children_states_as_files(folder)
                 files = [f for f, status in states if status == state]
-            elif state == 'progress':
+            elif state == 'progress' and not transition:
+                states = self.children_states_as_files(folder)
                 files = [f for f, status in states if status in PROGRESS_STATES]
-            elif state == 'conflicted':
+            elif state == 'progress' and transition:
+                states = self.children_states_as_paths(folder)
+                files = [f for f, status in states if status in PROGRESS_STATES]
+                files = self.get_next_synced_files(files)
+            elif state == 'conflicted' and not transition:
+                states = self.children_states_as_files(folder)
                 files = [f for f, status in states if status in CONFLICTED_STATES]
+            elif state == 'conflicted' and transition:
+                states = self.children_states_as_paths(folder)
+                files = [f for f, status in states if status in CONFLICTED_STATES]
+                files = self.get_next_synced_files(files)
             else:
                 files = []
+                
             folder_struct['files'] = files
             folder_list.append({'folder': folder_struct})
-        json_struct['list'] = folder_list
             
-        response_body = json.dumps(json_struct)        
-        http_status = '200 OK'
-        response_headers = [('Content-Type', 'application/json'),
-                            ('Content-Length', str(len(response_body)))]
-        
-        start_response(http_status, response_headers)
-        return [response_body]
+        json_struct['list'] = folder_list
+        response_body = json.dumps(json_struct)
+        cherrypy.response.status = '200 OK'
+        cherrypy.response.headers['Content-Type'] = 'application/json'
+        cherrypy.response.headers['Content-Length'] = str(len(response_body))
+
+        return response_body    
+
+    def get_next_synced_files(self, paths):
+        """Called from the http thread to return file(s) which transitioned from 
+        'in progress' or 'conflicted' state to 'synchronized' state."""
+
+        session = self.get_session()
+        self.sync_condition.acquire()
+        num_synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
+                                filter(LastKnownState.local_path.in_(paths)).count()
+        if num_synced == 0:
+            self.sync_condition.wait()
+        synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
+                                filter(LastKnownState.local_path in paths).all()
+        self.sync_condition.release()
+        return synced               
 
     def reset_proxy(self):
         BaseAutomationClient.set_proxy()
-        
+
     def setProxy(self):
         BaseAutomationClient.set_proxy(ProxyInfo.get_proxy())
         
     def proxy_changed(self):
         return BaseAutomationClient.get_proxy() != ProxyInfo.get_proxy()
-        
-        
+
+
+    def get_upgrade_service_client(self, server_binding):
+        """Return a client for the external software upgrade service."""
+        from nxdrive._version import __version__
+
+        cache = self._get_client_cache()
+        url = Constants.UPGRADE_SERVICE_URL + Constants.SHORT_APP_NAME + '/' + __version__ + '/' + sys.platform
+        cache_key = (url, None, self.device_id)
+        remote_client = cache.get(cache_key)
+
+        if remote_client is None:
+            is_automation = url.startswith(server_binding.server_url)
+            remote_client = self.remote_upgrade_service_client_factory(
+                url, None, self.device_id,
+                timeout = self.timeout, is_automation = is_automation)
+            cache[cache_key] = remote_client
+        # Make it possible to have the remote client simulate any kind of
+        # failure
+        remote_client.make_raise(self._remote_error)
+        return remote_client
+
+    def get_maint_service_client(self, server_binding):
+        """Return a client for the external maintenance service."""
+
+        cache = self._get_client_cache()
+        netloc = urlparse.urlsplit(server_binding.server_url).netloc
+        url = urlparse.urljoin(Constants.MAINTENANCE_SERVICE_URL, netloc)
+        cache_key = (url, None, self.device_id)
+        remote_client = cache.get(cache_key)
+
+        if remote_client is None:
+            is_automation = url.startswith(server_binding.server_url)
+            remote_client = self.remote_maint_service_client_factory(
+                url, None, self.device_id,
+                timeout = self.timeout, is_automation = is_automation)
+            cache[cache_key] = remote_client
+        # Make it possible to have the remote client simulate any kind of
+        # failure
+        remote_client.make_raise(self._remote_error)
+        return remote_client
+
+    def _reset_upgrade_info(self, sb, session = None):
+        """Remove all upgrade info with same or lower version number than the current one."""
+        if session is None:
+            session = self.get_session()
+
+        versions = session.query(ServerEvent).filter(ServerEvent.message_type == 'upgrade').\
+                            filter(ServerEvent.local_folder == sb.local_folder).all()
+        older_versions = [version for version in versions if not _is_newer_version(version.data1)]
+        if len(older_versions) > 0:
+            map(session.delete, older_versions)
+
+    def _get_folders_and_sync_roots(self, controller, server_binding):
+        session = controller.get_session()
+        controller.synchronizer.get_folders(server_binding = server_binding, session = session)
+        controller.synchronizer.update_roots(server_binding = server_binding, session = session)
+
+    def start_folders_thread(self, server_binding):
+            Thread(target = self._get_folders_and_sync_roots,
+                                      args = (self, server_binding,)).start()
+            
