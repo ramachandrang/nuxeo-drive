@@ -49,7 +49,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def __init__(self, frontend = None, parent = None):
         super(PreferencesDlg, self).__init__(parent)
         self.setupUi(self)
-        self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
+        self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setWindowTitle('%s Preferences' % Constants.APP_NAME)
         self.tabWidget.setCurrentIndex(1)
         self.cbAutostart.setText(self.tr('Start automatically when starting this computer'))
@@ -180,20 +180,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         app = QApplication.instance()
         process_filter = EventFilter(self)
 
-#        app.setOverrideCursor(Qt.WaitCursor)
-#        self.installEventFilter(process_filter)
-#        try:
-#            # retrieve folders
-#            self.controller.synchronizer.get_folders()
-#            self.controller.synchronizer.update_roots(self.server_binding)
-#
-#        except Exception as e:
-#            log.error(self.tr('Unable to update folders from %s (%s)'), self.server_binding.server_url, str(e))
-#
-#        finally:
-#            app.restoreOverrideCursor()
-#            self.removeEventFilter(process_filter)
-
         dlg = SyncFoldersDlg(frontend = self.frontend)
         if dlg.exec_() == QDialog.Rejected:
             return
@@ -202,11 +188,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         app.setOverrideCursor(Qt.WaitCursor)
         self.installEventFilter(process_filter)
         try:
-            self.controller.synchronizer.set_roots()
-
+            self.controller.synchronizer.set_roots(self.server_binding)
         except Exception as e:
             log.error(self.tr('Unable to set roots for %s (%s)'), self.server_binding.server_url, str(e))
-
         finally:
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
@@ -356,9 +340,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                         self.server_binding.remote_user,
                         self.server_binding.remote_password)
 
-#                    self.controller.synchronizer.get_folders()
-#                    self.controller.synchronizer.update_roots(self.server_binding)
-
             except Exception as ex:
                 log.debug("failed to bind or unbind: %s", str(ex))
                 self._disconnect()
@@ -432,16 +413,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             if self.server_binding is not None:
                 shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
                 win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
-
-            notifications = settings.value('preferences/notifications', 'true')
-            if notifications.lower() == 'true':
-                self.notifications = True
-            elif notifications.lower() == 'false':
-                self.notifications = False
-            else:
-                self.notifications = True
-        else:
-            self.notifications = settings.value('preferences/notifications', True)
 
         # Apply other changes
         if self.rbProxy.isChecked():
@@ -530,4 +501,3 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
         if self.result == ProgressDialog.OK_AND_RESTART and self.frontend.state == Constants.APP_STATE_STOPPED:
             self.frontend._doSync()
-            

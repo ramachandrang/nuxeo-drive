@@ -5,6 +5,7 @@ import argparse
 from getpass import getpass
 import traceback
 
+import nxdrive
 from nxdrive.controller import Controller
 from nxdrive.daemon import daemonize
 from nxdrive.logging_config import configure
@@ -38,6 +39,7 @@ If no command is provided, the graphical application is started along with a
 synchronization process.
 
 Possible commands:
+- version
 - console
 - start
 - stop
@@ -70,6 +72,14 @@ def make_cli_parser(add_subparsers = True):
     common_parser = argparse.ArgumentParser(
         add_help = False,
     )
+    
+    common_parser.add_argument(
+        "--version", "-v",
+        action = 'store_true',
+        default = False,
+        help = _("print the program version.")
+    )
+        
     common_parser.add_argument(
         "--nxdrive-home",
         default = "~/.nuxeo-drive",
@@ -389,6 +399,11 @@ class CliHandler(object):
 
     def launch(self, options = None):
         """Launch the QT app in the main thread and sync in another thread."""
+
+        if options.version:
+            from nxdrive._version import __version__
+            return __version__
+        
         # check is in wizard mode
         wizard_mode = settings.value('wizard', 'true')
         if sys.platform == 'win32':

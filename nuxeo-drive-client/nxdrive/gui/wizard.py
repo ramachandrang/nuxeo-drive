@@ -73,7 +73,7 @@ class CpoWizard(QWizard):
         self.addPage(FinalPage())  # 5
         self.addPage(AdvancedPage())  # 6
 
-        self.setWindowIcon(QIcon(Constants.APP_ICON_ENABLED))
+        self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setFixedSize(700, 500)
         self.setPixmap(QWizard.LogoPixmap, QPixmap(Constants.APP_IMG_WIZARD_BANNER))
         self.setWindowTitle(self.tr('%s Setup') % Constants.APP_NAME)
@@ -178,23 +178,20 @@ class CpoWizard(QWizard):
         settings.setValue('preferences/log', True)
         # change wizard mode to false (start as app)
         settings.setValue('wizard', False)
-
+        # save settings now
+        settings.sync()
         launch = self.field('launch')
         if launch:
             exe_path = find_exe_path()
             script, ext = os.path.splitext(exe_path)
-#            if exe_path is not None:
-#                subprocess.Popen([exe_path])
-#            else:
-#                base = os.path.split(os.path.split(__file__)[0])[0]
-#                script = os.path.join(base, 'commandline.py')
-#                python = sys.executable
-#                subprocess.Popen([python, script, 'gui'])
+            params = ['gui', '--start']
             if ext == '.py':
                 python = sys.executable
-                subprocess.Popen([python, exe_path, '--start'])
+                subprocess.Popen([python, exe_path] + params)
+                log.debug('launching %s %s %s', python, exe_path, ' '.join(params))
             else:
-                subprocess.Popen([exe_path, '--start'])
+                subprocess.Popen([exe_path] + params)
+                log.debug('launching %s %s', exe_path, ' '.join(params))
 
         return super(CpoWizard, self).accept()
 
@@ -220,8 +217,10 @@ class IntroPage(QWizardPage):
 
         self.setWindowTitle('<html><b><font color="red">%s</font></b></html> Setup' % Constants.APP_NAME)
         self.setSubTitle(self.tr('Welcome to %s') % Constants.APP_NAME)
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
+        if sys.platform == 'darwin':
+            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        elif sys.platform == 'win32':
+            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
 
         self.lblInstr = QLabel(self.tr('Please log in to %s') % Constants.PRODUCT_NAME)
         self.lblUrl = QLabel("<html><a href='%s'>%s</a></html>" % (Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_CLOUDDESK_URL))
@@ -354,8 +353,10 @@ class InstallOptionsPage(QWizardPage):
 #        self.typical = True
 
         self.setSubTitle(self.tr('Choose Setup Type'))
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
+        if sys.platform == 'darwin':
+            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        elif sys.platform == 'win32':
+            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
 
         # Typical option
         self.rdButtonTypical = QRadioButton(self)
@@ -458,8 +459,6 @@ class InstallOptionsPage(QWizardPage):
             count = session.query(SyncFolders).\
                    filter(SyncFolders.bind_state == True).count()
             if count == 0:
-                # get alll folders
-                self.wizard().controller.synchronizer.get_folders(session = session)
                 # check top-level folders as sync roots
                 self.wizard().controller.synchronizer.check_toplevel_folders(session = session)
 
@@ -490,8 +489,10 @@ class GuideOnePage(QWizardPage):
     def __init__(self, parent = None):
         super(GuideOnePage, self).__init__(parent)
 
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
+        if sys.platform == 'darwin':
+            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        elif sys.platform == 'win32':
+            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
         username = self.field('username')
 
         self.setSubTitle(self.tr('Welcome to %s, %s!') % (Constants.APP_NAME, username))
@@ -521,8 +522,10 @@ class GuideTwoPage(QWizardPage):
     def __init__(self, parent = None):
         super(GuideTwoPage, self).__init__(parent)
 
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
+        if sys.platform == 'darwin':
+            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        elif sys.platform == 'win32':
+            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
 
         self.setSubTitle(self.tr('Access your files from everywhere using %s!') % Constants.PRODUCT_NAME)
         self.lblDetail = QLabel(self.tr("<html>To access your files from a different computer, log in to %s. "
@@ -540,9 +543,10 @@ class GuideThreePage(QWizardPage):
     def __init__(self, parent = None):
         super(GuideThreePage, self).__init__(parent)
 
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
-
+        if sys.platform == 'darwin':
+            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        elif sys.platform == 'win32':
+            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
         self.setSubTitle(self.tr('The %s Notification Icon') % Constants.APP_NAME)
 #        self.lblDetail = QLabel(self.tr("<html>Access your %s from the Mac Menu Bar. "
 #                                        "A <img href='%s'></img> icon indicates that the client is connected ready to synchronize your files. "
@@ -599,8 +603,10 @@ class AdvancedPage(QWizardPage):
     def __init__(self, parent = None):
         super(AdvancedPage, self).__init__(parent)
 
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
+        if sys.platform == 'darwin':
+            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+        elif sys.platform == 'win32':
+            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
         self.setSubTitle(self.tr('Advanced Setup'))
 
         folderGroup = QGroupBox(self.tr('Select Location'))
@@ -783,8 +789,10 @@ class FinalPage(QWizardPage):
     def __init__(self, parent = None):
         super(FinalPage, self).__init__(parent)
 
-        self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
+#        if sys.platform == 'darwin':
+#            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
+#        elif sys.platform == 'win32':
+#            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
 
         self.setSubTitle(self.tr('Successfully Completed.'))
         self.lblDetail = QLabel(self.tr("<html><span style='font-size: 12px'>%s has finished installation and is ready to go.</span>"

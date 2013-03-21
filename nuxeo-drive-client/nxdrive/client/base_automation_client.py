@@ -4,7 +4,6 @@ import sys
 import platform
 import base64
 import json
-import urlparse
 import mimetypes
 import random
 import time
@@ -28,6 +27,7 @@ from nxdrive.utils import classproperty
 from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.utils import get_maintenance_message
 from nxdrive import Constants
+from nxdrive import DEBUG, DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION
 
 log = get_logger(__name__)
 
@@ -74,9 +74,9 @@ class MaintenanceMode(Exception):
                 schedule = schedules['ScheduleItems'][0]
             else:
                 schedule = None
-            self.msg, self.detail = get_maintenance_message(status, schedule = schedule)
+            self.msg, self.detail, self.data1, self.data2 = get_maintenance_message(status, schedule = schedule)
         else:
-            self.msg, self.detail = get_maintenance_message('maintenance')
+            self.msg, self.detail, self.data1, self.data2 = get_maintenance_message('maintenance')
 
     def __str__(self):
         return '\n'.join((self.msg, self.detail))
@@ -236,7 +236,7 @@ class BaseAutomationClient(object):
     def __init__(self, server_url, user_id, device_id,
                  password = None, token = None, repository = "default",
                  ignored_prefixes = None, ignored_suffixes = None,
-                 timeout = 60, blob_timeout = None):
+                 timeout = 60, blob_timeout = None, is_automation = True):
         self.timeout = timeout
         self.blob_timeout = blob_timeout
         if ignored_prefixes is not None:
@@ -249,7 +249,7 @@ class BaseAutomationClient(object):
         else:
             self.ignored_suffixes = DEFAULT_IGNORED_SUFFIXES
 
-        if not server_url.endswith('/'):
+        if is_automation and not server_url.endswith('/'):
             server_url += '/'
         self.server_url = server_url
 
@@ -259,7 +259,9 @@ class BaseAutomationClient(object):
 
         self.user_id = user_id
         self.device_id = device_id
-        self._update_auth(password = password, token = token)
+        if user_id is not None:
+            # skip for service w/o authentication (like the external maintenance and upgrade services)
+            self._update_auth(password = password, token = token)
 
         handlers = []
         proxy_support = None
@@ -307,9 +309,10 @@ class BaseAutomationClient(object):
 #        handlers.append(HTTPHandler(debuglevel=1))
 #        handlers.append(HTTPSHandler(debuglevel=1))
         self.opener = urllib2.build_opener(*handlers)
+        if is_automation:
+            self.automation_url = server_url + 'site/automation/'
+            self.fetch_api()
 
-        self.automation_url = server_url + 'site/automation/'
-        self.fetch_api()
 
     def log_request(self, req):
         if BaseAutomationClient._enable_trace:
@@ -427,17 +430,18 @@ class BaseAutomationClient(object):
         try:
             resp = self.opener.open(req, timeout = timeout)
             # --- BEGIN DEBUG ----
-#            from StringIO import StringIO
-#            msg = '{"Status": "maintenance", "ScheduleItems": [\
-#                    {"CreationDate": "2013-02-15T09:50:22.001",\
-#                     "Target": "qadm.sharpb2bcloud.com",\
-#                     "Service": "Cloud Portal Service",\
-#                     "FromDate": "2013-02-16T23:00:00Z",\
-#                     "ToDate": "2013-02-17T03:00:00Z"\
-#                    }]\
-#                    }'
-#            fp = StringIO(msg)
-#            raise urllib2.HTTPError(url, 503, "service unavailable", None, fp)
+            if DEBUG_MAINTENANCE_EXCEPTION:
+                from StringIO import StringIO
+                msg = '{"Status": "maintenance", "ScheduleItems": [\
+                        {"CreationDate": "2013-02-15T09:50:22.001",\
+                         "Target": "qadm.sharpb2bcloud.com",\
+                         "Service": "Cloud Portal Service",\
+                         "FromDate": "2013-02-16T23:00:00Z",\
+                         "ToDate": "2013-02-17T03:00:00Z"\
+                        }]\
+                        }'
+                fp = StringIO(msg)
+                raise urllib2.HTTPError(url, 503, "service unavailable", None, fp)
             # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             # NOTE cannot rewind the error stream from maintenance server!
@@ -561,15 +565,16 @@ class BaseAutomationClient(object):
         try:
             resp = self.opener.open(req, timeout = self.blob_timeout)
             # --- BEGIN DEBUG ----
-#            from StringIO import StringIO
-#            msg = '{ "entity-type": "exception",\
-#                    "type":"com.sharplabs.clouddesk.operations.StorageExceededException",\
-#                    "status": "500",\
-#                    "message": "Failed to execute operation: StorageUsed.Get",\
-#                    "stack": ""\
-#                }'
-#            fp = StringIO(msg)
-#            raise urllib2.HTTPError(url, 500, "internal server error", None, fp)
+            if DEBUG_QUOTA_EXCEPTION:
+                from StringIO import StringIO
+                msg = '{ "entity-type": "exception",\
+                        "type":"com.sharplabs.clouddesk.operations.StorageExceededException",\
+                        "status": "500",\
+                        "message": "Failed to execute operation: StorageUsed.Get",\
+                        "stack": ""\
+                    }'
+                fp = StringIO(msg)
+                raise urllib2.HTTPError(url, 500, "internal server error", None, fp)
             # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             self._log_details(e)
@@ -811,30 +816,6 @@ class BaseAutomationClient(object):
                 pass
 
         return retry_after, schedules
-
-    def _get_maintenance_schedule(self, server_binding):
-        netloc = urlparse.urlsplit(server_binding.server_url).netloc
-        req = urllib2.Request(urlparse.urljoin(Constants.MAINTENANCE_SERVICE_URL, netloc))
-        # --- BEGIN DEBUG ----
-        self.log_request(req)
-        # ---- END DEBUG -----
-
-        try:
-            resp = self.opener.open(req)
-            # extract the json payload as it is wrapped insode a <string><.string>!
-            data = resp.read()
-            # --- BEGIN DEBUG ----
-            self.log_response(resp, data)
-            # ---- END DEBUG -----
-            # NOTE Workaround this response which is supposed to be JSON but it looks like this
-            # <?xml version="1.0" encoding="utf-8"?><string>...json data...</string>
-            # and the Content-Type is 'application/xml'
-            data = data.partition('<string>')[2]
-            data = data.rpartition('</string')[0]
-            return json.loads(data)
-        except Exception, e:
-            log.debug('error retrieving schedule: %s', str(e))
-            return None
 
     def _add_redirect_handler(self):
         my_redirect_handler = NoSIICARedirectHandler()

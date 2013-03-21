@@ -31,7 +31,7 @@ class Dialog(QDialog):
         if QtGui is None:
             raise RuntimeError(self.tr("PySide is not installed."))
 
-        self.setWindowIcon(QtGui.QIcon(Constants.APP_ICON_ENABLED))
+        self.setWindowIcon(QtGui.QIcon(Constants.APP_ICON_DIALOG))
         self.create_authentication_box(fields_spec)
         self.callback = callback
         buttonBox = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok

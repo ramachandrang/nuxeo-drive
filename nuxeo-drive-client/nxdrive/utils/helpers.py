@@ -53,16 +53,38 @@ def find_exe_path():
     # Fall-back to the regular method that should work both the ndrive script
     return sys.argv[0]
 
-def get_maintenance_message(status, schedule=None):
+def find_data_path():
+    """Introspect the Python runtime to find the frozen 'data' path."""
+
+    import nxdrive
+    nxdrive_path = os.path.realpath(os.path.dirname(nxdrive.__file__))
+
+    # Detect frozen win32 executable under Windows
+    if nxdrive_path.endswith(WIN32_SUFFIX):
+        exe_path = nxdrive_path.replace(WIN32_SUFFIX, 'data')
+        if os.path.exists(exe_path):
+            return exe_path
+
+    # Detect OSX frozen app
+    if nxdrive_path.endswith(OSX_SUFFIX):
+        exe_path = nxdrive_path.replace(OSX_SUFFIX, 'Contents/MacOS/Resources/data')
+        if os.path.exists(exe_path):
+            return exe_path
+
+    # Fall-back to the regular method that should work both the ndrive script
+    return os.path.join(os.path.split(sys.argv[0])[0], 'data')
+    
+def get_maintenance_message(status, schedule = None):
     from dateutil import tz
     from datetime import datetime
 
     # NOTE only notify about the Cloud Office Portal service.
-    # Ignore the 'Service' in the schedule because the service url is 
+    # Ignore the 'Service' in the schedule because the service url is
     # passed in the request anyway.
     if schedule is None and status == 'maintenance':
         msg = '%s is currently offline.' % Constants.SERVICE_NAME
         detail = 'Due to maintenance.'
+        data1 = data2 = None
     elif schedule is not None:
         service = schedule['Service']
         # get UTC times
@@ -73,21 +95,21 @@ def get_maintenance_message(status, schedule=None):
         to_tz = tz.tzlocal()
         start_utc = start_utc.replace(tzinfo = from_tz)
         end_utc = end_utc.replace(tzinfo = from_tz)
-        start_local = start_utc.astimezone(to_tz)
-        end_local = end_utc.astimezone(to_tz)
+        data1 = start_local = start_utc.astimezone(to_tz)
+        data2 = end_local = end_utc.astimezone(to_tz)
         if status == 'maintenance':
-            msg = _("%s is currently offline.") % service                           
-            detail = _("Due to maintenance from %s to %s.") %\
+            msg = _("%s is currently offline.") % service
+            detail = _("Due to maintenance from %s to %s.") % \
                              (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         elif status == 'available':
             msg = _("%s is scheduled for maintenance.") % service
-            detail = _("From %s to %s.") %\
+            detail = _("From %s to %s.") % \
                              (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         else:
-            msg = detail = None       
+            msg = detail = None
     else:
-        msg = detail = None
-    return msg, detail
+        msg = detail = data1 = data2 = None
+    return msg, detail, data1, data2
 
 def create_settings():
     QCoreApplication.setOrganizationDomain(Constants.COMPANY_NAME)
@@ -107,7 +129,7 @@ class Communicator(QObject):
     menu = Signal()
     stop = Signal()
     invalid_credentials = Signal(str)
-    invalid_proxy = Signal(str)
+    invalid_proxy = Signal(str, str)
     message = Signal(str, str, QSystemTrayIcon.MessageIcon)
     error = Signal(str, str, QMessageBox.StandardButton)
     folders = Signal()

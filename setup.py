@@ -18,7 +18,7 @@ PRODUCT_NAME = 'Cloud Portal Office'
 APP_NAME = PRODUCT_NAME + ' Desktop'
 SHORT_APP_NAME = 'CpoDesktop'
 DEFAULT_ROOT_FOLDER = PRODUCT_NAME
-SETUP_SCRIPT = r"CPODesktop-setup-script.iss"
+# SETUP_SCRIPT = r"CPODesktop-setup-script.iss"
 
 def get_version():
     VERSIONPATH = os.path.join(os.path.dirname(__file__), VERSIONFILE)
@@ -189,7 +189,7 @@ if '--freeze' in sys.argv:
         include_bin_files = [(os.path.normpath(f), "bin/%s" % os.path.basename(f))
                              for f in bin_files]
 
-        include_setup_files = [(SETUP_SCRIPT, SETUP_SCRIPT)]
+#        include_setup_files = [(SETUP_SCRIPT, SETUP_SCRIPT)]
 
         freeze_options = dict(
             executables = executables,
@@ -205,7 +205,8 @@ if '--freeze' in sys.argv:
                     "packages": packages + [
                         "nose",
                     ],
-                    "include_files": include_icon_files + include_bin_files + include_setup_files,
+#                    "include_files": include_icon_files + include_bin_files + include_setup_files,
+                    "include_files": include_icon_files + include_bin_files,
                 },
                 "bdist_msi": {
                     "add_to_path": True,
@@ -226,7 +227,7 @@ elif sys.platform == 'darwin':
     freeze_options = dict(
         app = [script],
         data_files = [('icons', icons_files),
-                    ('nxdrive/data', others_files)],
+                    ('data', others_files)],
         options = dict(
             py2app = dict(
                 iconfile = icon,

@@ -4,13 +4,13 @@ Created on Oct 28, 2012
 @author: mconstantin
 '''
 import sys
+from nxdrive import USE_LOCAL_SERVICE, DEBUG
 
 try:
     import _version
     __version__ = _version.__version__
 except ImportError:
     __version__ = '0.0.0.0'
-
 
 COMPANY_NAME = 'Sharp'
 PRODUCT_NAME = _('Cloud Portal Office')
@@ -24,6 +24,13 @@ APP_STATE_QUITTING = _('quitting')
 APP_SUBSTATE_AVAILABLE = _('available')
 APP_SUBSTATE_MAINTENANCE = _('maintenance')
 
+INFO_STATE_NONE = 'none'
+INFO_STATE_MAINTENANCE_SCHEDULE = 'maint_schedule'
+INFO_STATE_QUOTA = 'quota'
+INFO_STATE_UPGRADE = 'upgrade'
+INFO_STATE_INVALID_CREDENTIALS = 'invalid_cred'
+INFO_STATE_INVALID_PROXY = 'invalid_proxy'
+
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 # TODO replace with CloudDesk url and admin(?) account
 DEFAULT_CLOUDDESK_URL = r'https://qadm.sharpb2bcloud.com/app1'
@@ -31,9 +38,16 @@ DEFAULT_ACCOUNT = "user4@qt1.com"
 # DEFAULT_CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
 # DEFAULT_ACCOUNT = "user@shiro.com"
 SERVICE_NAME = 'Cloud Portal Office'
-MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
-INTERNAL_HTTP_PORT = 63111
 
+if USE_LOCAL_SERVICE:
+    MAINTENANCE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
+    UPGRADE_SERVICE_URL = r'http://hbdisdlw7.enet.sharplabs.com/Maintenance/SoftwareUpdates.svc/json/'
+    #UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
+else:
+    MAINTENANCE_SERVICE_URL = r'https://dev-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
+    UPGRADE_SERVICE_URL = r'https://dev-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
+
+INTERNAL_HTTP_PORT = 63111
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
 MY_DOCS = 'My Docs'
 OTHERS_DOCS = 'Others Docs'
@@ -50,6 +64,7 @@ SERVICE_NOTIFICATION_INTERVAL = 6 * 3600  # six hours
 FDTOKEN_DURATION = 15 * 60
 SYNC_STATUS_STOP = 1
 SYNC_STATUS_START = 2
+APP_ICON_DIALOG = ':/icon_dlg.png'
 APP_ICON_ENABLED = ':/indicator_icon_enabled.png'
 APP_ICON_DISABLED = ':/indicator_icon_disabled.png'
 APP_ICON_PAUSED = ':/indicator_icon_paused.png'
@@ -69,18 +84,16 @@ if sys.platform == 'darwin':
     APP_IMG_WIZARD_APPBAR = ':/appbar.png'
     APP_IMG_WIZARD_FINAL = ':/final_page_darwin.png'
     APP_IMG_WIZARD_BKGRND = ':/bkgrnd.png'
-    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'
     APP_IMG_WIZARD_BANNER = ':/banner.png'
 elif sys.platform == 'win32':
     APP_IMG_WIZARD_FINDER_FOLDERS = ':/explorer_folders.png'
     APP_IMG_WIZARD_ACCESS_FILES = ':/access_files_win32.png'
     APP_IMG_WIZARD_APPBAR = ':/systray.png'
     APP_IMG_WIZARD_FINAL = ':/final_page_win32.png'
-    APP_IMG_WIZARD_BKGRND = ':/bkgrnd.png'
-    APP_IMG_WIZARD_WATERMARK = ':/bkgrnd.png'
+    APP_IMG_WIZARD_WATERMARK = ':/watermark.png'
     APP_IMG_WIZARD_BANNER = ':/banner.png'
 
-COPYRIGHT_FILE = r'nxdrive/data/CloudDesk_EULA.txt'
+COPYRIGHT_FILE = r'CloudDesk_EULA.txt'
 ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
 ICON_APP_ENABLED = R'nuxeo_drive_icon_16_enabled.png'
 ICON_APP_DISABLED = R'nuxeo_drive_icon_16_disabled.png'

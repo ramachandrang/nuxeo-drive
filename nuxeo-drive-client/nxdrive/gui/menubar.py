@@ -21,8 +21,11 @@ from PySide.QtGui import QDialog, QMessageBox, QImage, QPainter, QIcon
 from PySide.QtCore import QTimer
 
 from sqlalchemy import func
+from sqlalchemy.sql.expression import asc, desc
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
 from nxdrive import Constants
+from nxdrive import DEBUG
 from nxdrive.async.operations import SyncOperations
 # from utils.helpers import Communicator, ProxyInfo, RecoverableError
 from nxdrive.utils import Communicator
@@ -33,12 +36,14 @@ from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import create_settings
+from nxdrive.utils import find_data_path
 from nxdrive.model import RecentFiles
 from nxdrive.model import ServerEvent
 from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
 from nxdrive.gui.info_dlg import InfoDlg
 from nxdrive.client import Unauthorized
+from nxdrive._version import _is_newer_version
 
 if sys.platform == 'win32':
     from nxdrive.protocol_handler import win32
@@ -102,6 +107,7 @@ class BindingInfo(object):
     def __init__(self, folder_path):
         self.folder_path = folder_path
         self.short_name = os.path.basename(folder_path)
+        self.state = Constants.INFO_STATE_NONE
 
     def online_status_change(self):
         return self._online != self._prev_online
@@ -168,16 +174,20 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionAbout = QtGui.QAction(self.tr("About"), self)
         self.actionAbout.setObjectName("actionAbout")
         # TO BE REMOVED - BEGIN
-        self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
-        self.actionDebug.setObjectName("actionDebug")
-        self.actionDebug.setCheckable(True)
+        if DEBUG:
+            self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
+            self.actionDebug.setObjectName("actionDebug")
+            self.actionDebug.setCheckable(True)
         # TO BE REMOVED - END
         self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
-        # add a new info action
-        self.actionInfo = QtGui.QAction(self.tr("Info.."), self)
-        self.actionUsedStorage.setObjectName("actionInfo")
-        
+        # add a new notification (about maintenance) action
+        self.actionNotification = QtGui.QAction(self.tr("Notification..."), self)
+        self.actionNotification.setObjectName("actionNotification")
+        # add a new software upgrade action
+        self.actionUpgrade = QtGui.QAction(self.tr("Upgrade Available..."), self)
+        self.actionUpgrade.setObjectName("actionUpgrade")
+
         self.menuCloudDesk.addAction(self.actionStatus)
         self.menuCloudDesk.addAction(self.actionCommand)
         self.menuCloudDesk.addSeparator()
@@ -187,21 +197,23 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionUsername)
         self.menuCloudDesk.addAction(self.actionUsedStorage)
-        self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionPreferences)
+        self.menuCloudDesk.addSeparator()
+        self.menuCloudDesk.addAction(self.actionNotification)
+        self.menuCloudDesk.addAction(self.actionUpgrade)
+        # TO BE REMOVED - BEGIN
+        if DEBUG:
+            self.menuCloudDesk.addSeparator()
+            self.menuCloudDesk.addAction(self.actionDebug)
+        # TO BE REMOVED - END
+        self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionHelp)
         self.menuCloudDesk.addAction(self.actionAbout)
-        self.menuCloudDesk.insertAction(self.actionCommand, self.actionInfo)
-
-        # TO BE REMOVED - BEGIN
-        self.menuCloudDesk.addSeparator()
-        self.menuCloudDesk.addAction(self.actionDebug)
-        # TO BE REMOVED - END
-
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionQuit)
         # this is just an indicator
         self.actionStatus.setEnabled(False)
+        self.actionUpgrade.setVisible(False)
 
     def setupMisc(self):
         self.setContextMenu(self.menuCloudDesk)
@@ -213,11 +225,13 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionOpenCloudDeskFolder.triggered.connect(self.openLocalFolder)
         self.actionShowCloudDeskInfo.triggered.connect(self.openCloudDesk)
         self.messageClicked.connect(self.handle_message_clicked)
-        self.actionInfo.triggered.connect(self.showInfo)
-        
+        self.actionNotification.triggered.connect(self.show_maintenance_info)
+        self.actionUpgrade.triggered.connect(self.show_upgrade_info)
+
         # BEGIN TO BE REMOVED
-        self.actionDebug.setChecked(False)
-        self.actionDebug.toggled.connect(self.enable_trace)
+        if DEBUG:
+            self.actionDebug.setChecked(False)
+            self.actionDebug.toggled.connect(self.enable_trace)
         # END TO BE REMOVED
 
         # copy to local binding
@@ -225,7 +239,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.get_binding_info(sb.local_folder)
         # save current server binding
         self.server_binding = self.controller.get_server_binding(self._get_local_folder())
-
+        if self.server_binding is not None:
+            session = self.controller.get_session()
+            # reset older version events
+            self.controller._reset_upgrade_info(self.server_binding, session=session)
+            # reset the nag schedules
+            self.server_binding.reset_nags()
+            session.commit()
+        
         # setup communication from worker thread to application
         self.communicator.icon.connect(self.set_icon_state)
         self.communicator.menu.connect(self.update_menu)
@@ -268,10 +289,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def about(self):
         msgbox = QMessageBox()
+        msgbox.setWindowTitle(Constants.APP_NAME)
         msgbox.setText(self.tr("About %s") % Constants.APP_NAME)
         msgbox.setStandardButtons(QMessageBox.Ok)
-        msgbox.setInformativeText(self.tr("""version<b>%s</b>
-                <p>Copyright &copy; 2012 SHARP CORPORATION
+        msgbox.setInformativeText(self.tr("""version<b> %s</b>
+                <p>Copyright &copy; 2013 SHARP CORPORATION
                 All Rights Reserved.
                 <p>Platform Details: %s</p>
                 <p style="font-size: small">Python %s</p>
@@ -280,20 +302,21 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                             platform.python_version(), PySide.__version__, QtCore.__version__))
         icon = QIcon(Constants.APP_ICON_ABOUT)
         msgbox.setIconPixmap(icon.pixmap(48, 48))
-        msgbox.setDetailedText(open(Constants.COPYRIGHT_FILE).read())
+        path = find_data_path()
+        msgbox.setDetailedText(open(os.path.join(path, Constants.COPYRIGHT_FILE)).read())
         msgbox.setDefaultButton(QMessageBox.Ok)
         msgbox.exec_()
 
     def _authenticate(self):
         # Launch the GUI to create a binding
         from nxdrive.gui.authentication import prompt_authentication
-        server_binding = self.controller.get_server_binding(self.local_folder, 
+        server_binding = self.controller.get_server_binding(self.local_folder,
                                                             raise_if_missing = False)
         if server_binding is None:
             if self.local_folder is None:
                 self.local_folder = DEFAULT_NX_DRIVE_FOLDER
             success = prompt_authentication(self.controller, self.local_folder)
-        else:                 
+        else:
             success = prompt_authentication(self.controller, server_binding.local_folder,
                                    url = server_binding.server_url,
                                    username = server_binding.remote_user)
@@ -304,7 +327,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.server_binding = self.controller.get_server_binding(self.local_folder)
 
         return success[0]
-            
+
     def handle_recoverable_error(self, text, info, buttons):
         mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, text)
         if buttons is not None:
@@ -328,7 +351,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # verify that a binding still exists for the local folder
         if self.local_folder is not None:
             return self.local_folder
-    
+
         # get the 'first' existing binding, if any
         binding = self.controller.get_server_binding(raise_if_missing = False)
         self.local_folder = binding.local_folder if binding is not None else DEFAULT_EX_NX_DRIVE_FOLDER
@@ -442,7 +465,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def _startAnimation(self):
         assert not self.startDelay  # this shouldn't happen, delay is reset before
         self.timer.start(Constants.ICON_ANIMATION_DELAY)
-        self.iterator = itertools.cycle('2341')
+        self.iterator = itertools.cycle('123')
 
     def _onTimerDelay(self):
         assert self.startDelay
@@ -496,25 +519,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # TODO add ui for signing in
         pass
 
-    def notify_maintenance_schedule(self, msg, detail):
-        self.server_binding = self.controller.get_server_binding(self.local_folder)
+    def notify_quota_exceeded(self, local_folder, msg, detail):
         self.communicator.message.emit(msg,
                                        detail,
-                                       QtGui.QSystemTrayIcon.Information)
-        
-    def notify_maintenance_mode(self, msg, detail):
-        # TODO update menu, icon
-        self.substate = Constants.APP_SUBSTATE_MAINTENANCE
-        self.server_binding = self.controller.get_server_binding(self.local_folder)
-        self.communicator.message.emit(msg,
-                                       detail,
-                                       QtGui.QSystemTrayIcon.Warning)  
-        self.notify_offline(self.local_folder)      
-
-    def notify_quota_exceeded(self, msg):
-        self.server_binding = self.controller.get_server_binding(self.local_folder)
-        self.communicator.message.emit(Constants.APP_NAME,
-                                       msg,
                                        QtGui.QSystemTrayIcon.Warning)
 
     def notify_online(self, local_folder):
@@ -527,22 +534,22 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.update_running_icon()
             self.communicator.menu.emit()
 
-    def notify_offline(self, local_folder, exception=None):
+    def notify_offline(self, local_folder, exception = None):
         info = self.get_info(local_folder)
         if exception is not None:
             code = getattr(exception, 'code', None)
         else:
             code = None
-            
-        if code is not None:  
-            reason = self.tr("Server returned HTTP code %r") % code  
+
+        if code is not None:
+            reason = self.tr("Server returned HTTP code %r") % code
         else:
-            reason = str(exception)            
-            
+            reason = str(exception)
+
+        log.debug('Switching to offline mode (reason: %s) for: %s',
+                  reason, local_folder)
         if info.online:
             # Mark binding as offline and update UI
-            log.debug('Switching to offline mode (reason: %s) for: %s',
-                      reason, local_folder)
             info.online = False
             self.update_running_icon()
             self.communicator.menu.emit()
@@ -556,7 +563,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             text = getattr(exception, 'text', None)
             msg = 'Detected invalid proxy server settings' + '' if text is None else ': %s' % text
             log.debug(msg)
-            self.communicator.invalid_proxy.emit(msg)
+            self.communicator.invalid_proxy.emit(local_folder, msg)
 
     def notify_pending(self, local_folder, n_pending, or_more = False):
         if self.state == Constants.APP_STATE_QUITTING:
@@ -718,7 +725,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def rebuild_menu(self):
         """update when menu is activated"""
-        
+
         if self.server_binding is None:
             storage_text = None
         else:
@@ -730,15 +737,23 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.actionUsedStorage.setText(storage_text)
 
         session = self.controller.get_session()
-        has_events = session.query(func.count(ServerEvent.id)).\
-                filter(ServerEvent.local_folder == self.local_folder).scalar() > 0
-        self.actionInfo.setVisible(has_events)
+        # Notification (for maintenance info) menu is always available
+        # TO BE REMOVED
+#        has_events = session.query(func.count(ServerEvent.id)).\
+#                filter(ServerEvent.local_folder == self.local_folder).scalar() > 0
+#        self.actionInfo.setVisible(has_events)
+
         self.actionUsername.setText(self._getUserName())
-        self.actionShowCloudDeskInfo.setEnabled(len(self.binding_info.values()) > 0)
+        connected = len(self.binding_info.values()) > 0
+        self.actionShowCloudDeskInfo.setEnabled(connected)
+        self.actionNotification.setEnabled(len(self.binding_info.values()) > 0)
+        self.actionUpgrade.setVisible(connected and self._is_new_version_available())
         self.actionStatus.setText(self._syncStatus())
         self.actionCommand.setText(self._syncCommand())
         self.actionOpenCloudDeskFolder.setText('Open %s Folder' % os.path.basename(self._get_local_folder()))
-        self.actionQuit.setEnabled(self.state != Constants.APP_STATE_QUITTING)
+        # TO DO synchronize the stop between the 2 threads
+        # Do not disable the 'quit' menu for now
+#        self.actionQuit.setEnabled(self.state != Constants.APP_STATE_QUITTING)
 
         self.menuViewRecentFiles.clear()
         recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == self.local_folder).all()
@@ -753,9 +768,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 # TODO setEnabled(False) does not work!!
 #                open_folder_action.setEnabled(False)
                 open_folder_action.setVisible(False)
-            
+
             self.menuViewRecentFiles.addAction(open_folder_action)
-            
+
         if self.substate == Constants.APP_SUBSTATE_MAINTENANCE:
             self.actionStatus.setText(self.tr('Unavailable'))
             self.actionCommand.setEnabled(False)
@@ -764,14 +779,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def update_menu(self):
         pass
-    
+
     def showInfo(self):
         if self.infoDlg is not None:
             return
 
         self.infoDlg = InfoDlg(frontend = self)
         self.infoDlg.exec_()
-        self.infoDlg = None        
+        self.infoDlg = None
 
     def showPreferences(self):
         if self.preferencesDlg is not None:
@@ -828,7 +843,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.actionCommand.setEnabled(False)
             return self.tr("Resume")
         elif self.state == Constants.APP_STATE_RUNNING:
-            self.actionCommand.setEnabled(any(i.online for i in infos))
+            # allow pause/resume even if off-line (is still looping...)
+#            self.actionCommand.setEnabled(any(i.online for i in infos))
             return self.tr("Pause")
 
     def _syncStatus(self):
@@ -867,7 +883,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                        url = Constants.DEFAULT_CLOUDDESK_URL,
                                        username = Constants.DEFAULT_ACCOUNT)
             ok = result[0]
-            if not ok: 
+            if not ok:
                 return
             self.server_binding = self.controller.get_server_binding(self.local_folder)
         self.setupProcessing()
@@ -894,6 +910,26 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             log.info("application quit.")
             self.quit()
 
+    @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
+    def handle_message(self, title, message, icon_type):
+        if self.notifications:
+            self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
+
+    def handle_message_clicked(self):
+        info = self.get_binding_info(self.local_folder)
+        handler = getattr(self, '_handle_click_%s' % info.state, self._handle_click_none)
+        handler(info)
+        info.state = Constants.INFO_STATE_NONE
+
+    def _common_click_handler(self, local_folder, state):
+        info = self.get_binding_info(local_folder)
+        info.state = state
+        if sys.platform == 'darwin':
+            # clicking on the message notification is not working on the Mac
+            handler = getattr(self, '_handle_click_%s' % info.state, Constants.INFO_STATE_NONE)
+            handler(info)
+            info.state = Constants.INFO_STATE_NONE
+
     @QtCore.Slot(str)
     def handle_invalid_credentials(self, local_folder):
         sb = self.controller.get_server_binding(local_folder, raise_if_missing = False)
@@ -901,37 +937,127 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 #        self.communicator.menu.emit()
         # show a notification
         for_server = '' if sb is None else ' for server: %s' % sb.server_url
-        detail = 'Update credentials%s' % for_server
+        detail = self.tr('Update credentials%s') % for_server
         self.handle_message(self.tr("%s Authentication") % Constants.APP_NAME,
                            detail,
                            QtGui.QSystemTrayIcon.Critical)
 
-        # clicking on the message notification is not working on the Mac
-        if sys.platform == 'darwin':
-            if not self.get_binding_info(self.local_folder).online:
-                if self._authenticate():
-                    self.doWork()
+        self._common_click_handler(local_folder, Constants.INFO_STATE_INVALID_CREDENTIALS)
+
+    def _handle_click_invalid_cred(self, info = None):
+        if not self.get_binding_info(self.local_folder).online:
+            if self._authenticate():
+                self.doWork()
 
     @QtCore.Slot()
-    def handle_invalid_proxy(self, message):
+    def handle_invalid_proxy(self, local_folder, message):
         self.handle_message(self.tr("%s Configuration") % Constants.APP_NAME,
                            message,
                            QtGui.QSystemTrayIcon.Critical)
+
+        self._common_click_handler(local_folder, Constants.INFO_STATE_INVALID_PROXY)
+
+    def _handle_click_invalid_proxy(self, info = None):
         if self.proxyDlg is None:
             self.proxyDlg = ProxyDlg(frontend = self)
             self.proxyDlg.exec_()
             self.proxyDlg = None
 
-    @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
-    def handle_message(self, title, message, icon_type):
-        if self.notifications:
-            self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
+    def notify_maintenance_schedule(self, local_folder, msg, detail):
+        info = self.get_info(local_folder)
+        info.state = Constants.INFO_STATE_MAINTENANCE_SCHEDULE
+        self.communicator.message.emit(msg,
+                                       detail,
+                                       QtGui.QSystemTrayIcon.Information)
 
-    def handle_message_clicked(self):
-        # handle only the click for entering credentials
-        if not self.get_binding_info(self.local_folder).online:
-            if self._authenticate():
-                self.doWork()
+    def notify_maintenance_mode(self, local_folder, msg, detail):
+        # TODO update menu, icon
+        self.substate = Constants.APP_SUBSTATE_MAINTENANCE
+        info = self.get_info(local_folder)
+        info.state = Constants.INFO_STATE_MAINTENANCE_SCHEDULE
+        self.communicator.message.emit(msg,
+                                       detail,
+                                       QtGui.QSystemTrayIcon.Warning)
+        self.notify_offline(local_folder)
+
+    def _handle_click_maint_schedule(self, info = None):
+        self.show_maintenance_info()
+
+    def _handle_click_none(self, info = None):
+        pass
+
+    def show_maintenance_info(self):
+        msg = self.tr('Maintenance is not available.\n')
+        icon = QMessageBox.Information
+        if self.binding_info is not None:
+            session = self.controller.get_session()
+            try:
+                server_maint_event = session.query(ServerEvent).\
+                                filter(ServerEvent.local_folder == self.server_binding.local_folder).\
+                                filter(ServerEvent.message_type == 'maintenance').\
+                                order_by(desc(ServerEvent.utc_time)).first()
+                if server_maint_event is not None:
+                    msg = server_maint_event.message
+                    if self.server_binding.maintenance:
+                        icon = QMessageBox.Warning
+                else:
+                    msg = self.tr('No maintenance is scheduled.\n')
+            except NoResultFound:
+                msg = self.tr('No maintenance is scheduled.\n')
+            except Exception, e:
+                log.debug("error retrieving maintenance info (%s)", e)
+                return
+
+        msgbox = QMessageBox()
+        msgbox.setWindowTitle(Constants.APP_NAME)
+        msgbox.setText(self.tr("Maintenance information"))
+        msgbox.setStandardButtons(QMessageBox.Ok)
+        msgbox.setDefaultButton(QMessageBox.Ok)
+        main, detail = msg.split('\n')
+        msgbox.setInformativeText(main)
+        msgbox.setDetailedText(detail)
+        msgbox.setIcon(icon)
+        msgbox.exec_()
+
+    def show_upgrade_info(self):
+        if self.binding_info is not None:
+            session = self.controller.get_session()
+            try:
+                server_upgrade_event = session.query(ServerEvent).\
+                                filter(ServerEvent.local_folder == self.server_binding.local_folder).\
+                                filter(ServerEvent.message_type == 'upgrade').\
+                                order_by(desc(ServerEvent.utc_time)).first()
+                if server_upgrade_event is not None:
+                    url = server_upgrade_event.data2
+                    new = 2  # open in a new tab if possible
+                    webbrowser.open(url, new = new)
+            except Exception, e:
+                log.debug("error retrieving client upgrade (%s)", e)
+
+    def notify_upgrade(self, local_folder, msg, detail):
+        info = self.get_info(local_folder)
+        if (info.online and self._is_new_version_available()):
+            info.state = Constants.INFO_STATE_UPGRADE
+            self.communicator.message.emit(msg,
+                                           detail,
+                                           QtGui.QSystemTrayIcon.Information)
+
+    def _is_new_version_available(self):
+        try:
+            session = self.controller.get_session()
+            last_upgrade_event = session.query(ServerEvent).filter(ServerEvent.local_folder == self.local_folder).\
+                                            filter(ServerEvent.message_type == 'upgrade').\
+                                            order_by(desc(ServerEvent.utc_time)).first()
+            # upgrade event: data1 is the version, data2 is the download url
+            if last_upgrade_event is not None:
+                return _is_newer_version(last_upgrade_event.data1)
+            else:
+                return False
+        except Exception, e:
+            log.debug("error retrieving upgrade version (%s)", e)
+
+    def _handle_click_upgrade(self, info = None):
+        self.show_upgrade_info()
 
     def _getUserName(self):
 #        local_folder = default_nuxeo_drive_folder()
@@ -956,6 +1082,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         painter.end()
         return imageWithOverlay
+    
+    def commitData(self, sm):
+        log.trace("app quitting")
+        self.quit()
+        
 
 
 from nxdrive.utils import QApplicationSingleton
@@ -964,6 +1095,7 @@ def startApp(controller, options):
     app = QApplicationSingleton()
     app.setQuitOnLastWindowClosed(False)
     i = CloudDeskTray(controller, options)
+    app.commitData = i.commitData
     i.show()
     return app.exec_()
 
