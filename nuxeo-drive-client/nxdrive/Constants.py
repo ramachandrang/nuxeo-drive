@@ -67,6 +67,7 @@ SYNC_STATUS_START = 2
 APP_ICON_DIALOG = ':/icon_dlg.png'
 APP_ICON_ENABLED = ':/indicator_icon_enabled.png'
 APP_ICON_DISABLED = ':/indicator_icon_disabled.png'
+APP_ICON_SYNCED = ':/indicator_icon_synced.png'
 APP_ICON_PAUSED = ':/indicator_icon_paused.png'
 APP_ICON_STOPPING = ':/indicator_icon_paused.png'
 APP_ICON_PATTERN = ':/indicator_icon_%s.png'
@@ -77,6 +78,9 @@ APP_ICON_TAB_ACCOUNT = ':/account.png'
 APP_ICON_TAB_NETWORK = ':/network.png'
 APP_ICON_TAB_ADVANCED = ':/advanced.png'
 APP_ICON_WIZARD_RB = ':/rb_icon.png'
+APP_ICON_MENU_QUOTA = ':/menu_quota_exceeded.png'
+APP_ICON_MENU_MAINT = ':/menu_maint_mode.png'
+APP_ICON_MENU_UNAVAILABLE = APP_ICON_MENU_QUOTA
 
 if sys.platform == 'darwin':
     APP_IMG_WIZARD_FINDER_FOLDERS = ':/finder_folders.png'

@@ -18,7 +18,7 @@ import PySide
 from PySide import QtGui
 from PySide import QtCore
 from PySide.QtGui import QDialog, QMessageBox, QImage, QPainter, QIcon
-from PySide.QtCore import QTimer
+from PySide.QtCore import Qt, QTimer
 
 from sqlalchemy import func
 from sqlalchemy.sql.expression import asc, desc
@@ -727,26 +727,29 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         """update when menu is activated"""
 
         if self.server_binding is None:
-            storage_text = None
+            storage_text, exceeded = None, False
         else:
-            storage_text = self.controller.get_storage(self.server_binding)
+            storage_text, exceeded = self.controller.get_storage(self.server_binding)
         if storage_text is None:
             self.actionUsedStorage.setVisible(False)
         else:
             self.actionUsedStorage.setVisible(True)
             self.actionUsedStorage.setText(storage_text)
+            icon = QIcon(Constants.APP_ICON_MENU_QUOTA) if exceeded else QIcon()
+            self.actionUsedStorage.setIcon(icon)
+            self.actionUsedStorage.setIconVisibleInMenu(exceeded)
 
         session = self.controller.get_session()
-        # Notification (for maintenance info) menu is always available
-        # TO BE REMOVED
-#        has_events = session.query(func.count(ServerEvent.id)).\
-#                filter(ServerEvent.local_folder == self.local_folder).scalar() > 0
-#        self.actionInfo.setVisible(has_events)
 
         self.actionUsername.setText(self._getUserName())
         connected = len(self.binding_info.values()) > 0
         self.actionShowCloudDeskInfo.setEnabled(connected)
+        # Notification (for maintenance info) menu is always available
         self.actionNotification.setEnabled(len(self.binding_info.values()) > 0)
+        maint_info = self._is_maintenance_info_available()
+        icon = QIcon(Constants.APP_ICON_MENU_MAINT) if maint_info else QIcon()
+        self.actionNotification.setIcon(icon)
+        self.actionNotification.setIconVisibleInMenu(maint_info)
         self.actionUpgrade.setVisible(connected and self._is_new_version_available())
         self.actionStatus.setText(self._syncStatus())
         self.actionCommand.setText(self._syncCommand())
@@ -771,6 +774,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
             self.menuViewRecentFiles.addAction(open_folder_action)
 
+        icon = QIcon(Constants.APP_ICON_MENU_UNAVAILABLE) if self.substate == Constants.APP_SUBSTATE_MAINTENANCE else QIcon()
+        self.actionStatus.setIcon(icon)
+        self.actionStatus.setIconVisibleInMenu(self.substate == Constants.APP_SUBSTATE_MAINTENANCE)
+        # trim the menu if in maintenance mode
         if self.substate == Constants.APP_SUBSTATE_MAINTENANCE:
             self.actionStatus.setText(self.tr('Unavailable'))
             self.actionCommand.setEnabled(False)
@@ -1018,6 +1025,17 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox.setDetailedText(detail)
         msgbox.setIcon(icon)
         msgbox.exec_()
+        
+    def _is_maintenance_info_available(self):
+        session = self.controller.get_session()
+        try:
+            maint_info_count = session.query(ServerEvent).\
+                            filter(ServerEvent.local_folder == self.server_binding.local_folder).\
+                            filter(ServerEvent.message_type == 'maintenance').\
+                            filter(ServerEvent.data2 > datetime.utcnow()).count()
+            return maint_info_count > 0
+        except:
+            return False
 
     def show_upgrade_info(self):
         if self.binding_info is not None:
@@ -1094,6 +1112,7 @@ from nxdrive.utils import QApplicationSingleton
 def startApp(controller, options):
     app = QApplicationSingleton()
     app.setQuitOnLastWindowClosed(False)
+    app.setAttribute(Qt.AA_DontShowIconsInMenus)
     i = CloudDeskTray(controller, options)
     app.commitData = i.commitData
     i.show()

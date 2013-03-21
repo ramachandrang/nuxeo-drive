@@ -145,13 +145,15 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def showEvent(self, evt):
         if evt.spontaneous:
             if self.server_binding is None:
-                storage_text = None
+                storage_text, exceeded = None, False
             else:
-                storage_text = self.controller.get_storage(self.server_binding)
+                storage_text, exceeded = self.controller.get_storage(self.server_binding)
             if storage_text is None:
-                self.lblStorage.setText(self.tr('not available'))
+                self.lblStorage.setText(self.tr('Not available'))
             else:
                 self.lblStorage.setVisible(True)
+                if exceeded:
+                    storage_text = "<img src='%s'>%s</img>" % (Constants.APP_ICON_MENU_QUOTA, storage_text)
                 self.lblStorage.setText(storage_text)
 
             self.lblComputer.setText(platform.node())
