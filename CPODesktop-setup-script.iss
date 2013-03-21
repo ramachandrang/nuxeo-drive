@@ -12,7 +12,9 @@ AppPublisher=SHARP
 AppPublisherURL=http://www.sharp.com/
 AppSupportURL=http://www.sharp.com/
 AppUpdatesURL=http://www.sharp.com/
-DefaultDirName={pf}\Cloud Portal Office Desktop
+
+UsePreviousAppDir=no
+DefaultDirName={pf}\SHARP\Cloud Portal Office Desktop
 DefaultGroupName=Cloud Portal Office Desktop
 OutputDir=dist
 OutputBaseFilename=CPODesktop-0.1.9-Win32-setup
@@ -54,10 +56,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "Cloud Portal Office Desktop\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "BatchFiles\*"; DestDir: "{app}\BatchFiles\"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "PreReqDll\*"; DestDir: "{sys}"; Flags: recursesubdirs createallsubdirs
+;If 64 bit installation
 Source: "dll\64bit\*"; DestDir: "{app}\bin\"; Flags: ignoreversion;  Check: Is64BitInstallMode
+Source: "RedistPackages\64bit\*"; DestDir: "{app}\RedistPackages\"; Flags: ignoreversion;  Check: Is64BitInstallMode
+;If 32 bit installation
 Source: "dll\32bit\*"; DestDir: "{app}\bin\"; Flags: ignoreversion;  Check: not Is64BitInstallMode
-Source: "dll\64bit\*"; DestDir: "{sys}\";  Check: Is64BitInstallMode
-Source: "dll\32bit\*"; DestDir: "{sys}\";  Check: not Is64BitInstallMode
+Source: "RedistPackages\32bit\*"; DestDir: "{app}\RedistPackages\"; Flags: ignoreversion;  Check: not Is64BitInstallMode
 
 [Icons]                                                                                                        
 Name: "{group}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"
@@ -65,12 +69,13 @@ Name: "{group}\{cm:UninstallProgram,Cloud Portal Office Desktop}"; Filename: "{u
 Name: "{commondesktop}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: runhidden  
+Filename: "{app}\RedistPackages\Setup.exe"; Description: "{cm:LaunchProgram, Install Redist packages}"; Flags: waituntilterminated    
+Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Parameters:"""{app}"""; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: runhidden    
 Filename: "{app}\BatchFiles\RestartExplorer.bat"; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: runhidden waituntilterminated  
-Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent  
+Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent 
 
 [UninstallRun]
-Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Flags: runhidden 
+Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}"""; Flags: runhidden 
 Filename: "{app}\BatchFiles\RestartExplorer.bat"; Flags: runhidden waituntilterminated  
 
 

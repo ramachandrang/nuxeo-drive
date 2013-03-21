@@ -980,16 +980,9 @@ class Synchronizer(object):
                 self.synchronize_one(pair_state, session = session, status = status)
                 synchronized += 1
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
-                if getattr(e, 'code', None) == 500:
-                    # This is an unexpected: blacklist doc_pair for
-                    # a cooldown period
-                    log.error("Failed to sync %r", pair_state, exc_info = True)
-                    pair_state.last_sync_error_date = datetime.utcnow()
-                    session.commit()
-                else:
-                    # This is expected and should interrupt the sync process for
-                    # this local_folder and should be dealt with in the main loop
-                    raise e
+                # This is expected and should interrupt the sync process for
+                # this local_folder and should be dealt with in the main loop
+                raise e
             except Exception as e:
                 # Unexpected exception: blacklist for a cooldown period
                 log.error("Failed to sync %r", pair_state, exc_info = True)

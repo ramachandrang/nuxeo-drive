@@ -5,6 +5,7 @@ Created on Feb 6, 2013
 '''
 
 import sys
+import os
 
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import find_exe_path
@@ -32,15 +33,18 @@ def update_win32_reg_key(reg, path, attributes = ()):
     _winreg.CloseKey(key)
 
 def create_shortcut(path, target, wDir = '', icon = ''):
-    shell = Dispatch('WScript.Shell')
-    shortcut = shell.CreateShortCut(path)
-    shortcut.Targetpath = target
-    shortcut.WorkingDirectory = wDir
-    if icon == '':
-        pass
-    else:
-        shortcut.iconLocation = icon
-    shortcut.save()
+    try:
+        shell = Dispatch('WScript.Shell')
+        shortcut = shell.CreateShortCut(path)
+        shortcut.Targetpath = target
+        shortcut.WorkingDirectory = wDir
+        if icon == '':
+            pass
+        else:
+            shortcut.iconLocation = icon
+        shortcut.save()
+    except Exception, e:
+        log.debug('error creating shortcut %s for %s: %s', path, target, e)
 
 def create_or_replace_shortcut(shortcut, target):
     win_version = sys.getwindowsversion()
@@ -50,15 +54,16 @@ def create_or_replace_shortcut(shortcut, target):
                                               pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
         try:
             shlink.QueryInterface(pythoncom.IID_IPersistFile).Load(shortcut)
-            if shlink.GetPath(shell.SLGP_RAWPATH)[0] != target:
+            if shlink.GetPath(shell.SLGP_RAWPATH)[0].lower() != target.lower():
                 shlink.SetPath(target)
                 shlink.QueryInterface(pythoncom.IID_IPersistFile).Save(None, True)
         except pythoncom.com_error as e:
             exe_path = find_exe_path()
-            if exe_path is None:
-                # FOR TESTING
-                exe_path = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
-                create_shortcut(shortcut, target, icon = exe_path)
+            if os.path.splitext(exe_path)[1] == '.exe':
+                icon = exe_path
+            else:
+                icon = ''
+            create_shortcut(shortcut, target, icon=icon)
     else:
         # TODO find the Favorites location for other Windows versions
         pass
@@ -73,10 +78,12 @@ def create_shortcut_if_not_exists(shortcut, target):
             shlink.QueryInterface(pythoncom.IID_IPersistFile).Load(shortcut)
         except pythoncom.com_error as e:
             exe_path = find_exe_path()
-            if exe_path is None:
-                # FOR TESTING
-                exe_path = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
-                create_shortcut(shortcut, target, icon = exe_path)
+            
+            if os.path.splitext(exe_path)[1] == '.exe':
+                icon = exe_path
+            else:
+                icon = os.path.join(os.path.split(exe_path)[0], 'data', 'icons', Constants.ICON_APP_ENABLED)
+            create_shortcut(shortcut, target, icon=icon)            
     else:
         # TODO find the Favorites location for other Windows versions
         pass

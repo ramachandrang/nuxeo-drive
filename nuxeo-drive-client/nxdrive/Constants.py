@@ -95,7 +95,7 @@ elif sys.platform == 'win32':
 
 COPYRIGHT_FILE = r'CloudDesk_EULA.txt'
 ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
-ICON_APP_ENABLED = R'nuxeo_drive_icon_16_enabled.png'
-ICON_APP_DISABLED = R'nuxeo_drive_icon_16_disabled.png'
+ICON_APP_ENABLED = r'CP_Red_Office_16x16_Online.png'
+ICON_APP_DISABLED = r'CP_Red_Office_16x16_Offline.png'
 
 
