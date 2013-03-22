@@ -7,7 +7,7 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{5D0411E3-47F5-441A-B595-C1DCE87519C2}}
 AppName=Cloud Portal Office Desktop
-AppVersion=0.1.9
+AppVersion=0.1.9.4
 AppPublisher=SHARP
 AppPublisherURL=http://www.sharp.com/
 AppSupportURL=http://www.sharp.com/
@@ -17,17 +17,19 @@ UsePreviousAppDir=no
 DefaultDirName={pf}\SHARP\Cloud Portal Office Desktop
 DefaultGroupName=Cloud Portal Office Desktop
 OutputDir=dist
-OutputBaseFilename=CPODesktop-0.1.9-Win32-setup
+OutputBaseFilename=CPODesktop-0.1.9.4-Win32-setup
 SetupIconFile=Cloud Portal Office Desktop\icons\CP_Red_Office_64.ico
 UninstallDisplayIcon={app}\icons\CP_Red_Office_64.ico
 UninstallDisplayName=Cloud Portal Office Desktop
 Compression=lzma
 SolidCompression=yes
 ChangesEnvironment=yes
+ChangesAssociations=yes
   ;If the machine is x64, then install in x64 bit mode; Else in 32 bit mode
 ArchitecturesInstallIn64BitMode=x64 
 PrivilegesRequired=admin
-; AlwaysRestart=yes
+;AlwaysRestart=yes
+;SignTool=MSSignTool 
 
 
 [Languages]
@@ -70,13 +72,15 @@ Name: "{commondesktop}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop
 
 [Run]
 Filename: "{app}\RedistPackages\Setup.exe"; Description: "{cm:LaunchProgram, Install Redist packages}"; Flags: waituntilterminated    
+Filename: "{app}\BatchFiles\StopExplorer.bat"; Flags: runhidden waituntilterminated  
 Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Parameters:"""{app}"""; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: runhidden    
-Filename: "{app}\BatchFiles\RestartExplorer.bat"; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: runhidden waituntilterminated  
+Filename: "{app}\BatchFiles\StartExplorer.bat"; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: runhidden waituntilterminated  
 Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent 
 
 [UninstallRun]
+Filename: "{app}\BatchFiles\StopExplorer.bat"; Flags: runhidden waituntilterminated  
 Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}"""; Flags: runhidden 
-Filename: "{app}\BatchFiles\RestartExplorer.bat"; Flags: runhidden waituntilterminated  
+Filename: "{app}\BatchFiles\StartExplorer.bat"; Flags: runhidden waituntilterminated  
 
 
 [Registry]

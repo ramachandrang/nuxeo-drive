@@ -1,3 +1,3 @@
 @echo off
-explorer
+START explorer
 EXIT
