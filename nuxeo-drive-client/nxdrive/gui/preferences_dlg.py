@@ -466,13 +466,15 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             shortcut_path = os.path.join(startup_folder, Constants.SHORT_APP_NAME + '.lnk')
             if self.autostart:
                 target = win32.find_exe_path()
-                if target is None:
-                    # FOR TESTING
-                    target = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
+                if os.path.splitext(target)[1] != '.exe':
+                    target = '"%s %s"' % (sys.executable, target)
                 win32utils.create_shortcut_if_not_exists(shortcut_path, target)
             else:
-                os.unlink(shortcut_path)
-
+                try:
+                    os.unlink(shortcut_path)
+                except WindowsError as e:
+                    log.debug('error deleting shortcut: %s', e)
+                    
         elif sys.platform == 'darwin':
 #            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/%s.%s.plist') % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME),
 #                                       QSettings.NativeFormat)
