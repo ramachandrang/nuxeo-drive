@@ -252,7 +252,7 @@ class Controller(object):
         else:
             log.info("Failed to get process id, app will not quit.")
 
-    def _children_states(self, folder_path):
+    def _children_states(self, folder_path, session=None):
         """List the status of the children of a folder
 
         The state of the folder is a summary of their descendant rather
@@ -260,7 +260,8 @@ class Controller(object):
         use for the end user.
 
         """
-        session = self.get_session()
+        if session is None:
+            session = self.get_session()
         # Find the server binding for this absolute path
         try:
             binding, path = self._binding_path(folder_path, session = session)
@@ -278,8 +279,8 @@ class Controller(object):
         states = self._pair_states_recursive(session, folder_state)
         return states, path
         
-    def children_states_as_files(self, folder_path):
-        states, path = self._children_states(folder_path)
+    def children_states_as_files(self, folder_path, session=None):
+        states, path = self._children_states(folder_path, session=session)
         if not path or not states:
             return states
         else:
@@ -287,8 +288,8 @@ class Controller(object):
                     for s, pair_state in states
                     if s.local_parent_path == path]
 
-    def children_states_as_paths(self, folder_path):
-        states, path = self._children_states(folder_path)
+    def children_states_as_paths(self, folder_path, session=None):
+        states, path = self._children_states(folder_path, session=session)
         if not path or not states:
             return states
         else:
@@ -296,9 +297,9 @@ class Controller(object):
                     for s, pair_state in states
                     if s.local_parent_path == path]
             
-    def children_states(self, folder_path):
+    def children_states(self, folder_path, session=None):
         """For backward compatibility"""
-        return self.chidren_states_as_files(folder_path)
+        return self.chidren_states_as_files(folder_path, session=session)
     
     def _pair_states_recursive(self, session, doc_pair):
         """Recursive call to collect pair state under a given location."""
@@ -954,45 +955,51 @@ class Controller(object):
         json_struct = { 'list': {}}
         folder_list = []
         
+        session = self.get_session()
         # force a local scan
-        self.synchronizer.scan_local(folder)
-        folder_struct = {}
-        folder_struct['name'] = folder
-        if state == 'synchronized':
-            states = self.children_states_as_files(folder)
-            files = [f for f, status in states if status == state]
-        elif state == 'progress' and not transition:
-            states = self.children_states_as_files(folder)
-            files = [f for f, status in states if status in PROGRESS_STATES]
-        elif state == 'progress' and transition:
-            states = self.children_states_as_paths(folder)
-            files = [f for f, status in states if status in PROGRESS_STATES]
-            files = self.get_next_synced_files(files)
-        elif state == 'conflicted' and not transition:
-            states = self.children_states_as_files(folder)
-            files = [f for f, status in states if status in CONFLICTED_STATES]
-        elif state == 'conflicted' and transition:
-            states = self.children_states_as_paths(folder)
-            files = [f for f, status in states if status in CONFLICTED_STATES]
-            files = self.get_next_synced_files(files)
-        else:
-            files = []
-            
-        folder_struct['files'] = files
-        folder_list.append({'folder': folder_struct})
-            
-        json_struct['list'] = folder_list
-        cherrypy.response.status = '200 OK'
-        return json_struct
+        try:
+            self.synchronizer.scan_local(folder, session=session)
+            folder_struct = {}
+            folder_struct['name'] = folder
+            if state == 'synchronized':
+                states = self.children_states_as_files(folder, session=session)
+                files = [f for f, status in states if status == state]
+            elif state == 'progress' and not transition:
+                states = self.children_states_as_files(folder, session=session)
+                files = [f for f, status in states if status in PROGRESS_STATES]
+            elif state == 'progress' and transition:
+                states = self.children_states_as_paths(folder, session=session)
+                files = [f for f, status in states if status in PROGRESS_STATES]
+                files = self.get_next_synced_files(files)
+            elif state == 'conflicted' and not transition:
+                states = self.children_states_as_files(folder, session=session)
+                files = [f for f, status in states if status in CONFLICTED_STATES]
+            elif state == 'conflicted' and transition:
+                states = self.children_states_as_paths(folder, session=session)
+                files = [f for f, status in states if status in CONFLICTED_STATES]
+                files = self.get_next_synced_files(files)
+            else:
+                files = []
+                
+            folder_struct['files'] = files
+            folder_list.append({'folder': folder_struct})
+                
+            json_struct['list'] = folder_list
+            cherrypy.response.status = '200 OK'
+            return json_struct
+        except:
+            session.rollback()
+            raise
 
-    def get_next_synced_files(self, paths):
+    def get_next_synced_files(self, paths, session=None):
         """Called from the http thread to return file(s) which transitioned from 
         'in progress' or 'conflicted' state to 'synchronized' state."""
 
         if len(paths) == 0:
             return paths
         
-        session = self.get_session()
+        if session is None:
+            session = self.get_session()
         self.sync_condition.acquire()
         num_synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
                                 filter(LastKnownState.local_path.in_(paths)).count()

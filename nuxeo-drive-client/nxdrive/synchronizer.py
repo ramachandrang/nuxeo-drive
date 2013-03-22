@@ -982,16 +982,9 @@ class Synchronizer(object):
                 self.synchronize_one(pair_state, session = session, status = status)
                 synchronized += 1
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
-                if getattr(e, 'code', None) == 500:
-                    # This is an unexpected: blacklist doc_pair for
-                    # a cooldown period
-                    log.error("Failed to sync %r", pair_state, exc_info = True)
-                    pair_state.last_sync_error_date = datetime.utcnow()
-                    session.commit()
-                else:
-                    # This is expected and should interrupt the sync process for
-                    # this local_folder and should be dealt with in the main loop
-                    raise e
+                # This is expected and should interrupt the sync process for
+                # this local_folder and should be dealt with in the main loop
+                raise e
             except Exception as e:
                 # Unexpected exception: blacklist for a cooldown period
                 log.error("Failed to sync %r", pair_state, exc_info = True)
@@ -1219,7 +1212,7 @@ class Synchronizer(object):
                         sb, session = session, status = status)
 
                 if self._frontend is not None:
-                    self._frontend.notify_sync_completed(status)
+                    self._frontend.notify_sync_completed(status)                
 
                 # safety net to ensure that Nuxeo Drive won't eat all the CPU,
                 # disk and network resources of the machine scanning over an
@@ -1416,7 +1409,8 @@ class Synchronizer(object):
                 # Only update recently changed documents
                 self._update_remote_states(server_binding, summary,
                                            session = session)
-                self._notify_pending(server_binding)
+                # this is called below. Why call it here and ignore the return value too?
+#                self._notify_pending(server_binding)
 
             remote_refresh_duration = time() - tick
             tick = time()
@@ -1455,8 +1449,11 @@ class Synchronizer(object):
                       remote_refresh_duration,
                       synchronization_duration)
 
-            if self._frontend is not None and n_pending > 0:
-                self._frontend.notify_stop_transfer()
+            if self._frontend is not None:
+                if n_pending > 0:
+                    self._frontend.notify_stop_transfer()
+                if n_pending - n_synchronized == 0:
+                    self._frontend.notify_synced()
 
             if n_synchronized > 0:
                 self.update_last_access(server_binding)

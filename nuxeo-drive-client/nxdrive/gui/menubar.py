@@ -436,6 +436,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def _set_icon_stopping(self):
         self.setIcon(QIcon(Constants.APP_ICON_STOPPING))
 
+    def _set_icon_synced(self):
+        self.setIcon(QIcon(Constants.APP_ICON_SYNCED))
+        
     def _set_icon_enabled_start(self):
         assert not self.startDelay
         assert not self.stop
@@ -515,6 +518,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 #        self.communicator.menu.emit()
         self.communicator.stop.emit()
 
+    def notify_synced(self):
+        self.communicator.icon.emit('synced')
+        
     def notify_signin(self, url):
         # TODO add ui for signing in
         pass
