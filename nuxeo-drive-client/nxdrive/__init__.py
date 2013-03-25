@@ -1,5 +1,5 @@
 """Global debug flag"""
-DEBUG = False
+DEBUG = True
 
 """Global maintenance/upgrade service flag"""
 USE_LOCAL_SERVICE = False

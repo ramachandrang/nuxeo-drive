@@ -90,6 +90,7 @@ class Event(object):
 
 class ExceptionEvent(Event):
     evant_names = {401: 'unauthorized',
+                   403: 'forbidden',
                    61: 'invalid_proxy',
                    600: 'invalid_proxy',
                    601: 'invalid_proxy',
@@ -161,8 +162,11 @@ class Controller(object):
     __instance = None
 
     @staticmethod
-    def getController():
-        # not exactly a singleton
+    def getController(config_folder = None, echo = None, poolclass = None, timeout = 60):
+        if not Controller.__instance:
+            if not config_folder:
+                return None
+            Controller.__instance = Controller(config_folder, echo = None, poolclass = None, timeout = 60)
         return Controller.__instance
 
     def __init__(self, config_folder, echo = None, poolclass = None, timeout = 60):
@@ -336,7 +340,7 @@ class Controller(object):
         for _, sub_pair_state in results:
             if sub_pair_state != 'synchronized':
                 pair_state = 'children_modified'
-            break
+                break
         # Pre-pend the folder state to the descendants
         return [(doc_pair, pair_state)] + results
 
@@ -467,6 +471,7 @@ class Controller(object):
                                    remote_state = 'synchronized')
             session.add(state)
             session.commit()
+            self.lock_folder(server_binding.local_folder)
             return server_binding
         except Exception as e:
             log.debug("Failed to bind server: %s", str(e))
@@ -474,6 +479,7 @@ class Controller(object):
             return None
 
         session.commit()
+        self.lock_folder(server_binding.local_folder)
         return server_binding
 
     def unbind_server(self, local_folder):
@@ -525,6 +531,7 @@ class Controller(object):
             session.delete(se)
                 
         session.delete(binding)
+        self.unlock_folder(local_folder)
         session.commit()
 
     def unbind_all(self):
@@ -782,7 +789,7 @@ class Controller(object):
 
     def recover_from_invalid_credentials(self, server_binding, exception, session = None):
         code = getattr(exception, 'code', None)
-        if code == 401 or code == 403:
+        if code == 401:
             log.debug('Detected invalid credentials for: %s', server_binding.local_folder)
             self.invalidate_client_cache(server_binding.server_url)
             folder = server_binding.local_folder
@@ -910,19 +917,26 @@ class Controller(object):
 
     def start_status_thread(self):
         if self.status_thread is None or not self.status_thread.isAlive():
-            self.http_server = HttpServer(Constants.INTERNAL_HTTP_PORT, self.sync_status_app)
-            self.status_thread = Thread(target = http_server_loop,
-                                      args = (self.http_server,))
-            self.status_thread.start()
+            try:
+                self.http_server = HttpServer(Constants.INTERNAL_HTTP_PORT, self)
+                self.status_thread = Thread(target = http_server_loop,
+                                          args = (self.http_server,))
+                self.status_thread.start()
+            except:
+                pass
 
     def stop_status_thread(self):
-        if self.http_server:
+        if self.status_thread is not None or self.status_thread.isAlive():
             try:
                 url = 'http://localhost:%d/stop' % self.http_server.port
                 urllib2.urlopen(url, None, 10)
             except:
                 log.trace("terminating the http thread with an error.")
-
+                
+    def status_thread_cleanup(self):
+        self.status_thread = None
+        self.http_server = None
+                        
     def sync_status_app(self, state, folder, transition):
         import json
         from cgi import escape
@@ -958,13 +972,13 @@ class Controller(object):
         session = self.get_session()
         # force a local scan
         try:
-            self.synchronizer.scan_local(folder, session=session)
             folder_struct = {}
             folder_struct['name'] = folder
             if state == 'synchronized':
                 states = self.children_states_as_files(folder, session=session)
                 files = [f for f, status in states if status == state]
             elif state == 'progress' and not transition:
+                self.synchronizer.scan_local(folder, session=session)
                 states = self.children_states_as_files(folder, session=session)
                 files = [f for f, status in states if status in PROGRESS_STATES]
             elif state == 'progress' and transition:
@@ -1081,3 +1095,24 @@ class Controller(object):
             Thread(target = self._get_folders_and_sync_roots,
                                       args = (self, server_binding,)).start()
             
+    def lock_folder(self, path):
+        # os.chflags does not work on Mac
+        if sys.platform == 'darwin':
+            from subprocess import call
+            try:
+                call(['chflags', 'uchg', path])
+            except Exception as e:
+                log.debug('error locking path %s: %s', path, e)
+        elif sys.platform == 'win32':
+            pass
+            
+    def unlock_folder(self, path):
+        # os.chflags does not work on Mac
+        if sys.platform == 'darwin':
+            from subprocess import call
+            try:
+                call(['chflags', 'nouchg', path])
+            except Exception as e:
+                log.debug('error unlocking path %s: %s', path, e)
+        elif sys.platform == 'win32':
+            pass

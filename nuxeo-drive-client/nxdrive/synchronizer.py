@@ -1212,7 +1212,10 @@ class Synchronizer(object):
                         sb, session = session, status = status)
 
                 if self._frontend is not None:
-                    self._frontend.notify_sync_completed(status)                
+                    self._frontend.notify_sync_completed(status)     
+                    
+                # start status thread if it crashed
+                self._controller.start_status_thread()           
 
                 # safety net to ensure that Nuxeo Drive won't eat all the CPU,
                 # disk and network resources of the machine scanning over an
@@ -1611,6 +1614,7 @@ class Synchronizer(object):
                 # Skip servers with missing credentials
                 continue
             try:
+                success = False
                 nxclient = self._controller.get_remote_client(sb)
                 if not nxclient.is_addon_installed():
                     continue
@@ -1639,7 +1643,7 @@ class Synchronizer(object):
 
                 self._update_docs(othersdocs_folder, nodes, sb.local_folder, session = session, dirty = dirty)
                 self._controller._get_mydocs_folder(sb, session = session)
-                success = True
+                sucess = True
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # Ignore expected possible network related errors
                 success = self._handle_network_error(sb, e, session = session)

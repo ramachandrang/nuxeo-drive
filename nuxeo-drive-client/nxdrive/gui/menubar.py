@@ -30,6 +30,7 @@ from nxdrive.async.operations import SyncOperations
 # from utils.helpers import Communicator, ProxyInfo, RecoverableError
 from nxdrive.utils import Communicator
 from nxdrive.utils import RecoverableError
+
 # this import is flagged erroneously as unused import - do not remove
 import nxdrive.gui.qrc_resources
 from nxdrive.async.worker import Worker
@@ -134,7 +135,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
         self.controller = controller
         self.options = options
-        self.communicator = Communicator()
+        self.communicator = Communicator.getCommunicator()
         self.state = Constants.APP_STATE_STOPPED
         self.substate = Constants.APP_SUBSTATE_AVAILABLE
         self.worker = None
@@ -238,7 +239,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         for sb in self.controller.list_server_bindings():
             self.get_binding_info(sb.local_folder)
         # save current server binding
-        self.server_binding = self.controller.get_server_binding(self._get_local_folder())
+        local_folder = self._get_local_folder()
+        self.server_binding = self.controller.get_server_binding(local_folder)
+        self.controller.lock_folder(local_folder)
         if self.server_binding is not None:
             session = self.controller.get_session()
             # reset older version events
@@ -255,6 +258,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.communicator.invalid_credentials.connect(self.handle_invalid_credentials)
         self.communicator.invalid_proxy.connect(self.handle_invalid_proxy)
         self.communicator.error.connect(self.handle_recoverable_error)
+        
+        self.communicator.messageReceived.connect(self.notify_another_instance)
 
         # Show 'up-to-date' notification message only once
         self.firsttime_pending_message = True
@@ -287,6 +292,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 #                               self.tr('Update credentials'),
 #                               QtGui.QSystemTrayIcon.Critical)
 
+    def notify_another_instance(self, msg):
+        dlg = SingleInstanceDlg()
+        dlg.exec_()
+    
     def about(self):
         msgbox = QMessageBox()
         msgbox.setWindowTitle(Constants.APP_NAME)
@@ -562,7 +571,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         if code is None:
             return
-        elif code == 401 or code == 403:
+        elif code == 401:
             log.debug('Detected invalid credentials for: %s', local_folder)
             self.communicator.invalid_credentials.emit(local_folder)
         elif code == 61 or code == 600 or code == 601:
@@ -726,6 +735,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 self._resumeSync()
             self.controller.stop()
         else:
+            self.controller.unlock_folder(self.local_folder)
             # quit directly
             QtGui.QApplication.quit()
 
@@ -1084,8 +1094,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.show_upgrade_info()
 
     def _getUserName(self):
-#        local_folder = default_nuxeo_drive_folder()
-#        local_folder = os.path.abspath(os.path.expanduser(local_folder))
         server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
         return server_binding.remote_user if not server_binding == None else Constants.DEFAULT_ACCOUNT
 
@@ -1114,15 +1122,20 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
 
 from nxdrive.utils import QApplicationSingleton
+from nxdrive.gui.single_instance_dlg import SingleInstanceDlg
 
 def startApp(controller, options):
-    app = QApplicationSingleton()
+    app = QApplicationSingleton(Constants.APP_ID)
+    if app.isRunning(): 
+        sys.exit(0)
+    
     app.setQuitOnLastWindowClosed(False)
     app.setAttribute(Qt.AA_DontShowIconsInMenus)
     i = CloudDeskTray(controller, options)
     app.commitData = i.commitData
     i.show()
     return app.exec_()
+
 
 if __name__ == "__main__":
     sys.exit(startApp)

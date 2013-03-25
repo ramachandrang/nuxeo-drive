@@ -39,7 +39,13 @@ DEVICE_DESCRIPTIONS = {
     'win32': 'Windows Desktop',
 }
 
-
+class Forbidden(Exception):
+    def __init__(self, url, user_id, code=403, data=''):
+        self.url = url
+        self.user_id = user_id
+        self.code = code
+        self.data = data
+        
 class Unauthorized(Exception):
 
     def __init__(self, url, user_id, code = 401, data = ''):
@@ -363,8 +369,10 @@ class BaseAutomationClient(object):
             self.log_response(raw_response, data)
             # --- END DEBUG ----
         except urllib2.HTTPError as e:
-            if e.code == 401 or e.code == 403:
+            if e.code == 401:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
+            elif e.code == 403:
+                raise Forbidden(self.server_url, self.user_id, e.code)
             elif e.code == 503:
                 retry_after, schedules = self._check_maintenance_mode(e)
                 if retry_after > 0:
@@ -446,8 +454,10 @@ class BaseAutomationClient(object):
         except urllib2.HTTPError as e:
             # NOTE cannot rewind the error stream from maintenance server!
 #            self._log_details(e)
-            if e.code == 401 or e.code == 403:
+            if e.code == 401:
                 raise Unauthorized(url, self.user_id, e.code, data)
+            elif e.code == 403:
+                raise Forbidden(url, self.user_id, e.code, data)
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None
@@ -578,8 +588,10 @@ class BaseAutomationClient(object):
             # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             self._log_details(e)
-            if e.code == 401 or e.code == 403:
+            if e.code == 401:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
+            elif e.code == 403:
+                raise Forbidden(self.server_url, self.user_id, e.code)
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None
@@ -667,8 +679,10 @@ class BaseAutomationClient(object):
             log.debug("received token: %s", token)
         except urllib2.HTTPError as e:
             self._log_details(e)
-            if e.code == 401 or e.code == 403:
+            if e.code == 401:
                 raise Unauthorized(url, self.user_id, e.code)
+            elif e.code == 403:
+                raise Forbidden(url, self.user_id, e.code)
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None

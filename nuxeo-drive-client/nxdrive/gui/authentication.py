@@ -160,10 +160,10 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
             dialog.show_message(msg)
             return False
 
-    if app is None:
-        log.debug("Launching QT prompt for server binding.")
-        from nxdrive.utils import QApplicationSingleton
-        QApplicationSingleton()
+#    if app is None:
+#        log.debug("Launching QT prompt for server binding.")
+#        from nxdrive.utils import QApplicationSingleton
+#        QApplicationSingleton()
 #        QtGui.QApplication([])
 
     dialog = Dialog(fields_spec, title = _("%s Authentication") % Constants.APP_NAME,

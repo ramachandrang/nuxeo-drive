@@ -59,7 +59,7 @@ class CpoWizard(QWizard):
         self.controller = controller
         self.controller.synchronizer.register_frontend(self)
         self.session = self.controller.get_session()
-        self.communicator = Communicator()
+        self.communicator = Communicator.getCommunicator()
         self.options = options
         self.skip = False
         self.keep_location = False
@@ -820,7 +820,9 @@ class FinalPage(QWizardPage):
 
 
 def startWizard(controller, options):
-    app = QApplicationSingleton()
+    app = QApplicationSingleton(Constants.APP_ID)
+    if app.isRunning(): sys.exit(0)
+    
     i = CpoWizard(controller, options)
     i.show()
     return app.exec_()

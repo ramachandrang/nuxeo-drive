@@ -15,6 +15,7 @@ from nxdrive.utils.exceptions import ProxyConfigurationError
 from nxdrive.utils.exceptions import RecoverableError
 
 from nxdrive.utils.helpers import QApplicationSingleton
+from nxdrive.utils.helpers import QSingleInstanceApplication
 from nxdrive.utils.helpers import Communicator
 from nxdrive.utils.helpers import EventFilter
 from nxdrive.utils.helpers import classproperty
