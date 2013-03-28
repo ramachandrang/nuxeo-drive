@@ -35,7 +35,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         self.server_binding = self.frontend.server_binding
 
         try:
-            self.model = get_model(frontend.controller.get_session(), controller = self.controller)
+            self.model = get_model(frontend.controller.get_session(), self.frontend)
             if self.model is None:
                 log.debug('cannot retrieve model.')
                 return
@@ -65,7 +65,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
     def folders_changed(self):
         session = self.frontend.controller.get_session()
         root = self.model.invisibleRootItem().child(0)
-        update_model(session, root)
+        update_model(session, root, self.server_binding.local_folder)
 
     def set_checked_state(self, parent):
         """Initialize the state of all checkboxes based on the model."""
@@ -212,30 +212,33 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
                     sync_folder.check_state = False
                 else:
                     sync_folder.check_state = True if parent.checkState() == Qt.Checked else False
-                session.commit()
-                return
+                    
+            if not folder_id == Constants.OTHERS_DOCS_UID and not folder_id == Constants.CLOUDDESK_UID:
+    #            states = [parent.child(i).checkState() for i in range(parent.rowCount())]
+    #            first_state = states[0]
+    #            other_states = filter(lambda state: state != first_state, states[1:])
+                if clear:
+                    sync_folder.check_state = False
+                else:
+                    # get status of all children
+                    children_state = self._get_states(parent)
+                    checked = self._get_count(children_state, Qt.Checked)
+                    unchecked = self._get_count(children_state, Qt.Unchecked)
+                    if checked > 0 and unchecked > 0:
+                        sync_folder.check_state = False
+                    else:
+                        sync_folder.check_state = True if checked > 0 else False
+                        clear = True
+    
+            for i in range(parent.rowCount()):
+                self._update_state(parent.child(i), clear = clear)
+                                
+            session.commit()
+
         except MultipleResultsFound:
             log.debug('multiple folders with id %s found', folder_id)
         except NoResultFound:
             log.debug('folder with id %s not found', folder_id)
+        except Exception, e:
+            log.debug('failed to update folder state: %s', e)
 
-        if not folder_id == Constants.OTHERS_DOCS_UID and not folder_id == Constants.CLOUDDESK_UID:
-#            states = [parent.child(i).checkState() for i in range(parent.rowCount())]
-#            first_state = states[0]
-#            other_states = filter(lambda state: state != first_state, states[1:])
-            if clear:
-                sync_folder.check_state = False
-            else:
-                # get status of all children
-                children_state = self._get_states(parent)
-                checked = self._get_count(children_state, Qt.Checked)
-                unchecked = self._get_count(children_state, Qt.Unchecked)
-                if checked > 0 and unchecked > 0:
-                    sync_folder.check_state = False
-                else:
-                    sync_folder.check_state = True if checked > 0 else False
-                    clear = True
-            session.commit()
-
-        for i in range(parent.rowCount()):
-            self._update_state(parent.child(i), clear = clear)

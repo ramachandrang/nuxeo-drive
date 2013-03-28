@@ -1,5 +1,5 @@
 __version__ = '0.1.10'
-__db_version__ = '0.2'
+__db_version__ = '0.3'
 
 import re
 

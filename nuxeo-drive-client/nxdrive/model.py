@@ -281,7 +281,8 @@ class ServerBinding(Base):
 class SyncFolders(Base):
     __tablename__ = 'sync_folders'
 
-    remote_id = Column(String, primary_key = True)
+    id = Column(Integer, Sequence('syncfolder_id_seq'), primary_key = True)
+    remote_id = Column(String)
     remote_name = Column(String)
     remote_root = Column(Integer)
     remote_parent = Column(String, ForeignKey('sync_folders.remote_id'))

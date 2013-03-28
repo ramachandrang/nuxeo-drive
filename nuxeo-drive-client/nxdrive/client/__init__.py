@@ -1,5 +1,6 @@
 from nxdrive.client.common import NotFound
 from nxdrive.client.base_automation_client import Unauthorized
+from nxdrive.client.base_automation_client import Forbidden
 from nxdrive.client.base_automation_client import QuotaExceeded
 from nxdrive.client.base_automation_client import MaintenanceMode
 from nxdrive.client.remote_document_client import NuxeoDocumentInfo

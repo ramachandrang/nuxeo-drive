@@ -40,11 +40,25 @@ DEVICE_DESCRIPTIONS = {
 }
 
 class Forbidden(Exception):
-    def __init__(self, url, user_id, code=403, data=''):
+    def __init__(self, url, user_id, e=None):
         self.url = url
         self.user_id = user_id
-        self.code = code
-        self.data = data
+        self.message = _("Maximum number of <font color='red'>%d linked devices</font> has been reached. Click <a href='%s'>here</a> to unlink.")
+        self.max_devices = 3
+        self.href = url
+        self.return_url = None
+        if e is not None and isinstance(e, urllib2.HTTPError):
+            self.code = e.code
+            if hasattr(e, "fp"):
+                data = e.fp.read()
+                try:
+                    error_detail = json.loads(data)
+                    self.max_devices = int(error_detail['max_devices'])
+                    self.href = error_detail['href']
+                    self.return_url = error_detail['returnURL']
+                except:
+                    pass
+
         
 class Unauthorized(Exception):
 
@@ -370,13 +384,13 @@ class BaseAutomationClient(object):
             # --- END DEBUG ----
         except urllib2.HTTPError as e:
             if e.code == 401:
-                raise Unauthorized(self.server_url, self.user_id, e.code)
+                raise Unauthorized(self.automation_url, self.user_id, e.code)
             elif e.code == 403:
-                raise Forbidden(self.server_url, self.user_id, e.code)
+                raise Forbidden(self.automation_url, self.user_id, e.code)
             elif e.code == 503:
                 retry_after, schedules = self._check_maintenance_mode(e)
                 if retry_after > 0:
-                    raise MaintenanceMode(self.server_url, self.user_id, retry_after, schedules)
+                    raise MaintenanceMode(self.automation_url, self.user_id, retry_after, schedules)
                 else:
                     raise
             else:
@@ -678,11 +692,11 @@ class BaseAutomationClient(object):
             token2 = token.decode('ascii')
             log.debug("received token: %s", token)
         except urllib2.HTTPError as e:
-            self._log_details(e)
+#            self._log_details(e)
             if e.code == 401:
                 raise Unauthorized(url, self.user_id, e.code)
             elif e.code == 403:
-                raise Forbidden(url, self.user_id, e.code)
+                raise Forbidden(self.server_url, self.user_id, e)
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None

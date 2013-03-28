@@ -5,6 +5,7 @@ Created on Feb 6, 2013
 '''
 
 import sys
+import os
 
 from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import find_exe_path
@@ -54,11 +55,11 @@ def create_or_replace_shortcut(shortcut, target):
                 shlink.SetPath(target)
                 shlink.QueryInterface(pythoncom.IID_IPersistFile).Save(None, True)
         except pythoncom.com_error as e:
-            exe_path = find_exe_path()
-            if exe_path is None:
+            exe_path = icon = find_exe_path()
+            if os.path.splitext(exe_path)[1] == '.py':
                 # FOR TESTING
-                exe_path = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
-                create_shortcut(shortcut, target, icon = exe_path)
+                icon = ''
+            create_shortcut(shortcut, target, icon = icon)
     else:
         # TODO find the Favorites location for other Windows versions
         pass
@@ -72,11 +73,11 @@ def create_shortcut_if_not_exists(shortcut, target):
         try:
             shlink.QueryInterface(pythoncom.IID_IPersistFile).Load(shortcut)
         except pythoncom.com_error as e:
-            exe_path = find_exe_path()
-            if exe_path is None:
+            exe_path = icon = find_exe_path()
+            if os.path.splitext(exe_path)[1] == '.py':
                 # FOR TESTING
-                exe_path = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
-                create_shortcut(shortcut, target, icon = exe_path)
+                icon = ''
+            create_shortcut(shortcut, target, icon = icon)
     else:
         # TODO find the Favorites location for other Windows versions
         pass

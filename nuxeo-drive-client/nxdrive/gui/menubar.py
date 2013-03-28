@@ -241,9 +241,18 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # save current server binding
         local_folder = self._get_local_folder()
         self.server_binding = self.controller.get_server_binding(local_folder)
+        # lock folders to prevent user deletion
         self.controller.lock_folder(local_folder)
+            
         if self.server_binding is not None:
             session = self.controller.get_session()
+#            mydocs = self.controller.get_mydocs_folder_synced(self.server_binding, session=session)
+#            if mydocs is not None:
+#                self.controller.lock_folder(mydocs)
+#            otherdocs = self.controller.get_otherdocs_folder_synced(self.server_binding, session=session)
+#            if otherdocs is not None:
+#                self.controller.lock_folder(otherdocs)
+
             # reset older version events
             self.controller._reset_upgrade_info(self.server_binding, session=session)
             # reset the nag schedules
@@ -735,7 +744,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 self._resumeSync()
             self.controller.stop()
         else:
-            self.controller.unlock_folder(self.local_folder)
+#            self.controller.unlock_folder(self.local_folder)
+#            if self.server_binding is not None:
+#                mydocs = self.controller.get_mydocs_folder_synced(self.server_binding)
+#                if mydocs is not None:
+#                    self.controller.unlock_folder(mydocs)
+#                otherdocs = self.controller.get_otherdocs_folder_synced(self.server_binding)
+#                if otherdocs is not None:
+#                    self.controller.unlock_folder(otherdocs)
             # quit directly
             QtGui.QApplication.quit()
 

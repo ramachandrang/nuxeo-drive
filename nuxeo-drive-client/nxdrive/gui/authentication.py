@@ -1,8 +1,8 @@
 """GUI prompt to bind a new server"""
 
-import os
+import urllib
 
-from nxdrive.client import Unauthorized
+from nxdrive.client import Unauthorized, Forbidden
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
 
@@ -12,6 +12,7 @@ log = get_logger(__name__)
 QtGui, QDialog = None, object
 try:
     from PySide import QtGui
+    from PySide.QtCore import Qt
     QDialog = QtGui.QDialog
     log.debug("QT / PySide successfully imported")
 except ImportError:
@@ -42,6 +43,8 @@ class Dialog(QDialog):
         mainLayout = QtGui.QVBoxLayout()
         mainLayout.addWidget(self.authentication_group_box)
         self.message_area = QtGui.QLabel()
+        self.message_area.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
+        self.message_area.setOpenExternalLinks(True)
         self.message_area.setWordWrap(True)
         mainLayout.addWidget(self.message_area)
         mainLayout.addWidget(buttonBox)
@@ -112,7 +115,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
     fields_spec = [
         {
             'id': 'url',
-            'label': 'Nuxeo Server URL:',
+            'label': 'Site URL:',
             'value': url,
             'is_readonly': is_url_readonly,
         },
@@ -153,6 +156,26 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
         except Unauthorized:
             dialog.show_message(_("Invalid credentials."))
             return False
+        except Forbidden as e:
+            client = controller.remote_doc_client_factory(url, username, controller.device_id, password)
+            mydocs = client.get_mydocs()
+            p1 = e.href
+            if p1[-1] != '/': p1 += '/'
+            p2 = 'nxpath/default'
+            p3 = mydocs['path']
+            if p3[-1] != '/': p3 += '/'
+            p4 = e.return_url
+            if p4[-1] != '&': p4 += '&'
+            query_params = {
+                            'user_name': username,
+                            'user_password': password,
+                            'language': 'en_US',
+                            'requestedUrl': '',
+                            'form_submitted_marker': '',
+                            'Submit': 'Log in'
+                            }
+            url = p1 + p2 + p3 + p4 + urllib.urlencode(query_params)
+            dialog.show_message(e.message % (e.max_devices, url))
         except Exception as e:
             msg = _("Unable to connect to %s") % url
             log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)

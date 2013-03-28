@@ -45,7 +45,7 @@ from nxdrive import Constants
 from nxdrive.http_server import HttpServer
 from nxdrive.http_server import http_server_loop
 
-from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy import func
 from sqlalchemy import asc
@@ -470,16 +470,30 @@ class Controller(object):
                                    remote_info = remote_info,
                                    remote_state = 'synchronized')
             session.add(state)
-            session.commit()
-            self.lock_folder(server_binding.local_folder)
+#            self.lock_folder(server_binding.local_folder)
+#            mydocs = self.get_mydocs_folder_synced(state, session=session)
+#            if mydocs is not None:
+#                self.lock_folder(mydocs)
+#            otherdocs = self.get_mydocs_folder_synced(state, session=session)
+#            if otherdocs is not None:
+#                self.lock_folder(otherdocs)
+                          
+            session.commit()      
             return server_binding
         except Exception as e:
             log.debug("Failed to bind server: %s", str(e))
             session.rollback()
             return None
 
+#        self.lock_folder(server_binding.local_folder)
+#        mydocs = self.get_mydocs_folder_synced(state, session=session)
+#        if mydocs is not None:
+#            self.lock_folder(mydocs)
+#        otherdocs = self.get_mydocs_folder_synced(state, session=session)
+#        if otherdocs is not None:
+#            self.lock_folder(otherdocs)
+            
         session.commit()
-        self.lock_folder(server_binding.local_folder)
         return server_binding
 
     def unbind_server(self, local_folder):
@@ -530,8 +544,15 @@ class Controller(object):
         for se in server_events:
             session.delete(se)
                 
-        session.delete(binding)
-        self.unlock_folder(local_folder)
+#        self.unlock_folder(binding.local_folder)
+#        mydocs = self.get_mydocs_folder_synced(binding, session=session)
+#        if mydocs is not None:
+#            self.unlock_folder(mydocs)
+#        otherdocs = self.get_mydocs_folder_synced(binding, session=session)
+#        if otherdocs is not None:
+#            self.unlock_folder(otherdocs)
+#        session.delete(binding)
+
         session.commit()
 
     def unbind_all(self):
@@ -751,12 +772,77 @@ class Controller(object):
 
             try:
                 mydocs = session.query(SyncFolders).\
+                    filter(SyncFolders.local_folder == server_binding.local_folder).\
                     filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
                 self.mydocs_folder = mydocs.remote_id
             except NoResultFound:
                 self.mydocs_folder = None
+            except MultipleResultsFound:
+                log.debug("multiple My Docs found error!")
+                return None
 
         return self.mydocs_folder
+    
+    def get_root_folder_synced(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        try:
+            root = session.query(LastKnownState).\
+                filter(LastKnownState.local_folder == server_binding.local_folder).\
+                filter(or_(LastKnownState.pair_state == 'synchronized', LastKnownState.pair_state == 'locally_deleted')).\
+                filter(LastKnownState.local_path == '/').one()
+            return root
+        except NoResultFound:
+            return None
+        except MultipleResultsFound:
+            log.debug("multiple My Docs folders found error!")
+            return None
+        
+        
+    def get_mydocs_folder_synced(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        try:
+            mydocs = session.query(LastKnownState).\
+                filter(LastKnownState.local_folder == server_binding.local_folder).\
+                filter(or_(LastKnownState.pair_state == 'synchronized', LastKnownState.pair_state == 'locally_deleted')).\
+                filter(LastKnownState.remote_name == Constants.MY_DOCS).one()
+            return mydocs
+        except NoResultFound:
+            return None
+        except MultipleResultsFound:
+            log.debug("multiple My Docs folders found error!")
+            return None
+        
+    def get_guest_folder_synced(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        try:
+            guest_folder = session.query(LastKnownState).\
+                filter(LastKnownState.local_folder == server_binding.local_folder).\
+                filter(or_(LastKnownState.pair_state == 'synchronized', LastKnownState.pair_state == 'locally_deleted')).\
+                filter(LastKnownState.remote_name == Constants.GUEST_FOLDER).one()
+            return guest_folder
+        except NoResultFound:
+            return None
+        except MultipleResultsFound:
+            log.debug("multiple My Docs folders found error!")
+            return None        
+            
+    def get_otherdocs_folder_synced(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        try:
+            otherdocs = session.query(LastKnownState).\
+                filter(LastKnownState.local_folder == server_binding.local_folder).\
+                filter(or_(LastKnownState.pair_state == 'synchronized', LastKnownState.pair_state == 'locally_deleted')).\
+                filter(LastKnownState.remote_name == Constants.OTHERS_DOCS).one()
+            return otherdocs
+        except NoResultFound:
+            return None
+        except MultipleResultsFound:
+            log.debug("multiple Other Docs folders found error!")
+            return None
 
     def _log_offline(self, exception, context):
         if isinstance(exception, urllib2.HTTPError):
@@ -1096,23 +1182,52 @@ class Controller(object):
                                       args = (self, server_binding,)).start()
             
     def lock_folder(self, path):
+        if not os.path.exists(path):
+            return
         # os.chflags does not work on Mac
         if sys.platform == 'darwin':
             from subprocess import call
             try:
-                call(['chflags', 'uchg', path])
+#                call(['chflags', 'uchg', path])
+                pass
             except Exception as e:
                 log.debug('error locking path %s: %s', path, e)
         elif sys.platform == 'win32':
             pass
             
     def unlock_folder(self, path):
+        if not os.path.exists(path):
+            return
         # os.chflags does not work on Mac
         if sys.platform == 'darwin':
             from subprocess import call
             try:
-                call(['chflags', 'nouchg', path])
+#                call(['chflags', 'nouchg', path])
+                pass
             except Exception as e:
                 log.debug('error unlocking path %s: %s', path, e)
         elif sys.platform == 'win32':
             pass
+        
+    def check_nonremovable_folders(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        folders = (self.get_root_folder_synced(server_binding, session=session),
+                   self.get_mydocs_folder_synced(server_binding, session=session),
+                   self.get_guest_folder_synced(server_binding, session=session),
+                   self.get_otherdocs_folder_synced(server_binding, session=session),)
+        
+        for fld in folders:
+            if fld:
+                local_client = fld.get_local_client()
+                if not local_client.exists(fld.local_path):
+                    local_client.make_folder(fld.local_parent_path, fld.local_name)
+                    if fld.pair_state == 'locally_deleted':
+                        # change it back to synchronized
+                        fld.update_state('synchronized', 'synchronized')
+                        
+        if len(session.dirty):
+            # Make refreshed state immediately available to other processes
+            session.commit()
+  
+        

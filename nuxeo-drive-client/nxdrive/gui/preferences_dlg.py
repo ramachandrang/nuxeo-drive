@@ -14,15 +14,15 @@ from PySide.QtGui import QApplication, QDialog, QMessageBox, QDialogButtonBox, Q
 from PySide.QtCore import Qt, QSettings
 
 from nxdrive import Constants
-from nxdrive.model import ServerBinding, RecentFiles, LastKnownState
+from nxdrive.model import ServerBinding, RecentFiles, LastKnownState, ServerEvent, SyncFolders
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import create_settings
 from nxdrive.utils import register_startup_darwin
 from nxdrive.utils import EventFilter
 from nxdrive.utils import win32utils
+from nxdrive.utils.helpers import find_exe_path
 from nxdrive.client.base_automation_client import ProxyInfo
-from nxdrive.client.remote_document_client import RemoteDocumentClient
 from ui_preferences import Ui_preferencesDlg
 from proxy_dlg import ProxyDlg
 from progress_dlg import ProgressDialog
@@ -63,7 +63,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.stop_on_apply = False
         self.local_folder = frontend._get_local_folder() if frontend is not None else DEFAULT_EX_NX_DRIVE_FOLDER
         self.previous_local_folder = self.local_folder
-        self.move_to_folder = self.local_folder
+        self.local_folder_text_changed = False
+        self.prev_local_folder = self.local_folder
+        self.reuse_folder = False
         self.server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
         self.proxy = None
         self.rbProxy.setCheckable(True)
@@ -72,7 +74,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         applyBtn.clicked.connect(self.applyChanges)
         self.btnDisconnect.clicked.connect(self.manageBinding)
         self.btnBrowsefolder.clicked.connect(self.browseFolder)
-        self.txtCloudfolder.textChanged.connect(self.changeFolder)
+        self.txtCloudfolder.editingFinished.connect(self.changeFolder)
+        self.txtCloudfolder.textEdited.connect(self.folder_text_changed)
         self.btnSelect.clicked.connect(self.selectFolders)
         self.btnProxy.clicked.connect(self.configProxy)
         self.cbEnablelog.stateChanged.connect(self.enableLog)
@@ -177,6 +180,10 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #            self.tabWidget.setTabIcon(index, QIcon(Constants.APP_ICON_ABOUT))
 
     def selectFolders(self):
+        # this requires a server binding
+        if not self._isConnected():
+            self._connect()
+                    
         # TODO folders are retrieved here by user or, when the synchronizer starts
         # In between they are not updated if there are server changes
         app = QApplication.instance()
@@ -226,8 +233,40 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         else:
             self.btnProxy.setEnabled(False)
 
+    def folder_text_changed(self, text):
+        self.local_folder_text_changed = True
+        
     def changeFolder(self):
-        self.move_to_folder = os.path.normpath(os.path.join(self.txtCloudfolder.text(), Constants.DEFAULT_NXDRIVE_FOLDER))
+        if not self.local_folder_text_changed:
+            return
+        parent_folder = self.txtCloudfolder.text()
+        folder = os.path.normpath(os.path.join(parent_folder, Constants.DEFAULT_NXDRIVE_FOLDER))
+        if folder == self.prev_local_folder:
+            return
+        # validate at least the folder since it could have been entered directly
+        if (not os.path.exists(parent_folder)):
+            mbox = QMessageBox(QMessageBox.Warning, Constants.APP_NAME, self.tr("Folder %s does not exist.") % parent_folder)
+            mbox.setInformativeText(self.tr("Do you want to create it?"))
+            mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            if mbox.exec_() == QMessageBox.No:
+                self.local_folder_text_changed = False
+                return
+         
+        if os.path.exists(folder):
+            error = QMessageBox(QMessageBox.Warning, self.tr("Path Error"),
+                                                      self.tr("Folder %s already exists") % folder,
+                                                      QMessageBox.Ok,
+                                                      self)
+            error.setInformativeText(self.tr("Select a folder where %s does not exist." % Constants.DEFAULT_NXDRIVE_FOLDER))
+            error.exec_()
+            self.local_folder_text_changed = False
+            self.tabWidget.setCurrentIndex(3)
+            return
+            
+#        os.makedirs(folder)
+        self.local_folder = folder
+        self.local_folder_text_changed = False
+        self.reuse_folder = True
 
     def browseFolder(self):
         """enter or select a new path"""
@@ -239,7 +278,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if (len(selectedFld) == 0):
             selectedFld = defaultFld
         self.txtCloudfolder.setText(selectedFld)
-        self.lblCloudFolder.setText(selectedFld)
+        self.local_folder_text_changed = True
+        self.changeFolder()
 
     def accept(self):
         pass
@@ -283,7 +323,19 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         # Launch the GUI to create a binding
         from nxdrive.gui.authentication import prompt_authentication
 
-        local_folder = os.path.join(self.txtCloudfolder.text(), Constants.DEFAULT_NXDRIVE_FOLDER)
+        parent_folder = self.txtCloudfolder.text()
+        local_folder = os.path.join(parent_folder, Constants.DEFAULT_NXDRIVE_FOLDER)
+        if not self.reuse_folder:
+            msg = QMessageBox(QMessageBox.Question, self.tr('Folder Exists'),
+                              self.tr("The folder %s already exists."
+                              ) % local_folder,
+                              QMessageBox.Yes | QMessageBox.No)
+            msg.setInformativeText(self.tr("Do you want to use it?"))
+            if msg.exec_() == QMessageBox.No:
+                self.tabWidget.setCurrentIndex(3)
+                return
+                
+        self.reuse_folder = True
         remote_user = self.txtAccount.text()
         server_url = self.txtUrl.text()
         # validate at least the folder since it could have been entered directly
@@ -292,23 +344,25 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             mbox.setInformativeText(self.tr("Do you want to create it?"))
             mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             if mbox.exec_() == QMessageBox.No:
+                self.tabWidget.setCurrentIndex(3)
                 return
             os.makedirs(local_folder)
 
         result, self.values = prompt_authentication(self.controller, local_folder, url = server_url, username = remote_user, update = False)
         if result:
-            self.server_binding = ServerBinding(local_folder,
-                                                self.values['url'],
-                                                self.values['username'],
-                                                remote_password = self.values['password']
-                                                )
-            self.local_folder = local_folder
+            self.frontend.server_binding = self.server_binding = ServerBinding(local_folder,
+                                                                                self.values['url'],
+                                                                                self.values['username'],
+                                                                                remote_password = self.values['password']
+                                                                                )
+            self.frontend.local_folder = self.local_folder = local_folder
         return result
 
     def _disconnect(self):
         self.previous_local_folder = self.local_folder
         self.local_folder = None
         self.server_binding = None
+        self.reuse_folder = False
 
     def applyChanges(self):
         same_binding = False
@@ -349,7 +403,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 QMessageBox(QMessageBox.Critical, self.tr("%s Error") % Constants.APP_NAME, self.tr("Failed to connect to server, please try again.")).exec_()
                 return QDialog.Rejected
 
-        if self.local_folder is not None and self.move_to_folder is not None and self.local_folder != self.move_to_folder:
+        if self.local_folder is not None and self.prev_local_folder is not None and self.local_folder != self.prev_local_folder:
             if self._isConnected():
                 # prompt for moving the Nuxeo Drive folder for current binding
                 msg = QMessageBox(QMessageBox.Question, self.tr('Move Root Folder'),
@@ -362,29 +416,22 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                     return
 
 
-            if os.path.exists(self.move_to_folder):
+            if os.path.exists(self.local_folder):
                 error = QMessageBox(QMessageBox.Critical, self.tr("Path Error"),
-                                                          self.tr("Folder %s already exists" % self.move_to_folder),
+                                                          self.tr("Folder %s already exists" % self.local_folder),
                                                           QMessageBox.Ok)
                 error.setInformativeText(self.tr("Select a folder where %s does not exist." % Constants.DEFAULT_NXDRIVE_FOLDER))
                 error.exec_()
                 return QDialog.Rejected
 
-#            if (not os.path.exists(self.move_to_folder)):
-#                mbox = QMessageBox(QMessageBox.Warning, self.tr("CloudDesk"), self.tr("Folder %s does not exist.") % self.move_to_folder)
-#                mbox.setInformativeText(self.tr("Do you want to create it?"))
-#                mbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-#                if mbox.exec_() == QMessageBox.No:
-#                    return QDialog.Rejected
-
             self.result = ProgressDialog.stopServer(self.frontend, parent = self)
             if self.result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected
             try:
-                shutil.move(self.local_folder, self.move_to_folder)
+                shutil.move(self.prev_local_folder, self.local_folder)
             except shutil.Error as e:
                 error = QMessageBox(QMessageBox.Critical, self.tr("Move Error"),
-                                                          self.tr("Error moving folder %s to %s" % (self.local_folder, self.move_to_folder)))
+                                                          self.tr("Error moving folder %s to %s" % (self.prev_local_folder, self.local_folder)))
                 error.setInformativeText(str(e))
                 error.exec_()
                 return QDialog.Rejected
@@ -395,20 +442,30 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 session = self.frontend.controller.get_session()
                 recent_files = session.query(RecentFiles).all()
                 for rf in recent_files:
-                    rf.local_root = rf.local_root.replace(self.local_folder, self.move_to_folder)
+#                    rf.local_folder = rf.local_root.replace(self.local_folder, self.local_folder)
+                    rf.local_folder = self.local_folder
 
                 last_known_states = session.query(LastKnownState).all()
                 for lks in last_known_states:
-                    if lks.local_root.find(self.local_folder) != -1:
-                        lks.local_root = lks.local_root.replace(self.local_folder, self.move_to_folder)
+#                    if lks.local_root.find(self.local_folder) != -1:
+#                        lks.local_root = lks.local_root.replace(self.local_folder, self.local_folder)
+                    lks.local_folder = self.local_folder
 
                 # Update this last as it cascades primary key change to the other tables
                 server_bindings = session.query(ServerBinding).filter(ServerBinding.local_folder == self.local_folder).all()
                 for sb in server_bindings:
-                    sb.local_folder = self.move_to_folder
+                    sb.local_folder = self.local_folder
+                    
+                server_events = session.query(ServerEvent).filter(ServerEvent.local_folder == self.local_folder).all()
+                for se in server_events:
+                    se.local_folder = self.local_folder
+                    
+                sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == self.local_folder).all()
+                for sf in sync_folders:
+                    sf.local_folder = self.local_folder
                 session.commit()
 
-                self.frontend.local_folder = self.local_folder = self.move_to_folder
+                self.frontend.local_folder = self.local_folder
 
         # Update the Favorites link (Windows only)
         if sys.platform == 'win32':
@@ -465,10 +522,10 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             startup_folder = os.path.normpath(startup_folder)
             shortcut_path = os.path.join(startup_folder, Constants.SHORT_APP_NAME + '.lnk')
             if self.autostart:
-                target = win32.find_exe_path()
-                if target is None:
+                target = find_exe_path()
+                if os.path.splitext(target)[1] == '.py':
                     # FOR TESTING
-                    target = 'C:\\Program Files (x86)\\%s\\%s.exe' % (Constants.APP_NAME, Constants.SHORT_APP_NAME)
+                    target = sys.executable + ' ' + target + ' gui --start'
                 win32utils.create_shortcut_if_not_exists(shortcut_path, target)
             else:
                 os.unlink(shortcut_path)
