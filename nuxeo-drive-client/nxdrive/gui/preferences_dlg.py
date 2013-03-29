@@ -53,7 +53,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.setWindowTitle('%s Preferences' % Constants.APP_NAME)
         self.tabWidget.setCurrentIndex(1)
         self.cbAutostart.setText(self.tr('Start automatically when starting this computer'))
-        self.label_3.setText(self.tr('Site Url'))
+        self.label_3.setText(self.tr('Site Url:'))
         self.label_7.setText(self.tr('Folder location'))
         self.groupboxSite.setTitle(self.tr('%s Site') % Constants.PRODUCT_NAME)
         self.frontend = frontend
@@ -78,7 +78,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.txtCloudfolder.textEdited.connect(self.folder_text_changed)
         self.btnSelect.clicked.connect(self.selectFolders)
         self.btnProxy.clicked.connect(self.configProxy)
-        self.cbEnablelog.stateChanged.connect(self.enableLog)
+#        self.cbEnablelog.stateChanged.connect(self.enableLog)
         self.cbNotifications.stateChanged.connect(self.setNotifications)
         self.cbAutostart.stateChanged.connect(self.setAutostart)
         self.rbProxy.toggled.connect(self.setProxy)
@@ -164,7 +164,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.cbAutostart.setChecked(self.autostart)
             self.cbIconOverlays.setChecked(self.iconOverlays)
             self.cbNotifications.setChecked(self.notifications)
-            self.cbEnablelog.setChecked(self.logEnabled)
+#            self.cbEnablelog.setChecked(self.logEnabled)
 
             if not self._isConnected():
                 self.txtUrl.setText(Constants.DEFAULT_CLOUDDESK_URL)

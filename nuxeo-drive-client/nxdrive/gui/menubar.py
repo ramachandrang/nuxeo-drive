@@ -830,7 +830,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def showPreferences(self):
         if self.preferencesDlg is not None:
             return
-
+            
         self.preferencesDlg = PreferencesDlg(frontend = self)
         if self.preferencesDlg.exec_() == QDialog.Rejected:
             self.preferencesDlg = None

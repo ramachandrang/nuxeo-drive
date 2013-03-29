@@ -20,8 +20,9 @@
      
      <file alias="rb_icon.png">nxdrive/data/icons/CP_Red_Office_32x32.png</file>
      <file alias="banner.png">nxdrive/data/images/banner-small.png</file>
-     <file alias="bkgrnd.png">nxdrive/data/images/background_darwin.png</file>
-     <file alias="watermark.png">nxdrive/data/images/watermark_win32.png</file>
+     <file alias="bkgrnd.png">nxdrive/data/images/CP_Red_Office_256x256.png</file>
+     <file alias="watermark.png">nxdrive/data/images/CP_Red_Office_256x256.png</file>
+     <file alias="watermark_medium.png">nxdrive/data/images/CP_Red_Office_128x128.png</file>
      <file alias="finder_folders.png">nxdrive/data/images/finder_folders.png</file>
      <file alias="explorer_folders.png">nxdrive/data/images/explorer_folders.png</file>
      <file alias="access_files_darwin.png">nxdrive/data/images/access_files_darwin.png</file>

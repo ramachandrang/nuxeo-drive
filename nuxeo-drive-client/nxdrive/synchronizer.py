@@ -20,7 +20,7 @@ from collections import defaultdict, Iterable
 from nxdrive.client import DEDUPED_BASENAME_PATTERN
 from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
-from nxdrive.client import Unauthorized
+from nxdrive.client import Unauthorized, Forbidden
 from nxdrive.client import QuotaExceeded
 from nxdrive.client import MaintenanceMode
 from nxdrive.client import FolderInfo
@@ -1131,6 +1131,9 @@ class Synchronizer(object):
                     self._frontend.get_info(server_binding.local_folder).online = True
             except Unauthorized:
                 log.debug("Invalid credentials.")
+            except Forbidden:
+                # TODO fire a notification, sign off...
+                pass
             except Exception as e:
                 log.debug("Unable to connect to %s (%s)", server_binding.server_url, str(e), exc_info = True)
 
@@ -1624,6 +1627,7 @@ class Synchronizer(object):
         dirty = {}
         dirty['add'] = 0
         dirty['del'] = 0
+        success = False
         if session is None:
             session = self.get_session()
         if server_binding is not None:

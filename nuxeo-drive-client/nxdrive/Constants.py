@@ -33,8 +33,8 @@ INFO_STATE_INVALID_PROXY = 'invalid_proxy'
 
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 # TODO replace with CloudDesk url and admin(?) account
-DEFAULT_CLOUDDESK_URL = r'https://qadm.sharpb2bcloud.com/app1'
-DEFAULT_ACCOUNT = "user4@qt1.com"
+DEFAULT_CLOUDDESK_URL = r'https://devdm.sharpb2bcloud.com/app1'
+DEFAULT_ACCOUNT = "user1@dt1.com"
 # DEFAULT_CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
 # DEFAULT_ACCOUNT = "user@shiro.com"
 SERVICE_NAME = 'Cloud Portal Office'
@@ -102,7 +102,7 @@ elif sys.platform == 'win32':
 
 COPYRIGHT_FILE = r'CloudDesk_EULA.txt'
 ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
-ICON_APP_ENABLED = R'nuxeo_drive_icon_16_enabled.png'
-ICON_APP_DISABLED = R'nuxeo_drive_icon_16_disabled.png'
+ICON_APP_ENABLED = r'CP_Red_Office_16x16_Online.png'
+ICON_APP_DISABLED = r'CP_Red_Office_16x16_Offline.png'
 
 

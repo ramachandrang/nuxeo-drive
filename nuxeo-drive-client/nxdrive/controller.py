@@ -570,8 +570,6 @@ class Controller(object):
         server_url = self._normalize_url(server_url)
         nxclient = self.remote_doc_client_factory(server_url, username, self.device_id,
                                                   password)
-        # TODO request token
-        # How to validate the returned token that it is a valid token (vs e,g, the login page)
         if nxclient.request_token() is None:
             raise Unauthorized(server_url, username)
 
@@ -989,7 +987,7 @@ class Controller(object):
             if total == 0:
                 return None, False
             else:
-                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000),\
+                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used, used / total, total),\
                         used >= total
         except KeyError:
             return None, False

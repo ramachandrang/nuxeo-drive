@@ -32,7 +32,7 @@ class Ui_Dialog(object):
         self.label_2.setSizePolicy(sizePolicy)
         self.label_2.setMinimumSize(QtCore.QSize(153, 156))
         self.label_2.setText("")
-        self.label_2.setPixmap(QtGui.QPixmap(":/watermark.png"))
+        self.label_2.setPixmap(QtGui.QPixmap(":/watermark_medium.png"))
         self.label_2.setScaledContents(False)
         self.label_2.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
         self.label_2.setObjectName("label_2")

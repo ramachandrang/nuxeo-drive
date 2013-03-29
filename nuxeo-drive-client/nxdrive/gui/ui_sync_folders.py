@@ -38,5 +38,5 @@ class Ui_Dialog(object):
 
     def retranslateUi(self, Dialog):
         Dialog.setWindowTitle(QtGui.QApplication.translate("Dialog", "Synced Folders", None, QtGui.QApplication.UnicodeUTF8))
-        self.lblHelp.setText(QtGui.QApplication.translate("Dialog", "Those folders will be synced on all devices linked to the logged in account.", None, QtGui.QApplication.UnicodeUTF8))
+        self.lblHelp.setText(QtGui.QApplication.translate("Dialog", "Select the folders from your Cloud Portal Office account to sync with this computer.", None, QtGui.QApplication.UnicodeUTF8))
 

@@ -28,6 +28,8 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setWindowTitle(Constants.APP_NAME + self.tr(' Synced Folders'))
+        self.lblHelp.setText(self.tr('Select the folders from your %s account to sync with this computer.') % 
+                             Constants.PRODUCT_NAME)
         if frontend is None:
             return
         self.frontend = frontend

@@ -8,12 +8,13 @@ from __future__ import division
 import sys
 import os.path
 import subprocess
+import urllib
 
 from PySide.QtCore import Qt
 from PySide.QtGui import QWizard, QWizardPage, QPixmap, QIcon, QPalette, QApplication
 from PySide.QtGui import QLabel, QLineEdit, QGridLayout, QHBoxLayout, QVBoxLayout
 from PySide.QtGui import QPushButton, QRadioButton, QCheckBox, QGroupBox, QFileDialog, QDialog, QMessageBox
-from PySide.QtWebKit import QWebView
+#from PySide.QtWebKit import QWebView
 
 from folders_dlg import SyncFoldersDlg
 from proxy_dlg import ProxyDlg
@@ -215,14 +216,23 @@ class IntroPage(QWizardPage):
         super(IntroPage, self).__init__(parent)
         self.auth_ok = False
 
-        self.setWindowTitle('<html><b><font color="red">%s</font></b></html> Setup' % Constants.APP_NAME)
-        self.setSubTitle(self.tr('Welcome to %s') % Constants.APP_NAME)
+        self.setWindowTitle('%s Setup' % Constants.APP_NAME)
+        welcome = self.tr('Welcome to %s') % Constants.APP_NAME
+#        greeting = """{\rtf1\ansi\ansicpg1252\cocoartf1187\cocoasubrtf340
+#                    {\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+#                    {\colortbl;\red255\green255\blue255;\red221\green32\blue103;}
+#                    \margl1440\margr1440\vieww10800\viewh8400\viewkind0
+#                    \pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+#                    \f0\fs36 \cf0 %s \cf2 %s\cf0  %s}""" % (welcome, Constants.PRODUCT_NAME, self.tr('Desktop'))
+#        self.setTitle(self.tr("<html><style font-size:14px; font-weight:bold>Welcome to %s</style></html>") % Constants.APP_NAME)
+
+        self.setTitle(welcome)
         if sys.platform == 'darwin':
             self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
         elif sys.platform == 'win32':
             self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
 
-        self.lblInstr = QLabel(self.tr('Please log in to %s') % Constants.PRODUCT_NAME)
+        self.lblInstr = QLabel(self.tr('Please sign in to %s') % Constants.PRODUCT_NAME)
         self.lblUrl = QLabel("<html><a href='%s'>%s</a></html>" % (Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_CLOUDDESK_URL))
         self.lblUrl.setStyleSheet("QLabel { font-size: 10px }")
         self.lblUrl.setTextInteractionFlags(Qt.TextBrowserInteraction)
@@ -234,10 +244,12 @@ class IntroPage(QWizardPage):
         self.txtPwd = QLineEdit()
         self.lblPwd.setBuddy(self.txtPwd)
         self.txtPwd.setEchoMode(QLineEdit.Password)
-        self.btnLogin = QPushButton(self.tr('Login'))
         self.lblMessage = QLabel()
         self.lblMessage.setObjectName('message')
         self.lblMessage.setWordWrap(True)
+        self.lblMessage.setStyleSheet("QLabel { font-size: 10px }")
+        self.lblMessage.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
+        self.lblMessage.setOpenExternalLinks(True)
         self.lblMessage.setVisible(False)
         self.btnProxy = QPushButton(self.tr('Proxy...'))
         self.btnProxy.setVisible(False)
@@ -249,47 +261,49 @@ class IntroPage(QWizardPage):
         grid.addWidget(self.txtUsername, 2, 1)
         grid.addWidget(self.lblPwd, 3, 0, Qt.AlignRight)
         grid.addWidget(self.txtPwd, 3, 1)
-        hlayout = QHBoxLayout()
-        hlayout.addStretch(10)
-        hlayout.addWidget(self.btnLogin)
-        grid.addLayout(hlayout, 4, 1)
         hlayout2 = QHBoxLayout()
         hlayout2.addWidget(self.lblMessage)
-        hlayout2.addStretch(10)
+#        hlayout2.addStretch(1)
         hlayout2.addWidget(self.btnProxy)
-        grid.addLayout(hlayout2, 5, 1)
+        hlayout2.setStretch(0, 4)
+        hlayout2.setStretch(1, 1)
+        grid.addLayout(hlayout2, 4, 0, 1, 2, Qt.AlignLeft)
         self.setLayout(grid)
 
-        self.registerField('username', self.txtUsername)
-        self.registerField('pwd', self.txtPwd)
+        self.registerField('username*', self.txtUsername)
+        self.registerField('pwd*', self.txtPwd)
 
     def initializePage(self):
+#        self.wizard().setTitleFormat(Qt.RichText)
         # clear previous proxy setting
         settings = create_settings()
         settings.setValue('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
-        self.btnLogin.setText(self.tr('Logout') if self.auth_ok else self.tr('Login'))
-        self.btnLogin.clicked.connect(self.login)
         self.btnProxy.clicked.connect(self.showProxy)
 
     def login(self):
         if self.auth_ok:
             self.auth_ok = False
-            self.btnLogin.setText(self.tr('Login'))
             self.lblMessage.clear()
-            self.completeChanged.emit()
-            return
+#            self.completeChanged.emit()
+            return True
 
-        from nxdrive.client import Unauthorized
+        from nxdrive.client import Unauthorized, Forbidden
         app = QApplication.instance()
         process_filter = EventFilter(self)
 
         try:
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
-            # This does not validate credentials
-            self.wizard().controller.validate_credentials(Constants.DEFAULT_CLOUDDESK_URL,
-                self.txtUsername.text(), self.txtPwd.text())
-
+            
+            url = Constants.DEFAULT_CLOUDDESK_URL
+            username = self.txtUsername.text()
+            password = self.txtPwd.text()
+            self.wizard().controller.validate_credentials(url, username, password)
+            local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
+            self.wizard().local_folder = local_folder
+            # create the default server binding
+            self.wizard()._bind(local_folder)
+            
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
             msg = self.tr("Connected")
@@ -301,6 +315,28 @@ class IntroPage(QWizardPage):
             msg = self.tr('Invalid credentials.')
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
             self.auth_ok = False
+        except Forbidden as e:
+            controller = self.wizard().controller
+            client = controller.remote_doc_client_factory(url, username, controller.device_id, password)
+            mydocs = client.get_mydocs()
+            p1 = e.href
+            if p1[-1] != '/': p1 += '/'
+            p2 = 'nxpath/default'
+            p3 = mydocs['path']
+            if p3[-1] != '/': p3 += '/'
+            p4 = e.return_url
+            if p4[-1] != '&': p4 += '&'
+            query_params = {
+                            'user_name': username,
+                            'user_password': password,
+                            'language': 'en_US',
+                            'requestedUrl': '',
+                            'form_submitted_marker': '',
+                            'Submit': 'Log in'
+                            }
+            url = p1 + p2 + p3 + p4 + urllib.urlencode(query_params)
+            self.auth_ok = False
+            msg = e.message % (e.max_devices, url)
         except Exception as e:
             self.auth_ok = False
             self.wizard().controller.invalidate_client_cache(Constants.DEFAULT_CLOUDDESK_URL)
@@ -333,26 +369,25 @@ If a proxy server is required, please configure it here by selecting the Proxy..
 
         self.lblMessage.setText(msg)
         self.lblMessage.setVisible(True)
-        self.btnLogin.setText(self.tr('Logout') if self.auth_ok else self.tr('Login'))
+        return self.auth_ok
 
     def showProxy(self):
         dlg = ProxyDlg(frontend = self.wizard())
         self.result = dlg.exec_()
 
-    def isComplete(self):
-        return self.auth_ok
+    # use mandatory fields instead
+#    def isComplete(self):
+#        return bool(self.txtUsername.text()) and bool(self.txtPwd.text())
 
     def validatePage(self):
-        self.btnLogin.setVisible(False)
-        self.lblMessage.setVisible(False)
-        return True
+        return self.login()
 
 class InstallOptionsPage(QWizardPage):
     def __init__(self, parent = None):
         super(InstallOptionsPage, self).__init__(parent)
 #        self.typical = True
 
-        self.setSubTitle(self.tr('Choose Setup Type'))
+        self.setTitle(self.tr('Choose Setup Type'))
         if sys.platform == 'darwin':
             self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
         elif sys.platform == 'win32':
@@ -360,15 +395,18 @@ class InstallOptionsPage(QWizardPage):
 
         # Typical option
         self.rdButtonTypical = QRadioButton(self)
-        self.lblImgTypical = QLabel()
-        self.lblImgTypical.setPixmap(QPixmap(Constants.APP_ICON_WIZARD_RB))
+#        self.lblImgTypical = QLabel()
+#        self.lblImgTypical.setPixmap(QPixmap(Constants.APP_ICON_WIZARD_RB))
         self.lblTypical = QLabel(self.tr('Typical'))
         self.lblTypical2 = QLabel(self.tr('(recommended)'))
         self.lblTypical2.setStyleSheet('QLabel { font-size: 10px; color: gray }')
         self.lblTypical.setStyleSheet('QLabel { font-weight: bold }')
-        self.lblTypicalDetail = QLabel(self.tr('Setup %s with normal settings') % Constants.APP_NAME)
+        self.lblTypicalDetail = QLabel(self.tr('Automatically setup %s with default settings.') % Constants.APP_NAME)
+#        rect = self.lblTypicalDetail.geometry()
+#        rect.setWidth(250)
+#        self.lblTypicalDetail.setGeometry(rect)
         self.lblTypicalDetail.setStyleSheet('QLabel { font-size: 10px }')
-        self.lblTypicalDetail.setWordWrap(True)
+        self.lblTypicalDetail.setWordWrap(False)
         innerinnerHLayout = QHBoxLayout()
         innerinnerHLayout.addWidget(self.lblTypical)
         innerinnerHLayout.addWidget(self.lblTypical2)
@@ -378,24 +416,28 @@ class InstallOptionsPage(QWizardPage):
         innerVLayout1.addWidget(self.lblTypicalDetail)
         innerHLayout1 = QHBoxLayout()
         innerHLayout1.addWidget(self.rdButtonTypical)
-        innerHLayout1.addWidget(self.lblImgTypical)
+#        innerHLayout1.addWidget(self.lblImgTypical)
         innerHLayout1.addLayout(innerVLayout1)
         innerHLayout1.addStretch(10)
         # Advanced option
         self.rdButtonAdvanced = QRadioButton(self)
-        self.lblImgAdvanced = QLabel()
-        self.lblImgAdvanced.setPixmap(QPixmap(Constants.APP_ICON_WIZARD_RB))
+#        self.lblImgAdvanced = QLabel()
+#        self.lblImgAdvanced.setPixmap(QPixmap(Constants.APP_ICON_WIZARD_RB))
         self.lblAdvanced = QLabel(self.tr('Advanced'))
         self.lblAdvanced.setStyleSheet('QLabel { font-weight: bold }')
-        self.lblAdvancedDetail = QLabel(self.tr('Select your %s folder location, folders to synchronize, etc.') % Constants.PRODUCT_NAME)
+        self.lblAdvancedDetail = QLabel(self.tr('Customize your %s setup, including %s <br/>folder location and which folders to synch.') % 
+                                        (Constants.PRODUCT_NAME, Constants.APP_NAME))
         self.lblAdvancedDetail.setStyleSheet('QLabel { font-size: 10px }')
-        self.lblAdvancedDetail.setWordWrap(True)
+#        rect = self.lblAdvancedDetail.geometry()
+#        rect.setWidth(400)
+#        self.lblAdvancedDetail.setGeometry(rect)
+        self.lblAdvancedDetail.setWordWrap(False)
         innerVLayout2 = QVBoxLayout()
         innerVLayout2.addWidget(self.lblAdvanced)
         innerVLayout2.addWidget(self.lblAdvancedDetail)
         innerHLayout2 = QHBoxLayout()
         innerHLayout2.addWidget(self.rdButtonAdvanced)
-        innerHLayout2.addWidget(self.lblImgAdvanced)
+#        innerHLayout2.addWidget(self.lblImgAdvanced)
         innerHLayout2.addLayout(innerVLayout2)
         innerHLayout2.addStretch(10)
 
@@ -417,9 +459,12 @@ class InstallOptionsPage(QWizardPage):
         try:
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
-            # retrieve folders
-            self.wizard().controller.synchronizer.get_folders()
-            self.wizard().controller.synchronizer.update_roots()
+            # get the server binding for authenticated user and server
+            local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
+            server_binding = self.wizard().controller.get_server_binding(local_folder)
+            # retrieve folders for typical setup
+            self.wizard().controller.synchronizer.get_folders(server_binding=server_binding)
+            self.wizard().controller.synchronizer.update_roots(server_binding=server_binding)
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
         except Exception as e:
@@ -448,11 +493,6 @@ class InstallOptionsPage(QWizardPage):
                 os.makedirs(folder)
                 if self.wizard().local_folder is not None:
                     os.unlink(self.wizard().local_folder)
-
-            self.wizard().local_folder = folder
-            if self.wizard()._unbind_if_bound(folder):
-                # create the default server binding
-                self.wizard()._bind(folder)
 
             # if no root binding  exists, bind everything
             session = self.wizard().session
@@ -493,15 +533,19 @@ class GuideOnePage(QWizardPage):
             self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
         elif sys.platform == 'win32':
             self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
-        username = self.field('username')
 
-        self.setSubTitle(self.tr('Welcome to %s, %s!') % (Constants.APP_NAME, username))
-        self.lblDetail = QLabel(self.tr("<html>The %s is a special folder which synchronizes content under <b>My Docs</b> and "
-                                        "<b>Others Docs</b> folders with the same folders under your personal workspace of the %s. "
-                                        "Only subfolders of <b>My Docs</b> and <b>Others Docs</b> that have been specifically selected will be synchronized. "
-                                        "Drop files (or folders) under any of those synchronized folders and they will appear in the same location "
-                                        "in your cloud workspace. Similarly, files (or folders) added to your workspace will appear in the same location "
-                                        "on your desktop.</html>") % (Constants.PRODUCT_NAME, Constants.PRODUCT_NAME))
+        click_type = 'right ' if sys.platform == 'win32' else ''    
+        from nxdrive.gui.resources import find_icon
+        icon1_path = find_icon(Constants.ICON_APP_ENABLED)
+        data_uri1 = open(icon1_path, "rb").read().encode("base64").replace("\n", "")
+        img_tag1 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri1)
+        self.lblDetail = QLabel(self.tr("<html>The <b>{0}</b> folder on your desktop is a special folder, whose content is synchronized with your "
+                                        "on-line {0} content.<br/>"
+                                        "Simply add folders or save files here, and they will be synched with your {0} service. <b>You have full control over which folders are synched.</b><br/>"
+                                        "To select which folders to synch, simply {1}click {2}, and select <b>Preferences...</b>, then select the <b>Advanced</b> tab.<br/>"
+                                        "The {0} folder has two main subfolders, <b>My Docs</b> and <b>Others Docs</b>, allowing you to quickly identify folder trees you've created versus those "
+                                        "shared with you by others. This mirrors the {0} website structure.").format(Constants.PRODUCT_NAME, click_type, img_tag1))
+
         self.lblDetail.setWordWrap(True)
         self.lblDetail.setStyleSheet('QLabel { font-size: 10px }')
         self.lblImg = QLabel()
@@ -511,6 +555,10 @@ class GuideOnePage(QWizardPage):
         vLayout.addWidget(self.lblImg)
         self.setLayout(vLayout)
 
+    def initializePage(self):
+        username = self.field('username')
+        self.setTitle(self.tr('Welcome to %s, %s!') % (Constants.APP_NAME, username))Ä
+        
     def cleanupPage(self):
         advanced = self.wizard().field('advanced')
         if not advanced:
@@ -526,10 +574,23 @@ class GuideTwoPage(QWizardPage):
             self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
         elif sys.platform == 'win32':
             self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
-
-        self.setSubTitle(self.tr('Access your files from everywhere using %s!') % Constants.PRODUCT_NAME)
-        self.lblDetail = QLabel(self.tr("<html>To access your files from a different computer, log in to %s. "
-                                        "There you can preview, download or upload files using just your web browser.</html>") % Constants.PRODUCT_NAME)
+        click_type = 'right ' if sys.platform == 'win32' else ''
+        from nxdrive.gui.resources import find_icon
+        icon1_path = find_icon(Constants.ICON_APP_ENABLED)
+        data_uri1 = open(icon1_path, "rb").read().encode("base64").replace("\n", "")
+        img_tag1 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri1)
+        
+        self.setTitle(self.tr('Access your files from everywhere using %s!') % Constants.PRODUCT_NAME)
+        self.lblDetail = QLabel(self.tr("<html>To launch the {0} website, {1}click {2}, select <b>Open {0} <u>Website</u></b>.<br/>"
+                                        "To view your synced files, select <b>Open {0} <u>Folder</u></b>.<br/>"
+                                        "You can also access your files from any computer at any time by logging into the {0} website "
+                                        "at <a href='http://{3}'>{3}</a>.<br/>"
+                                        "Once signed-in, you have full access to share, view, save, and more...all from your web browser.<br/>"
+                                        "Remember to download the free {0} Mobile app from the Apple Store and/or Google Play!</html>").\
+                                format(Constants.PRODUCT_NAME, click_type, img_tag1, 'www.SharpCloudPortal.com'))
+                                
+        self.lblDetail.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
+        self.lblDetail.setOpenExternalLinks(True)
         self.lblDetail.setWordWrap(True)
         self.lblDetail.setStyleSheet('QLabel { font-size: 10px }')
         self.lblImg = QLabel()
@@ -547,26 +608,7 @@ class GuideThreePage(QWizardPage):
             self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
         elif sys.platform == 'win32':
             self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
-        self.setSubTitle(self.tr('The %s Notification Icon') % Constants.APP_NAME)
-#        self.lblDetail = QLabel(self.tr("<html>Access your %s from the Mac Menu Bar. "
-#                                        "A <img href='%s'></img> icon indicates that the client is connected ready to synchronize your files. "
-#                                        "If the icon is animated, synchronization is in progress. "
-#                                        "A <img href='%s'></img> icon indicates that the client is not connected or not started yet. "
-#                                        "Use the Start menu or check your Preferences to connect to %s site. "
-#                                        "Also from the same menu, you can open your %s folder, access the site, or change other settings.</html>") %
-#                                (Constants.PRODUCT_NAME, 'nxdrive/data/icons/nuxeo_drive_icon_16_enabled.png', Constants.APP_ICON_DISABLED, Constants.PRODUCT_NAME, Constants.APP_NAME))
-#        self.lblDetail.setWordWrap(True)
-#        self.lblDetail.setStyleSheet('QLabel { font-size: 10px }')
-#        self.lblImg = QLabel()
-#        self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_APPBAR))
-#        vLayout = QVBoxLayout()
-#        vLayout.addWidget(self.lblDetail)
-#        vLayout.addWidget(self.lblImg)
-#        self.setLayout(vLayout)
-        self.lblImg = QLabel()
-        self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_APPBAR))
-        self.webView = QWebView(self)
-        self.webView.setFixedHeight(130)
+        self.setTitle(self.tr('The %s Notification Icon') % Constants.APP_NAME)
 
         from nxdrive.gui.resources import find_icon
         icon1_path = find_icon(Constants.ICON_APP_ENABLED)
@@ -575,28 +617,25 @@ class GuideThreePage(QWizardPage):
         icon2_path = find_icon(Constants.ICON_APP_DISABLED)
         data_uri2 = open(icon2_path, "rb").read().encode("base64").replace("\n", "")
         img_tag2 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri2)
-        self.webView.setHtml(self.tr("<html><body style='background:WhiteSmoke; font-size:10px'>Access your %s from the Mac Menu Bar."
-                                        "<br>A %s icon indicates that the client is connected ready to synchronize your files. "
-                                        "<br>If the icon is animated, synchronization is in progress. "
-                                        "<br>A %s icon indicates that the client is not connected or not started yet. "
-                                        "<br>Use the Start menu or check your Preferences to connect to %s site. "
-                                        "<br>Also from the same menu, you can open your %s folder, access the site, or change other settings.</body></html>") %
-                                (Constants.PRODUCT_NAME, img_tag1, img_tag2, Constants.PRODUCT_NAME, Constants.APP_NAME))
-#        palette = self.webView.palette();
-#        palette.setBrush(QPalette.Base, Qt.transparent);
-#        self.webView.page().setPalette(palette);
-#        self.webView.setAttribute(Qt.WA_OpaquePaintEvent, False);
-#        self.webView.setAutoFillBackground(False)
-#
-#        p1 = self.palette()
-#        c = p1.color(self.backgroundRole())
-#        p2 = self.webView.palette()
-#        p2.setColor(self.webView.backgroundRole(), c)
-#        self.webView.setPalette(p2)
+        click_type = 'right ' if sys.platform == 'win32' else ''
+        
+        self.lblDetail = QLabel(self.tr("<html><body style='font-size:10px'>Your Mac Menu Bar will display {0} icon for convenient access."
+                                        "<br>{1} means you are signed in and connected.<br/>"
+                                        "Note: an animated icon indicates synchronization is in progress."
+                                        "<br>{2} Shows your are offline.<br/>"
+                                        "To connect, <b>{3}click</b> {1} and select <b>Properties</b>. Select <b>Account</b> tab and enter your credentials. "
+                                        "You will be automatically logged in from now on.</body></html>").\
+                             format(Constants.PRODUCT_NAME, img_tag1, img_tag2, click_type))
+                                
+        self.lblDetail.setWordWrap(True)
+        self.lblDetail.setStyleSheet('QLabel { font-size: 10px }')
+        
+        self.lblImg = QLabel()
+        self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_APPBAR))
+
         vLayout = QVBoxLayout()
-        vLayout.addWidget(self.webView)
+        vLayout.addWidget(self.lblDetail)
         vLayout.addWidget(self.lblImg)
-        self.webView.show()
         self.setLayout(vLayout)
 
 class AdvancedPage(QWizardPage):
@@ -634,7 +673,7 @@ class AdvancedPage(QWizardPage):
         syncGroup = QGroupBox(self.tr('Select Folders to Sync'))
         innerVLayout2 = QVBoxLayout()
         innerVLayout2.setObjectName('innerVLayout2')
-        self.rdSyncDefault = QRadioButton(self.tr('All folders') % Constants.PRODUCT_NAME)
+        self.rdSyncDefault = QRadioButton(self.tr('All folders'))
         self.rdSyncSelect = QRadioButton(self.tr('Choose folders to sync'))
         innerHLayout2 = QHBoxLayout()
         innerHLayout2.setObjectName('innerHLayout2')
@@ -757,14 +796,6 @@ class AdvancedPage(QWizardPage):
         process_filter = EventFilter(self)
 
         try:
-            app.setOverrideCursor(Qt.WaitCursor)
-            self.installEventFilter(process_filter)
-            # retrieve folders
-#            self.wizard().controller.synchronizer.get_folders()
-#            self.wizard().controller.synchronizer.update_roots()
-            app.restoreOverrideCursor()
-            self.removeEventFilter(process_filter)
-
             dlg = SyncFoldersDlg(frontend = self.wizard())
             if dlg.exec_() == QDialog.Rejected:
                 return
@@ -794,13 +825,15 @@ class FinalPage(QWizardPage):
 #        elif sys.platform == 'win32':
 #            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
 
-        self.setSubTitle(self.tr('Successfully Completed.'))
-        self.lblDetail = QLabel(self.tr("<html><span style='font-size: 12px'>%s has finished installation and is ready to go.</span>"
-                                        "<p><span style='font-size: 10px; font-weight: bold; color: lightseagreen'>Thanks for using it!</span></html>") % Constants.APP_NAME)
+        self.setTitle(self.tr('Successfully Completed.'))
+        self.setSubTitle(self.tr('Thanks for using it!'))
+        self.lblDetail = QLabel(self.tr("<span style='font-size: 12px'>%s has finished installation and is ready to go.</span>") % 
+                                Constants.APP_NAME)
         self.lblDetail.setWordWrap(True)
         self.lblImg = QLabel()
         self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_FINAL))
         self.rdLaunch = QCheckBox(self.tr("Launch %s") % Constants.APP_NAME)
+        self.rdLaunch.setCheckState(Qt.Checked)
 
         vLayout = QVBoxLayout()
         vLayout.addWidget(self.lblDetail)
