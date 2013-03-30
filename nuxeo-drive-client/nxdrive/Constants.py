@@ -4,7 +4,7 @@ Created on Oct 28, 2012
 @author: mconstantin
 '''
 import sys
-from nxdrive import USE_LOCAL_SERVICE, DEBUG
+from nxdrive import USE_LOCAL_SERVICE
 
 try:
     import _version
@@ -32,6 +32,8 @@ INFO_STATE_INVALID_CREDENTIALS = 'invalid_cred'
 INFO_STATE_INVALID_PROXY = 'invalid_proxy'
 
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
+CONFIG_FILE = 'nxdrive.cfg'
+
 # TODO replace with CloudDesk url and admin(?) account
 DEFAULT_CLOUDDESK_URL = r'https://devdm.sharpb2bcloud.com/app1'
 DEFAULT_ACCOUNT = "user1@dt1.com"

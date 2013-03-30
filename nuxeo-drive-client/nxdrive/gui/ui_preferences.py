@@ -83,6 +83,7 @@ class Ui_preferencesDlg(object):
         self.btnDisconnect = QtGui.QPushButton(self.widget)
         self.btnDisconnect.setObjectName("btnDisconnect")
         self.gridLayout.addWidget(self.btnDisconnect, 0, 2, 1, 1)
+        # BEGIN remove site url
         self.label_3 = QtGui.QLabel(self.widget)
         self.label_3.setObjectName("label_3")
         self.gridLayout.addWidget(self.label_3, 1, 0, 1, 1)
@@ -91,6 +92,7 @@ class Ui_preferencesDlg(object):
         self.txtUrl.setMinimumSize(QtCore.QSize(250, 22))
         self.txtUrl.setObjectName("txtUrl")
         self.gridLayout.addWidget(self.txtUrl, 1, 1, 1, 2)
+        # END remove site url
         self.label_5 = QtGui.QLabel(self.widget)
         self.label_5.setObjectName("label_5")
         self.gridLayout.addWidget(self.label_5, 2, 0, 1, 1)
@@ -235,7 +237,9 @@ class Ui_preferencesDlg(object):
         self.label.setText(QtGui.QApplication.translate("Dialog", "Account:", None, QtGui.QApplication.UnicodeUTF8))
         self.btnDisconnect.setToolTip(QtGui.QApplication.translate("Dialog", "Link and unlink this device", None, QtGui.QApplication.UnicodeUTF8))
         self.btnDisconnect.setText(QtGui.QApplication.translate("Dialog", "Disconnect", None, QtGui.QApplication.UnicodeUTF8))
+        # BEGIN remove site url
         self.label_3.setText(QtGui.QApplication.translate("Dialog", "CloudDesk Url", None, QtGui.QApplication.UnicodeUTF8))
+        # END remove site url
         self.label_2.setText(QtGui.QApplication.translate("Dialog", "Computer Name:", None, QtGui.QApplication.UnicodeUTF8))
         self.lblComputer.setText(QtGui.QApplication.translate("Dialog", "computer name here", None, QtGui.QApplication.UnicodeUTF8))
         self.label_5.setText(QtGui.QApplication.translate("Dialog", "Storage Used:", None, QtGui.QApplication.UnicodeUTF8))

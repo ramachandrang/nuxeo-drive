@@ -5,7 +5,6 @@ import argparse
 from getpass import getpass
 import traceback
 
-import nxdrive
 from nxdrive.controller import Controller
 from nxdrive.daemon import daemonize
 from nxdrive.logging_config import configure

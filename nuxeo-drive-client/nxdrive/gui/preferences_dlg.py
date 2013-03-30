@@ -30,9 +30,6 @@ from folders_dlg import SyncFoldersDlg
 import nxdrive.gui.qrc_resources
 
 
-if sys.platform == 'win32':
-    from nxdrive.protocol_handler import win32
-
 def default_expanded_nuxeo_drive_folder():
     return os.path.expanduser(DEFAULT_NX_DRIVE_FOLDER)
 
@@ -51,9 +48,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setWindowTitle('%s Preferences' % Constants.APP_NAME)
-        self.tabWidget.setCurrentIndex(1)
+        self.tabWidget.setCurrentIndex(0)
         self.cbAutostart.setText(self.tr('Start automatically when starting this computer'))
-        self.label_3.setText(self.tr('Site Url:'))
+#        self.label_3.setText(self.tr('Site Url:'))
         self.label_7.setText(self.tr('Folder location'))
         self.groupboxSite.setTitle(self.tr('%s Site') % Constants.PRODUCT_NAME)
         self.frontend = frontend
@@ -167,7 +164,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #            self.cbEnablelog.setChecked(self.logEnabled)
 
             if not self._isConnected():
+                # BEGIN remove site url
                 self.txtUrl.setText(Constants.DEFAULT_CLOUDDESK_URL)
+                # END remove site url
                 self.txtAccount.setText(Constants.DEFAULT_ACCOUNT)
                 self.txtCloudfolder.setText(os.path.dirname(self.local_folder))
 
@@ -300,23 +299,29 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtAccount.setText(self.server_binding.remote_user)
             self.txtAccount.setCursorPosition(0)
             self.txtAccount.setToolTip(self.server_binding.remote_user)
+            # BEGIN remove site url
             self.txtUrl.setText(self.server_binding.server_url)
             self.txtUrl.setCursorPosition(0)
             self.txtUrl.setToolTip(self.server_binding.server_url)
+            # END remove site url
             self.txtCloudfolder.setText(os.path.dirname(self.server_binding.local_folder))
             self.txtCloudfolder.setCursorPosition(0)
             self.txtCloudfolder.setToolTip(self.server_binding.local_folder)
             self.txtAccount.setReadOnly(True)
             self.txtAccount.deselect()
+            # BEGIN remove site url
             self.txtUrl.setReadOnly(True)
+            # END remove site url
             self.btnSelect.setEnabled(True)
         else:
             self.txtAccount.setReadOnly(False)
             # widget looks still read-only
             self.txtAccount.setEnabled(True)
             self.txtAccount.setSelection(0, len(self.txtAccount.text()))
+            # BEGIN remove site url
             self.txtUrl.setReadOnly(False)
             self.txtUrl.setEnabled(True)
+            # END remove site url
             self.btnSelect.setEnabled(False)
 
     def _connect(self):

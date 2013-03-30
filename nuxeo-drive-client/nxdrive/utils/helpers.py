@@ -6,12 +6,17 @@ Created on Nov 7, 2012
 
 import os
 import sys
+import ConfigParser
+
 from PySide.QtCore import Signal, QCoreApplication, QSettings, QObject, QEvent
 from PySide.QtCore import QIODevice, QTimer, Signal, QCoreApplication, QTextStream
 from PySide.QtGui import QSystemTrayIcon, QMessageBox, QApplication
 from PySide.QtNetwork import QLocalServer, QLocalSocket
 
+import nxdrive
 from nxdrive import Constants
+from nxdrive import Defaults
+
 from nxdrive.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -119,6 +124,58 @@ def create_settings():
     QCoreApplication.setApplicationName(Constants.SHORT_APP_NAME)
     return QSettings()
 
+def create_config_file(config_file):    
+    config = ConfigParser.RawConfigParser()
+    
+    # When adding sections or items, add them in the reverse order of
+    # how you want them to be displayed in the actual file.
+    # In addition, please note that using RawConfigParser's and the raw
+    # mode of ConfigParser's respective set functions, you can assign
+    # non-string values to keys internally, but will receive an error
+    # when attempting to write to a file or when you get it in non-raw
+    # mode. SafeConfigParser does not allow such assignments to take place.
+    config.add_section('support')
+    config.set('support', 'debug', str(nxdrive.DEBUG))
+    
+    config.add_section('misc')
+    config.set('misc', 'notification-delay', str(Defaults.NOTIFICATION_MESSAGE_DELAY))
+    config.set('misc', 'recent-files-count', str(Defaults.RECENT_FILES_COUNT))
+    
+    config.add_section('services')
+    config.set('services', 'maintenance-url', Defaults.MAINTENANCE_SERVICE_URL)
+    config.set('services', 'upgrade-url', Defaults.UPGRADE_SERVICE_URL)
+    config.set('services', 'notification-interval', str(Defaults.SERVICE_NOTIFICATION_INTERVAL))
+    
+    config.add_section('cloud-portal-office')
+    config.set('cloud-portal-office', 'server', Defaults.DEFAULT_CLOUDDESK_URL)
+    
+    # Writing our configuration file
+    with open(config_file, 'wb') as cfg:
+        config.write(cfg)
+    
+def read_config_file(config_file):
+    defaults = {
+                'debug': str(nxdrive.DEBUG),
+                'notification-delay': str(Defaults.NOTIFICATION_MESSAGE_DELAY),
+                'recent-files-count': str(Defaults.RECENT_FILES_COUNT),
+                'maintenance-url': Defaults.MAINTENANCE_SERVICE_URL,
+                'upgrade-url': Defaults.UPGRADE_SERVICE_URL,
+                'notification-interval': str(Defaults.SERVICE_NOTIFICATION_INTERVAL),
+                'server': Defaults.DEFAULT_CLOUDDESK_URL
+                }
+    config = ConfigParser.RawConfigParser(defaults)
+    config.read(config_file)
+    
+    try:
+        nxdrive.DEBUG = config.getboolean('support', 'debug')
+        Constants.NOTIFICATION_MESSAGE_DELAY = config.getint('misc', 'notification-delay')
+        Constants.RECENT_FILES_COUNT = config.getint('misc', 'recent-files-count')
+        Constants.MAINTENANCE_SERVICE_URL = config.get('services', 'maintenance-url')
+        Constants.UPGRADE_SERVICE_URL = config.get('services', 'upgrade-url')
+        Constants.NOTIFICATION_MESSAGE_DELAY = config.getint('services', 'notification-interval')
+        Constants.DEFAULT_CLOUDDESK_URL = config.get('cloud-portal-office', 'server')
+    except Exception as e:
+        log.debug('failed to read configuration file %s: %s', config_file, e)
 
 class Communicator(QObject):
     """Handle communication between sync and main GUI thread

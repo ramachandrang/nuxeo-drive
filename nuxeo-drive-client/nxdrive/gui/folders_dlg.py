@@ -9,7 +9,7 @@ from PySide.QtCore import Qt, QObject, Signal, Slot, QModelIndex
 
 from nxdrive.model import SyncFolders
 from ui_sync_folders import Ui_Dialog
-from nxdrive.RemoteFolderSystem import get_model, update_model, no_bindings
+from nxdrive.RemoteFolderSystem import get_model, update_model
 from nxdrive.RemoteFolderSystem import ID_ROLE, CHECKED_ROLE
 from nxdrive import Constants
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound

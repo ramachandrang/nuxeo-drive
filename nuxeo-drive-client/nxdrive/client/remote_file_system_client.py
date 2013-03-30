@@ -8,7 +8,8 @@ import time
 from nxdrive.logging_config import get_logger
 from nxdrive.client.common import NotFound
 from nxdrive.client.common import BUFFER_SIZE
-from nxdrive.client.base_automation_client import Unauthorized, Forbidden
+from nxdrive.client.base_automation_client import Unauthorized
+from nxdrive.client.base_automation_client import raise_403_error
 from nxdrive.client.base_automation_client import BaseAutomationClient
 
 
@@ -180,7 +181,7 @@ class RemoteFileSystemClient(BaseAutomationClient):
             if e.code == 401:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
             elif e.code == 403:
-                raise Forbidden(self.server_url, self.user_id, e.code)
+                raise_403_error(self.automation_url, self.user_id, e)
             else:
                 e.msg = base_error_message + ": HTTP error %d" % e.code
                 raise e

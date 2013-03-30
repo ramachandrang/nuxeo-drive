@@ -287,7 +287,7 @@ class IntroPage(QWizardPage):
 #            self.completeChanged.emit()
             return True
 
-        from nxdrive.client import Unauthorized, Forbidden
+        from nxdrive.client import Unauthorized, DeviceQuotaExceeded
         app = QApplication.instance()
         process_filter = EventFilter(self)
 
@@ -315,7 +315,7 @@ class IntroPage(QWizardPage):
             msg = self.tr('Invalid credentials.')
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
             self.auth_ok = False
-        except Forbidden as e:
+        except DeviceQuotaExceeded as e:
             controller = self.wizard().controller
             client = controller.remote_doc_client_factory(url, username, controller.device_id, password)
             mydocs = client.get_mydocs()
@@ -557,7 +557,7 @@ class GuideOnePage(QWizardPage):
 
     def initializePage(self):
         username = self.field('username')
-        self.setTitle(self.tr('Welcome to %s, %s!') % (Constants.APP_NAME, username))Ä
+        self.setTitle(self.tr('Welcome to %s, %s!') % (Constants.APP_NAME, username))
         
     def cleanupPage(self):
         advanced = self.wizard().field('advanced')

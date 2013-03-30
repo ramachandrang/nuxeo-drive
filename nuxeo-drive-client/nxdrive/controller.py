@@ -40,6 +40,8 @@ from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
 from nxdrive.utils import safe_long_path
+from nxdrive.utils import create_config_file
+from nxdrive.utils import read_config_file
 from nxdrive._version import _is_newer_version
 from nxdrive import Constants
 from nxdrive.http_server import HttpServer
@@ -194,10 +196,18 @@ class Controller(object):
         # metadata sqlite database.
         self._engine, self._session_maker = init_db(
             self.config_folder, echo = echo, poolclass = poolclass)
+        
+        config_file = Constants.CONFIG_FILE
+        config_file = os.path.join(normalized_path(config_folder), config_file)
+        if os.path.exists(config_file):
+            read_config_file(config_file)
+        else:
+            create_config_file(config_file)
+            
         self._local = local()
         self._remote_error = None
         self.device_id = self.get_device_config().device_id
-       	self.loop_count = 0
+        self.loop_count = 0
         self._init_storage()
         self.mydocs_folder = None
         self.synchronizer = Synchronizer(self)
@@ -415,7 +425,6 @@ class Controller(object):
         server_url = self._normalize_url(server_url)
         nxclient = self.remote_doc_client_factory(
             server_url, username, self.device_id, password)
-        token = nxclient.request_token()
         try:
             server_binding = session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
@@ -432,8 +441,12 @@ class Controller(object):
                 server_binding.remote_password = password
                 log.info("Updating password for user '%s' on server '%s'",
                         username, server_url)
-
-            if token is not None and server_binding.remote_token != token:
+            # revoke previous token (token==device), as there is a cap on the # of devices
+            if server_binding.remote_token is not None:
+                nxclient.revoke_token()
+            token = nxclient.request_token()
+#            if token is not None and server_binding.remote_token != token:
+            if token is not None:
                 log.info("Updating token for user '%s' on server '%s'",
                         username, server_url)
                 # Update the token info if required

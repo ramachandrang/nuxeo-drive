@@ -20,8 +20,9 @@ from collections import defaultdict, Iterable
 from nxdrive.client import DEDUPED_BASENAME_PATTERN
 from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
-from nxdrive.client import Unauthorized, Forbidden
-from nxdrive.client import QuotaExceeded
+from nxdrive.client import Unauthorized
+from nxdrive.client import StorageQuotaExceeded
+from nxdrive.client import DeviceQuotaExceeded
 from nxdrive.client import MaintenanceMode
 from nxdrive.client import FolderInfo
 from nxdrive.client import LocalClient
@@ -1116,26 +1117,28 @@ class Synchronizer(object):
         """Forever loop to scan / refresh states and perform sync"""
 
         delay = delay if delay is not None else self.delay
+        
+        # TODO Validating credentials by requesting a token would bump into the limit
         # Turn the icon indicator on
-        if self._frontend is None:
-            local_folder = None
-        else:
-            local_folder = self._frontend.local_folder
-        server_binding = self._controller.get_server_binding(local_folder)
-        if server_binding is not None:
-            try:
-                self._controller.validate_credentials(server_binding.server_url,
-                                                     server_binding.remote_user,
-                                                     server_binding.remote_password)
-                if self._frontend is not None:
-                    self._frontend.get_info(server_binding.local_folder).online = True
-            except Unauthorized:
-                log.debug("Invalid credentials.")
-            except Forbidden:
-                # TODO fire a notification, sign off...
-                pass
-            except Exception as e:
-                log.debug("Unable to connect to %s (%s)", server_binding.server_url, str(e), exc_info = True)
+#        if self._frontend is None:
+#            local_folder = None
+#        else:
+#            local_folder = self._frontend.local_folder
+#        server_binding = self._controller.get_server_binding(local_folder)
+#        if server_binding is not None:
+#            try:
+#                self._controller.validate_credentials(server_binding.server_url,
+#                                                     server_binding.remote_user,
+#                                                     server_binding.remote_password)
+#                if self._frontend is not None:
+#                    self._frontend.get_info(server_binding.local_folder).online = True
+#            except Unauthorized:
+#                log.debug("Invalid credentials.")
+#            except DeviceQuotaExceeded:
+#                # TODO fire a notification, sign off...
+#                log.debug('max number of linked devices exceeded.')
+#            except Exception as e:
+#                log.debug("Unable to connect to %s (%s)", server_binding.server_url, str(e), exc_info = True)
 
         if self._frontend is not None:
             self._frontend.notify_sync_started()
@@ -1547,7 +1550,7 @@ class Synchronizer(object):
                 self._frontend.notify_maintenance_mode(server_binding.local_folder, e.msg, e.detail)
             return False
 
-        elif isinstance(e, QuotaExceeded):
+        elif isinstance(e, StorageQuotaExceeded):
             log.info("quota exceeded on %s for user %s (doc: %s)", e.url, e.user_id, e.ref)
             assert e.url.startswith(server_binding.server_url), \
                     'binding url=%s is different from exception url=%s' % (server_binding.server_url, e.url)
@@ -1562,11 +1565,10 @@ class Synchronizer(object):
                 self._frontend.notify_quota_exceeded(server_binding.local_folder, msg, detail)
             return True
 
+        elif isinstance(e, DeviceQuotaExceeded):
+            pass
         else:
-            if self._controller.recover_from_invalid_credentials(server_binding, e):
-                return True
-            else:
-                return False
+            return self._controller.recover_from_invalid_credentials(server_binding, e)
 
     def get_remote_client(self, server_binding, base_folder = None,
                           repository = 'default'):
@@ -1861,12 +1863,13 @@ class Synchronizer(object):
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
                                   rc, session)
 
-    def notify_to_signin(self, server_binding = None):
+    def notify_to_signin(self, server_binding = None, error=None):
         if self._frontend is None:
             return
 
         if server_binding is None:
-            error = Unauthorized(Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_ACCOUNT)
+            if error is None:
+                error = Unauthorized(Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_ACCOUNT)
             self._frontend.notify_offline(Constants.DEFAULT_NXDRIVE_FOLDER, error)
         elif server_binding.nag_signin:
             self._frontend.notify_signin(server_binding.server_url)

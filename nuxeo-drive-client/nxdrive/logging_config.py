@@ -65,6 +65,21 @@ def configure(log_filename, file_level='INFO', console_level='INFO',
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
 
+def _find_logger_basefilename(logger):
+    """Finds the logger base filename(s) currently there is only one
+    """
+    log_file = None
+    parent = logger.__dict__['parent']
+    if parent.__class__.__name__ == 'RootLogger':
+        # this is where the file name lives
+        for h in logger.manager.root.__dict__['handlers']:
+            if h.__class__.__name__ == 'RotatingFileHandler':
+                log_file = h.baseFilename
+                break
+    else:
+        log_file = _find_logger_basefilename(parent)
+
+    return log_file    
 
 def get_logger(name):
     logger = logging.getLogger(name)

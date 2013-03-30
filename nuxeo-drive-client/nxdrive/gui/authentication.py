@@ -2,7 +2,7 @@
 
 import urllib
 
-from nxdrive.client import Unauthorized, Forbidden
+from nxdrive.client import Unauthorized, DeviceQuotaExceeded
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
 
@@ -156,7 +156,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
         except Unauthorized:
             dialog.show_message(_("Invalid credentials."))
             return False
-        except Forbidden as e:
+        except DeviceQuotaExceeded as e:
             client = controller.remote_doc_client_factory(url, username, controller.device_id, password)
             mydocs = client.get_mydocs()
             p1 = e.href

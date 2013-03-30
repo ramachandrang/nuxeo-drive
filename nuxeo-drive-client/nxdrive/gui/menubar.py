@@ -36,6 +36,7 @@ import nxdrive.gui.qrc_resources
 from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
+from nxdrive.logging_config import _find_logger_basefilename
 from nxdrive.utils import create_settings
 from nxdrive.utils import find_data_path
 from nxdrive.model import RecentFiles
@@ -43,11 +44,10 @@ from nxdrive.model import ServerEvent
 from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
 from nxdrive.gui.info_dlg import InfoDlg
-from nxdrive.client import Unauthorized
+from nxdrive.client import DeviceQuotaExceeded
 from nxdrive._version import _is_newer_version
 
 if sys.platform == 'win32':
-    from nxdrive.protocol_handler import win32
     from nxdrive.utils import win32utils
 
 settings = create_settings()
@@ -179,6 +179,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
             self.actionDebug.setObjectName("actionDebug")
             self.actionDebug.setCheckable(True)
+            self.actionViewLog = QtGui.QAction(self.tr("View Log"), self)
+            self.actionDebug.setObjectName("actionViewLog")
         # TO BE REMOVED - END
         self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
@@ -206,6 +208,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if DEBUG:
             self.menuCloudDesk.addSeparator()
             self.menuCloudDesk.addAction(self.actionDebug)
+            self.menuCloudDesk.addAction(self.actionViewLog)
         # TO BE REMOVED - END
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionHelp)
@@ -233,6 +236,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if DEBUG:
             self.actionDebug.setChecked(False)
             self.actionDebug.toggled.connect(self.enable_trace)
+            self.actionViewLog.triggered.connect(self.view_log)
         # END TO BE REMOVED
 
         # copy to local binding
@@ -296,10 +300,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def enable_trace(self, state):
         self.controller.enable_trace(state)
-        # this is not working on OS X
-#        self.communicator.message.emit(self.tr("CloudDesk Authentication"),
-#                               self.tr('Update credentials'),
-#                               QtGui.QSystemTrayIcon.Critical)
+
+    def view_log(self):
+        log_filename = _find_logger_basefilename(log)
+        self.controller.open_local_file(log_filename)
 
     def notify_another_instance(self, msg):
         dlg = SingleInstanceDlg()
@@ -588,7 +592,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             msg = 'Detected invalid proxy server settings' + '' if text is None else ': %s' % text
             log.debug(msg)
             self.communicator.invalid_proxy.emit(local_folder, msg)
-
+        elif code == 403 and isinstance(exception, DeviceQuotaExceeded):
+            log.debug('max number of linked devices exceeded.')
+            # force user to sign in to handle max number of linked devices exceeded
+            self.communicator.invalid_credentials.emit(local_folder)
+            
     def notify_pending(self, local_folder, n_pending, or_more = False):
         if self.state == Constants.APP_STATE_QUITTING:
             return
