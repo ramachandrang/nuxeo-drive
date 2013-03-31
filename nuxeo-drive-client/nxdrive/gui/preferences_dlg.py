@@ -50,9 +50,12 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.setWindowTitle('%s Preferences' % Constants.APP_NAME)
         self.tabWidget.setCurrentIndex(0)
         self.cbAutostart.setText(self.tr('Start automatically when starting this computer'))
+        # BEGIN remove site url
 #        self.label_3.setText(self.tr('Site Url:'))
+        # END remove site url
         self.label_7.setText(self.tr('Folder location'))
         self.groupboxSite.setTitle(self.tr('%s Site') % Constants.PRODUCT_NAME)
+        self.groupboxSite.setToolTip(Constants.CLOUDDESK_URL)
         self.frontend = frontend
         self.controller = frontend.controller
         self.result = ProgressDialog.OK_AND_NO_RESTART
@@ -165,9 +168,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
             if not self._isConnected():
                 # BEGIN remove site url
-                self.txtUrl.setText(Constants.DEFAULT_CLOUDDESK_URL)
+#                self.txtUrl.setText(Constants.CLOUDDESK_URL)
                 # END remove site url
-                self.txtAccount.setText(Constants.DEFAULT_ACCOUNT)
+                self.txtAccount.setText(Constants.ACCOUNT)
                 self.txtCloudfolder.setText(os.path.dirname(self.local_folder))
 
             self._updateBinding()
@@ -300,9 +303,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtAccount.setCursorPosition(0)
             self.txtAccount.setToolTip(self.server_binding.remote_user)
             # BEGIN remove site url
-            self.txtUrl.setText(self.server_binding.server_url)
-            self.txtUrl.setCursorPosition(0)
-            self.txtUrl.setToolTip(self.server_binding.server_url)
+#            self.txtUrl.setText(self.server_binding.server_url)
+#            self.txtUrl.setCursorPosition(0)
+#            self.txtUrl.setToolTip(self.server_binding.server_url)
             # END remove site url
             self.txtCloudfolder.setText(os.path.dirname(self.server_binding.local_folder))
             self.txtCloudfolder.setCursorPosition(0)
@@ -310,7 +313,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtAccount.setReadOnly(True)
             self.txtAccount.deselect()
             # BEGIN remove site url
-            self.txtUrl.setReadOnly(True)
+#            self.txtUrl.setReadOnly(True)
             # END remove site url
             self.btnSelect.setEnabled(True)
         else:
@@ -319,8 +322,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.txtAccount.setEnabled(True)
             self.txtAccount.setSelection(0, len(self.txtAccount.text()))
             # BEGIN remove site url
-            self.txtUrl.setReadOnly(False)
-            self.txtUrl.setEnabled(True)
+#            self.txtUrl.setReadOnly(False)
+#            self.txtUrl.setEnabled(True)
             # END remove site url
             self.btnSelect.setEnabled(False)
 
@@ -342,7 +345,10 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 
         self.reuse_folder = True
         remote_user = self.txtAccount.text()
-        server_url = self.txtUrl.text()
+        # BEGIN remove site url
+#        server_url = self.txtUrl.text()
+        server_url = Constants.CLOUDDESK_URL
+        # BEGIN remove site url
         # validate at least the folder since it could have been entered directly
         if (not os.path.exists(local_folder)):
             mbox = QMessageBox(QMessageBox.Warning, Constants.APP_NAME, self.tr("Folder %s does not exist.") % local_folder)

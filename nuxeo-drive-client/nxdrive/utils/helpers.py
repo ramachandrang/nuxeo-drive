@@ -135,10 +135,13 @@ def create_config_file(config_file):
     # when attempting to write to a file or when you get it in non-raw
     # mode. SafeConfigParser does not allow such assignments to take place.
     config.add_section('support')
+    config.set('support', '; this turns on debug menus', '')
     config.set('support', 'debug', str(nxdrive.DEBUG))
     
     config.add_section('misc')
+    config.set('misc', '; duration of the notification balloon [sec]', '')
     config.set('misc', 'notification-delay', str(Defaults.NOTIFICATION_MESSAGE_DELAY))
+    config.set('misc', '; number of files in the Recently Changed Files menu', '')
     config.set('misc', 'recent-files-count', str(Defaults.RECENT_FILES_COUNT))
     
     config.add_section('services')
@@ -173,10 +176,28 @@ def read_config_file(config_file):
         Constants.MAINTENANCE_SERVICE_URL = config.get('services', 'maintenance-url')
         Constants.UPGRADE_SERVICE_URL = config.get('services', 'upgrade-url')
         Constants.NOTIFICATION_MESSAGE_DELAY = config.getint('services', 'notification-interval')
-        Constants.DEFAULT_CLOUDDESK_URL = config.get('cloud-portal-office', 'server')
+        Constants.CLOUDDESK_URL = config.get('cloud-portal-office', 'server')
     except Exception as e:
         log.debug('failed to read configuration file %s: %s', config_file, e)
 
+def reload_config_file(config_file):
+    defaults = {
+                'debug': str(nxdrive.DEBUG),
+                'notification-delay': str(Defaults.NOTIFICATION_MESSAGE_DELAY),
+                'recent-files-count': str(Defaults.RECENT_FILES_COUNT),
+                'notification-interval': str(Defaults.SERVICE_NOTIFICATION_INTERVAL)
+                }
+    config = ConfigParser.RawConfigParser(defaults)
+    config.read(config_file)
+    
+    try:
+        nxdrive.DEBUG = config.getboolean('support', 'debug')
+        Constants.NOTIFICATION_MESSAGE_DELAY = config.getint('misc', 'notification-delay')
+        Constants.RECENT_FILES_COUNT = config.getint('misc', 'recent-files-count')
+        Constants.NOTIFICATION_MESSAGE_DELAY = config.getint('services', 'notification-interval')
+    except Exception as e:
+        log.debug('failed to reload configuration file %s: %s', config_file, e)
+    
 class Communicator(QObject):
     """Handle communication between sync and main GUI thread
 

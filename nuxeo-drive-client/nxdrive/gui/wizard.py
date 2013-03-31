@@ -148,7 +148,7 @@ class CpoWizard(QWizard):
         self._unbind_if_bound(folder)
         username = self.field('username')
         pwd = self.field('pwd')
-        url = Constants.DEFAULT_CLOUDDESK_URL
+        url = Constants.CLOUDDESK_URL
         self.controller.bind_server(folder, url, username, pwd)
 
     def notify_folders_changed(self):
@@ -233,10 +233,13 @@ class IntroPage(QWizardPage):
             self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
 
         self.lblInstr = QLabel(self.tr('Please sign in to %s') % Constants.PRODUCT_NAME)
-        self.lblUrl = QLabel("<html><a href='%s'>%s</a></html>" % (Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_CLOUDDESK_URL))
-        self.lblUrl.setStyleSheet("QLabel { font-size: 10px }")
-        self.lblUrl.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        self.lblUrl.setOpenExternalLinks(True)
+        self.lblInstr.setToolTip(Constants.CLOUDDESK_URL)
+        # BEGIN remove site url
+#        self.lblUrl = QLabel("<html><a href='%s'>%s</a></html>" % (Constants.CLOUDDESK_URL, Constants.CLOUDDESK_URL))
+#        self.lblUrl.setStyleSheet("QLabel { font-size: 10px }")
+#        self.lblUrl.setTextInteractionFlags(Qt.TextBrowserInteraction)
+#        self.lblUrl.setOpenExternalLinks(True)
+        # END remove site url
         self.lblUsername = QLabel(self.tr('Username'))
         self.lblPwd = QLabel(self.tr('Password'))
         self.txtUsername = QLineEdit()
@@ -256,18 +259,30 @@ class IntroPage(QWizardPage):
 
         grid = QGridLayout()
         grid.addWidget(self.lblInstr, 0, 0, 1, 2)
-        grid.addWidget(self.lblUrl, 1, 0, 1, 2)
-        grid.addWidget(self.lblUsername, 2, 0, Qt.AlignRight)
-        grid.addWidget(self.txtUsername, 2, 1)
-        grid.addWidget(self.lblPwd, 3, 0, Qt.AlignRight)
-        grid.addWidget(self.txtPwd, 3, 1)
+        # BEGIN remove site url
+#        grid.addWidget(self.lblUrl, 1, 0, 1, 2)
+#        grid.addWidget(self.lblUsername, 2, 0, Qt.AlignRight)
+#        grid.addWidget(self.txtUsername, 2, 1)
+#        grid.addWidget(self.lblPwd, 3, 0, Qt.AlignRight)
+#        grid.addWidget(self.txtPwd, 3, 1)
+#        hlayout2 = QHBoxLayout()
+#        hlayout2.addWidget(self.lblMessage)
+##        hlayout2.addStretch(1)
+#        hlayout2.addWidget(self.btnProxy)
+#        hlayout2.setStretch(0, 4)
+#        hlayout2.setStretch(1, 1)
+#        grid.addLayout(hlayout2, 4, 0, 1, 2, Qt.AlignLeft)
+        # END remove site url
+        grid.addWidget(self.lblUsername, 1, 0, Qt.AlignRight)
+        grid.addWidget(self.txtUsername, 1, 1)
+        grid.addWidget(self.lblPwd, 2, 0, Qt.AlignRight)
+        grid.addWidget(self.txtPwd, 2, 1)
         hlayout2 = QHBoxLayout()
         hlayout2.addWidget(self.lblMessage)
-#        hlayout2.addStretch(1)
         hlayout2.addWidget(self.btnProxy)
         hlayout2.setStretch(0, 4)
         hlayout2.setStretch(1, 1)
-        grid.addLayout(hlayout2, 4, 0, 1, 2, Qt.AlignLeft)
+        grid.addLayout(hlayout2, 3, 0, 1, 2, Qt.AlignLeft)
         self.setLayout(grid)
 
         self.registerField('username*', self.txtUsername)
@@ -295,7 +310,7 @@ class IntroPage(QWizardPage):
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
             
-            url = Constants.DEFAULT_CLOUDDESK_URL
+            url = Constants.CLOUDDESK_URL
             username = self.txtUsername.text()
             password = self.txtPwd.text()
             self.wizard().controller.validate_credentials(url, username, password)
@@ -339,7 +354,7 @@ class IntroPage(QWizardPage):
             msg = e.message % (e.max_devices, url)
         except Exception as e:
             self.auth_ok = False
-            self.wizard().controller.invalidate_client_cache(Constants.DEFAULT_CLOUDDESK_URL)
+            self.wizard().controller.invalidate_client_cache(Constants.CLOUDDESK_URL)
             self.wizard().controller.reset_proxy()
             # retry with proxy set to auto-detect
             settings = create_settings()
@@ -352,7 +367,7 @@ class IntroPage(QWizardPage):
                 settings.setValue('preferences/useProxy', ProxyInfo.PROXY_SERVER)
                 msg = self.tr("""Unable to connect to %s.
 If a proxy server is required, please configure it here by selecting the Proxy... button""") % \
-                        Constants.DEFAULT_CLOUDDESK_URL
+                        Constants.CLOUDDESK_URL
 
                 self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: gray }")
                 self.btnProxy.setVisible(True)
@@ -361,7 +376,7 @@ If a proxy server is required, please configure it here by selecting the Proxy..
                     detail = ' (%s)' % str(e)
                 else:
                     detail = ''
-                msg = self.tr('Unable to connect to %s%s') % (Constants.DEFAULT_CLOUDDESK_URL, detail)
+                msg = self.tr('Unable to connect to %s%s') % (Constants.CLOUDDESK_URL, detail)
                 self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
         finally:
             app.restoreOverrideCursor()
@@ -512,7 +527,7 @@ class InstallOptionsPage(QWizardPage):
                 except Exception as e:
                     username = self.field('username')
                     log.error(self.tr("Unable to set roots on '%s' for user '%s' (%s)"),
-                                        Constants.DEFAULT_CLOUDDESK_URL, username, str(e))
+                                        Constants.CLOUDDESK_URL, username, str(e))
                 finally:
                     app.restoreOverrideCursor()
                     self.removeEventFilter(process_filter)
@@ -808,7 +823,7 @@ class AdvancedPage(QWizardPage):
             self.setCommitPage(True)
 
         except Exception as e:
-            msg = self.tr('Unable to update folders from %s (%s)') % (Constants.DEFAULT_CLOUDDESK_URL, e)
+            msg = self.tr('Unable to update folders from %s (%s)') % (Constants.CLOUDDESK_URL, e)
             self.lblMessage.setText(msg)
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
 

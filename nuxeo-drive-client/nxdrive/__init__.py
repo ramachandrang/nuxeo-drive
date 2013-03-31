@@ -1,6 +1,9 @@
 """Global debug flag"""
 DEBUG = False
 
+def isDebug():
+    return DEBUG
+
 """Global maintenance/upgrade service flag"""
 USE_LOCAL_SERVICE = False
 """Flag for simulating a quota exception"""

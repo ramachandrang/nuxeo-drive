@@ -17,6 +17,8 @@ from threading import Thread
 from threading import Condition
 import logging
 
+from PySide import QtCore
+
 import nxdrive
 from nxdrive.client import LocalClient
 from nxdrive.client import RemoteFileSystemClient
@@ -42,6 +44,7 @@ from nxdrive.utils import normalized_path
 from nxdrive.utils import safe_long_path
 from nxdrive.utils import create_config_file
 from nxdrive.utils import read_config_file
+from nxdrive.utils import reload_config_file
 from nxdrive._version import _is_newer_version
 from nxdrive import Constants
 from nxdrive.http_server import HttpServer
@@ -66,21 +69,22 @@ def default_nuxeo_drive_folder():
 
     This folder is user specific, typically under the home folder.
     """
-    if sys.platform == "win32":
-        # WARNING: it's important to check `Documents` first as under Windows 7
-        # there also exists a `My Documents` folder invisible in the explorer and
-        # cmd / powershell but visible from Python
-        documents = os.path.expanduser(r'~\Documents')
-        my_documents = os.path.expanduser(r'~\My Documents')
-        if os.path.exists(documents):
-            # Regular location for documents under Windows 7 and up
-            return os.path.join(documents, Constants.DEFAULT_NXDRIVE_FOLDER)
-        elif os.path.exists(my_documents):
-            # Compat for Windows XP
-            return os.path.join(my_documents, Constants.DEFAULT_NXDRIVE_FOLDER)
+#    if sys.platform == "win32":
+#        # WARNING: it's important to check `Documents` first as under Windows 7
+#        # there also exists a `My Documents` folder invisible in the explorer and
+#        # cmd / powershell but visible from Python
+#        documents = os.path.expanduser(r'~\Documents')
+#        my_documents = os.path.expanduser(r'~\My Documents')
+#        if os.path.exists(documents):
+#            # Regular location for documents under Windows 7 and up
+#            return os.path.join(documents, Constants.DEFAULT_NXDRIVE_FOLDER)
+#        elif os.path.exists(my_documents):
+#            # Compat for Windows XP
+#            return os.path.join(my_documents, Constants.DEFAULT_NXDRIVE_FOLDER)
 
     # Fallback to home folder otherwiseConstants.DEFAULT_NXDRIVE_FOLDER)
     return os.path.join(os.path.expanduser('~'), Constants.DEFAULT_NXDRIVE_FOLDER)
+
 
 class Event(object):
     def __init__(self, name = 'none'):
@@ -203,7 +207,7 @@ class Controller(object):
             read_config_file(config_file)
         else:
             create_config_file(config_file)
-            
+        self.init_fswatcher()
         self._local = local()
         self._remote_error = None
         self.device_id = self.get_device_config().device_id
@@ -1240,5 +1244,15 @@ class Controller(object):
         if len(session.dirty):
             # Make refreshed state immediately available to other processes
             session.commit()
-  
+
+    def init_fswatcher(self):
+        config_file = Constants.CONFIG_FILE
+        config_file = os.path.join(normalized_path(self.config_folder), config_file)
+        self.fs_watcher = QtCore.QFileSystemWatcher([config_file,])
+        self.fs_watcher.fileChanged.connect(self.file_changed)
+        
+    @QtCore.Slot(str)
+    def file_changed(self, path):
+        # reload properties that may change at runtime
+        reload_config_file(path)
         

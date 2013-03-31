@@ -1869,7 +1869,7 @@ class Synchronizer(object):
 
         if server_binding is None:
             if error is None:
-                error = Unauthorized(Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_ACCOUNT)
+                error = Unauthorized(Constants.CLOUDDESK_URL, Constants.ACCOUNT)
             self._frontend.notify_offline(Constants.DEFAULT_NXDRIVE_FOLDER, error)
         elif server_binding.nag_signin:
             self._frontend.notify_signin(server_binding.server_url)

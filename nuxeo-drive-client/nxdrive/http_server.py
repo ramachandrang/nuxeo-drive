@@ -9,7 +9,7 @@ import sys
 import cherrypy
 from cherrypy import tools
 
-from nxdrive import DEBUG
+from nxdrive import isDebug
 from nxdrive.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -47,7 +47,7 @@ class HttpServer(object):
 #            cherrypy.response.status = '500 Internal Server Error'
 #            return {"error": "'sync_status_app' is not defined"}
         
-        if DEBUG:
+        if isDebug():
             return self.app(state, folder, transition)
         else:
             try:

@@ -21,4 +21,5 @@ from nxdrive.utils.helpers import EventFilter
 from nxdrive.utils.helpers import classproperty
 from nxdrive.utils.helpers import create_config_file
 from nxdrive.utils.helpers import read_config_file
+from nxdrive.utils.helpers import reload_config_file
 from nxdrive.utils import win32utils

@@ -25,7 +25,7 @@ from sqlalchemy.sql.expression import asc, desc
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
 from nxdrive import Constants
-from nxdrive import DEBUG
+from nxdrive import isDebug
 from nxdrive.async.operations import SyncOperations
 # from utils.helpers import Communicator, ProxyInfo, RecoverableError
 from nxdrive.utils import Communicator
@@ -175,12 +175,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionAbout = QtGui.QAction(self.tr("About"), self)
         self.actionAbout.setObjectName("actionAbout")
         # TO BE REMOVED - BEGIN
-        if DEBUG:
-            self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
-            self.actionDebug.setObjectName("actionDebug")
-            self.actionDebug.setCheckable(True)
-            self.actionViewLog = QtGui.QAction(self.tr("View Log"), self)
-            self.actionDebug.setObjectName("actionViewLog")
+        self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
+        self.actionDebug.setObjectName("actionDebug")
+        self.actionDebug.setCheckable(True)
+        self.actionViewLog = QtGui.QAction(self.tr("View Log"), self)
+        self.actionDebug.setObjectName("actionViewLog")
         # TO BE REMOVED - END
         self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
@@ -205,10 +204,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addAction(self.actionNotification)
         self.menuCloudDesk.addAction(self.actionUpgrade)
         # TO BE REMOVED - BEGIN
-        if DEBUG:
-            self.menuCloudDesk.addSeparator()
-            self.menuCloudDesk.addAction(self.actionDebug)
-            self.menuCloudDesk.addAction(self.actionViewLog)
+        self.debugSeparator = self.menuCloudDesk.addSeparator()
+        self.menuCloudDesk.addAction(self.actionDebug)
+        self.menuCloudDesk.addAction(self.actionViewLog)
         # TO BE REMOVED - END
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionHelp)
@@ -233,10 +231,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionUpgrade.triggered.connect(self.show_upgrade_info)
 
         # BEGIN TO BE REMOVED
-        if DEBUG:
-            self.actionDebug.setChecked(False)
-            self.actionDebug.toggled.connect(self.enable_trace)
-            self.actionViewLog.triggered.connect(self.view_log)
+        self.actionDebug.setChecked(False)
+        self.actionDebug.toggled.connect(self.enable_trace)
+        self.actionViewLog.triggered.connect(self.view_log)
         # END TO BE REMOVED
 
         # copy to local binding
@@ -798,6 +795,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # Do not disable the 'quit' menu for now
 #        self.actionQuit.setEnabled(self.state != Constants.APP_STATE_QUITTING)
 
+        self.debugSeparator.setVisible(isDebug())
+        self.actionDebug.setVisible(isDebug())
+        self.actionViewLog.setVisible(isDebug())
+        
         self.menuViewRecentFiles.clear()
         recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == self.local_folder).all()
         for recent_file in recent_files:
@@ -927,8 +928,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             # Launch the GUI to create a binding
             from nxdrive.gui.authentication import prompt_authentication
             result = prompt_authentication(self.controller, self.local_folder,
-                                       url = Constants.DEFAULT_CLOUDDESK_URL,
-                                       username = Constants.DEFAULT_ACCOUNT)
+                                       url = Constants.CLOUDDESK_URL,
+                                       username = Constants.ACCOUNT)
             ok = result[0]
             if not ok:
                 return
@@ -1119,7 +1120,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def _getUserName(self):
         server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
-        return server_binding.remote_user if not server_binding == None else Constants.DEFAULT_ACCOUNT
+        return server_binding.remote_user if not server_binding == None else Constants.ACCOUNT
 
     def _createImageWithOverlay(self, baseImage, overlayImage):
         imageWithOverlay = QImage(baseImage.size(), QImage.Format_ARGB32_Premultiplied)
@@ -1143,7 +1144,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         log.trace("app quitting")
         self.quit()
         
-
 
 from nxdrive.utils import QApplicationSingleton
 from nxdrive.gui.single_instance_dlg import SingleInstanceDlg
