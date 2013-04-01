@@ -496,7 +496,8 @@ class InstallOptionsPage(QWizardPage):
             if os.path.exists(folder) and not self.wizard().keep_location:
                 msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
                                                           self.tr("Folder %s already exists. Do you want to use it?" % folder))
-                msgbox.setInformativeText(self.tr("Select Yes to keep this location or No to select a different one on the Advanced next page."))
+                msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one on the Advanced next page."
+                                                  "Note that if you keep this folder, some files/folders may not be synchronized correctly."))
                 msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                 ret = msgbox.exec_()
                 if ret == QMessageBox.No:
@@ -740,7 +741,8 @@ class AdvancedPage(QWizardPage):
         if os.path.exists(folder) and not self.wizard().keep_location:
             msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
                                                       self.tr("Folder %s already exists. Do you want to use it?" % folder))
-            msgbox.setInformativeText(self.tr("Select Yes to keep this location or No to select a different one."))
+            msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one."
+                                              "Note that if you keep this folder, some files/folders may not be synchronized correctly."))
             msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             ret = msgbox.exec_()
             # BUG?! when the default (radio button) location is selected, the MessageBox is ok.

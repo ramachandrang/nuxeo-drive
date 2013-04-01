@@ -360,14 +360,13 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         parent_folder = self.txtCloudfolder.text()
         local_folder = os.path.join(parent_folder, Constants.DEFAULT_NXDRIVE_FOLDER)
         if not self.reuse_folder:
-            msg = QMessageBox(QMessageBox.Question, self.tr('Folder Exists'),
-                              self.tr("The folder %s already exists."
-                              ) % local_folder,
-                              QMessageBox.Yes | QMessageBox.No)
-            msg.setInformativeText(self.tr("Do you want to use it?"))
-            if msg.exec_() == QMessageBox.No:
-                self.tabWidget.setCurrentIndex(3)
-                return
+            msg = QMessageBox(QMessageBox.Warning, self.tr('Folder Exists'),
+                              self.tr("The folder %s already exists.") % local_folder,
+                              QMessageBox.Ok)
+            msg.setInformativeText(self.tr("Select a folder where %s does not exist.") % Constants.DEFAULT_NXDRIVE_FOLDER)
+            msg.exec_()
+            self.tabWidget.setCurrentIndex(3)
+            return
                 
         self.reuse_folder = True
         remote_user = self.txtAccount.text()
@@ -454,7 +453,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
 
             if os.path.exists(self.local_folder):
-                error = QMessageBox(QMessageBox.Critical, self.tr("Path Error"),
+                error = QMessageBox(QMessageBox.Warning, self.tr("Path Error"),
                                                           self.tr("Folder %s already exists" % self.local_folder),
                                                           QMessageBox.Ok)
                 error.setInformativeText(self.tr("Select a folder where %s does not exist." % Constants.DEFAULT_NXDRIVE_FOLDER))
