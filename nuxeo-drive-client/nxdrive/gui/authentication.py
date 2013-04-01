@@ -113,12 +113,14 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
 
     # TODO: learn how to use QT i18n support to handle translation of labels
     fields_spec = [
-        {
-            'id': 'url',
-            'label': 'Site URL:',
-            'value': url,
-            'is_readonly': is_url_readonly,
-        },
+        # BEGIN remove site url
+#        {
+#            'id': 'url',
+#            'label': 'Site URL:',
+#            'value': url,
+#            'is_readonly': is_url_readonly,
+#        },
+        # END remove site url
         {
             'id': 'username',
             'label': 'Username:',
@@ -132,14 +134,17 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
     ]
     def bind_server(values, dialog):
         try:
-            url = values['url']
-            if not url:
-                dialog.show_message(_("The Nuxeo server URL is required."))
-                return False
-            if (not url.startswith("http://")
-                and not url.startswith('https://')):
-                dialog.show_message(_("Not a valid HTTP url."))
-                return False
+            # BEGIN remove site url
+#            url = values['url']
+#            if not url:
+#                dialog.show_message(_("The Nuxeo server URL is required."))
+#                return False
+#            if (not url.startswith("http://")
+#                and not url.startswith('https://')):
+#                dialog.show_message(_("Not a valid HTTP url."))
+#                return False
+            # END remove site url
+            url = Constants.CLOUDDESK_URL
             username = values['username']
             if not username:
                 dialog.show_message(_("A user name is required"))

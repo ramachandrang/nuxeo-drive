@@ -18,11 +18,11 @@ APP_NAME = PRODUCT_NAME + _(' Desktop')
 SHORT_APP_NAME = 'CpoDesktop'
 OSX_APP_NAME = APP_NAME
 
-APP_STATE_RUNNING = _('running')
-APP_STATE_STOPPED = _('stopped')
-APP_STATE_QUITTING = _('quitting')
-APP_SUBSTATE_AVAILABLE = _('available')
-APP_SUBSTATE_MAINTENANCE = _('maintenance')
+APP_STATE_RUNNING = 'running'
+APP_STATE_STOPPED = 'stopped'
+APP_STATE_QUITTING = 'quitting'
+APP_SUBSTATE_AVAILABLE = 'available'
+APP_SUBSTATE_MAINTENANCE = 'maintenance'
 
 INFO_STATE_NONE = 'none'
 INFO_STATE_MAINTENANCE_SCHEDULE = 'maint_schedule'

@@ -1165,8 +1165,14 @@ class Synchronizer(object):
         self._controller.start_status_thread()
 
         try:
+            server_binding = None
+            if self._frontend is not None:
+                server_binding = self._frontend.server_binding
+                if server_binding is None:
+                    local_folder = self._frontend.local_folder
+                    server_binding = self._controller.get_server_binding(local_folder)
+                
             self.get_folders(server_binding = server_binding, session = session)
-
             count = session.query(SyncFolders).\
                    filter(and_(SyncFolders.bind_state == True,
                                SyncFolders.local_folder == server_binding.local_folder)).\

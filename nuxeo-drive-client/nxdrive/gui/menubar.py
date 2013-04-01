@@ -181,7 +181,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionViewLog = QtGui.QAction(self.tr("View Log"), self)
         self.actionDebug.setObjectName("actionViewLog")
         # TO BE REMOVED - END
-        self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
+        self.actionQuit = QtGui.QAction(self.tr("Exit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
         # add a new notification (about maintenance) action
         self.actionNotification = QtGui.QAction(self.tr("Notification..."), self)
@@ -910,7 +910,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         elif self.state == Constants.APP_STATE_RUNNING:
             return self.tr("Running")
         elif self.state == Constants.APP_STATE_QUITTING:
-            return self.tr('Quitting...')
+            return self.tr('Exiting...')
 
     def doWork(self):
         if self.state == Constants.APP_STATE_STOPPED:

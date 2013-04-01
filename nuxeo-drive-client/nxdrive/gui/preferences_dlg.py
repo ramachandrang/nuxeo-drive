@@ -9,9 +9,11 @@ import os
 import sys
 import platform
 import shutil
+from time import time
 
 from PySide.QtGui import QApplication, QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QIcon
 from PySide.QtCore import Qt, QSettings
+from PySide.QtCore import Signal, Slot, QObject
 
 from nxdrive import Constants
 from nxdrive.model import ServerBinding, RecentFiles, LastKnownState, ServerEvent, SyncFolders
@@ -42,6 +44,28 @@ DEFAULT_EX_NX_DRIVE_FOLDER = default_expanded_nuxeo_drive_folder()
 
 settings = QSettings()
 
+class ClickDetector(QObject):
+    clicked = Signal()
+    MAX_TIME = 5
+    
+    def __init__(self):
+        super(ClickDetector, self).__init__()
+        self._clear()
+        
+    def _clear(self):
+        self.num_clicks = 0
+        self.start = time()
+            
+    def click(self):
+        current = time()
+        if current - self.start > ClickDetector.MAX_TIME:
+            self._clear()
+        self.num_clicks += 1
+        if self.num_clicks == 5:
+            self.clicked.emit()
+            self._clear()
+        
+        
 class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def __init__(self, frontend = None, parent = None):
         super(PreferencesDlg, self).__init__(parent)
@@ -66,6 +90,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.local_folder_text_changed = False
         self.prev_local_folder = self.local_folder
         self.reuse_folder = False
+        self.bknd_clicks = ClickDetector()
         self.server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
         self.proxy = None
         self.rbProxy.setCheckable(True)
@@ -84,6 +109,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.rbProxy.toggled.connect(self.setProxy)
         # REMOVE proxy auto-detect
         self.rbAutodetect.toggled.connect(self.setProxy)
+        self.bknd_clicks.clicked.connect(self.toggle_debug_mode)
 
         self.cbIconOverlays.stateChanged.connect(self.setShowIconOverlays)
         if sys.platform == 'win32':
@@ -571,3 +597,13 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
         if self.result == ProgressDialog.OK_AND_RESTART and self.frontend.state == Constants.APP_STATE_STOPPED:
             self.frontend._doSync()
+
+    def mousePressEvent(self, event):
+        self.bknd_clicks.click()
+        super(PreferencesDlg, self).mousePressEvent(event)
+        
+    @Slot()
+    def toggle_debug_mode(self):
+        nxdrive.DEBUG = not nxdrive.DEBUG
+        
+        
