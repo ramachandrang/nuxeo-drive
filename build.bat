@@ -6,7 +6,7 @@ set INSTALL_DIR=Cloud Portal Office Desktop
 set SETUP_SCRIPT=CPODesktop-setup-script.iss
 set INNO_COMPILER=c:\Program Files (x86)\Inno Setup 5\iscc
 set CPO_EXE=CpoDesktop.exe
-set VERSION=0.1.10
+set VERSION=0.1.11
 
 pushd
 
