@@ -6,9 +6,17 @@ Created on Nov 7, 2012
 
 import os
 import sys
+import ConfigParser
+
 from PySide.QtCore import Signal, QCoreApplication, QSettings, QObject, QEvent
-from PySide.QtGui import QSystemTrayIcon, QMessageBox
+from PySide.QtCore import QIODevice, QTimer, Signal, QCoreApplication, QTextStream
+from PySide.QtGui import QSystemTrayIcon, QMessageBox, QApplication
+from PySide.QtNetwork import QLocalServer, QLocalSocket
+
+import nxdrive
 from nxdrive import Constants
+from nxdrive import Defaults
+
 from nxdrive.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -116,14 +124,94 @@ def create_settings():
     QCoreApplication.setApplicationName(Constants.SHORT_APP_NAME)
     return QSettings()
 
+def create_config_file(config_file):    
+    config = ConfigParser.RawConfigParser()
+    
+    # When adding sections or items, add them in the reverse order of
+    # how you want them to be displayed in the actual file.
+    # In addition, please note that using RawConfigParser's and the raw
+    # mode of ConfigParser's respective set functions, you can assign
+    # non-string values to keys internally, but will receive an error
+    # when attempting to write to a file or when you get it in non-raw
+    # mode. SafeConfigParser does not allow such assignments to take place.
+    config.add_section('support')
+    config.set('support', '; this turns on debug menus', '')
+    config.set('support', 'debug', str(nxdrive.DEBUG))
+    
+    config.add_section('misc')
+    config.set('misc', '; duration of the notification balloon [sec]', '')
+    config.set('misc', 'notification-delay', str(Defaults.NOTIFICATION_MESSAGE_DELAY))
+    config.set('misc', '; number of files in the Recently Changed Files menu', '')
+    config.set('misc', 'recent-files-count', str(Defaults.RECENT_FILES_COUNT))
+    
+    config.add_section('services')
+    config.set('services', 'maintenance-url', Defaults.MAINTENANCE_SERVICE_URL)
+    config.set('services', 'upgrade-url', Defaults.UPGRADE_SERVICE_URL)
+    config.set('services', 'notification-interval', str(Defaults.SERVICE_NOTIFICATION_INTERVAL))
+    
+    config.add_section('cloud-portal-office')
+    config.set('cloud-portal-office', 'server', Defaults.DEFAULT_CLOUDDESK_URL)
+    
+    # Writing our configuration file
+    with open(config_file, 'wb') as cfg:
+        config.write(cfg)
+    
+def read_config_file(config_file):
+    defaults = {
+                'debug': str(nxdrive.DEBUG),
+                'notification-delay': str(Defaults.NOTIFICATION_MESSAGE_DELAY),
+                'recent-files-count': str(Defaults.RECENT_FILES_COUNT),
+                'maintenance-url': Defaults.MAINTENANCE_SERVICE_URL,
+                'upgrade-url': Defaults.UPGRADE_SERVICE_URL,
+                'notification-interval': str(Defaults.SERVICE_NOTIFICATION_INTERVAL),
+                'server': Defaults.DEFAULT_CLOUDDESK_URL
+                }
+    config = ConfigParser.RawConfigParser(defaults)
+    config.read(config_file)
+    
+    try:
+        nxdrive.DEBUG = config.getboolean('support', 'debug')
+        Constants.NOTIFICATION_MESSAGE_DELAY = config.getint('misc', 'notification-delay')
+        Constants.RECENT_FILES_COUNT = config.getint('misc', 'recent-files-count')
+        Constants.MAINTENANCE_SERVICE_URL = config.get('services', 'maintenance-url')
+        Constants.UPGRADE_SERVICE_URL = config.get('services', 'upgrade-url')
+        Constants.NOTIFICATION_MESSAGE_DELAY = config.getint('services', 'notification-interval')
+        Constants.CLOUDDESK_URL = config.get('cloud-portal-office', 'server')
+    except Exception as e:
+        log.debug('failed to read configuration file %s: %s', config_file, e)
 
+def reload_config_file(config_file):
+    defaults = {
+                'debug': str(nxdrive.DEBUG),
+                'notification-delay': str(Defaults.NOTIFICATION_MESSAGE_DELAY),
+                'recent-files-count': str(Defaults.RECENT_FILES_COUNT),
+                'notification-interval': str(Defaults.SERVICE_NOTIFICATION_INTERVAL)
+                }
+    config = ConfigParser.RawConfigParser(defaults)
+    config.read(config_file)
+    
+    try:
+        nxdrive.DEBUG = config.getboolean('support', 'debug')
+        Constants.NOTIFICATION_MESSAGE_DELAY = config.getint('misc', 'notification-delay')
+        Constants.RECENT_FILES_COUNT = config.getint('misc', 'recent-files-count')
+        Constants.NOTIFICATION_MESSAGE_DELAY = config.getint('services', 'notification-interval')
+    except Exception as e:
+        log.debug('failed to reload configuration file %s: %s', config_file, e)
+    
 class Communicator(QObject):
     """Handle communication between sync and main GUI thread
 
     Use a signal to notify the main thread event loops about states update by
     the synchronization thread.
-
     """
+    # Stores the unique Singleton instance-
+    _iInstance = None
+    @staticmethod
+    def getCommunicator():
+        if not Communicator._iInstance:
+            Communicator._iInstance = Communicator()
+        return Communicator._iInstance
+    
     # (event name, new icon, rebuild menu, pause/resume)
     icon = Signal(str)
     menu = Signal()
@@ -133,21 +221,93 @@ class Communicator(QObject):
     message = Signal(str, str, QSystemTrayIcon.MessageIcon)
     error = Signal(str, str, QMessageBox.StandardButton)
     folders = Signal()
+    messageReceived = Signal(str)
 
+    def __init__(self):
+        if Communicator._iInstance:
+            raise Communicator._iInstance
+        super(Communicator, self).__init__()
+        Communicator._iInstance = self
 
+class classproperty(property):
+    def __get__(self, cls, owner):
+#        return classmethod(self.fget).__get__(None, owner)()
+        return self.fget.__get__(None, owner)()
 
+    def __set__(self, cls, owner, value):
+        return self.fset.__set__(None, owner, value)()
+    
+class QSingleInstanceApplication(QApplication):
+    messageReceived = Signal(str)
+    
+    def __init__(self, appid, args=sys.argv):
+        super(QSingleInstanceApplication, self).__init__(args)
+        self._id = appid
+
+        # Is there another instance running?
+        self._outSocket = QLocalSocket()
+        log.trace("connecting to server %s" % self._id)
+        self._outSocket.connectToServer(self._id)
+        self._isRunning = self._outSocket.waitForConnected()
+        
+        if self._isRunning:
+            # Yes, there is.
+            log.trace("another instance is running")
+            self._outStream = QTextStream(self._outSocket)
+            self._outStream.setCodec('UTF-8')
+            self.sendMessage('another instance was started')
+        else:
+            # No, there isn't.
+            print "first instance running as %s" % self._id
+            self._outSocket = None
+            self._outStream = None
+            self._inSocket = None
+            self._inStream = None
+            self._server = QLocalServer()
+            self._server.removeServer(self._id)
+            self._server.listen(self._id)
+            self._server.newConnection.connect(self._onNewConnection)
+            
+    def isRunning(self):
+        return self._isRunning
+
+    def id(self):
+        return self._id
+
+    def sendMessage(self, msg):
+        if not self._outStream:
+            return False
+        self._outStream << msg << '\n'
+        self._outStream.flush()
+        return self._outSocket.waitForBytesWritten()
+
+    def _onNewConnection(self):
+        if self._inSocket:
+            self._inSocket.readyRead.disconnect(self._onReadyRead)
+        self._inSocket = self._server.nextPendingConnection()
+        if not self._inSocket:
+            return
+        self._inStream = QTextStream(self._inSocket)
+        self._inStream.setCodec('UTF-8')
+        self._inSocket.readyRead.connect(self._onReadyRead)
+
+    def _onReadyRead(self):
+        while True:
+            msg = self._inStream.readLine()
+            if not msg: break
+            Communicator.getCommunicator().messageReceived.emit(msg)
+      
 class QApplicationSingleton(object):
     # # Stores the unique Singleton instance-
     _iInstance = None
-
-    from PySide.QtGui import QApplication
+    
     # # The constructor
     #  @param self The object pointer.
-    def __init__(self, args = []):
+    def __init__(self, appid, args = []):
         # Check whether we already have an instance
         if QApplicationSingleton._iInstance is None:
-            # Create and remember instanc
-            QApplicationSingleton._iInstance = QApplicationSingleton.QApplication(args)
+            # Create and remember instance
+            QApplicationSingleton._iInstance = QSingleInstanceApplication(appid, args)
 
         # Store instance reference as the only member in the handle
         self._EventHandler_instance = QApplicationSingleton._iInstance
@@ -160,7 +320,6 @@ class QApplicationSingleton(object):
     def __getattr__(self, aAttr):
         return getattr(self._iInstance, aAttr)
 
-
     # # Delegate access to implementation.
     #  @param self The object pointer.
     #  @param attr Attribute wanted.
@@ -168,6 +327,7 @@ class QApplicationSingleton(object):
     #  @return Result of operation.
     def __setattr__(self, aAttr, aValue):
         return setattr(self._iInstance, aAttr, aValue)
+    
 
 class EventFilter(QObject):
     def eventFilter(self, obj, event):
@@ -183,11 +343,3 @@ class EventFilter(QObject):
             # standard event processing
             return QObject.eventFilter(self, obj, event)
 
-
-class classproperty(property):
-    def __get__(self, cls, owner):
-#        return classmethod(self.fget).__get__(None, owner)()
-        return self.fget.__get__(None, owner)()
-
-    def __set__(self, cls, owner, value):
-        return self.fset.__set__(None, owner, value)()

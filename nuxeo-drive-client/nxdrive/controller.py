@@ -17,6 +17,8 @@ from threading import Thread
 from threading import Condition
 import logging
 
+from PySide import QtCore
+
 import nxdrive
 from nxdrive.client import LocalClient
 from nxdrive.client import RemoteFileSystemClient
@@ -40,12 +42,15 @@ from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import normalized_path
 from nxdrive.utils import safe_long_path
+from nxdrive.utils import create_config_file
+from nxdrive.utils import read_config_file
+from nxdrive.utils import reload_config_file
 from nxdrive._version import _is_newer_version
 from nxdrive import Constants
 from nxdrive.http_server import HttpServer
 from nxdrive.http_server import http_server_loop
 
-from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy import func
 from sqlalchemy import asc
@@ -64,21 +69,22 @@ def default_nuxeo_drive_folder():
 
     This folder is user specific, typically under the home folder.
     """
-    if sys.platform == "win32":
-        # WARNING: it's important to check `Documents` first as under Windows 7
-        # there also exists a `My Documents` folder invisible in the explorer and
-        # cmd / powershell but visible from Python
-        documents = os.path.expanduser(r'~\Documents')
-        my_documents = os.path.expanduser(r'~\My Documents')
-        if os.path.exists(documents):
-            # Regular location for documents under Windows 7 and up
-            return os.path.join(documents, Constants.DEFAULT_NXDRIVE_FOLDER)
-        elif os.path.exists(my_documents):
-            # Compat for Windows XP
-            return os.path.join(my_documents, Constants.DEFAULT_NXDRIVE_FOLDER)
+#    if sys.platform == "win32":
+#        # WARNING: it's important to check `Documents` first as under Windows 7
+#        # there also exists a `My Documents` folder invisible in the explorer and
+#        # cmd / powershell but visible from Python
+#        documents = os.path.expanduser(r'~\Documents')
+#        my_documents = os.path.expanduser(r'~\My Documents')
+#        if os.path.exists(documents):
+#            # Regular location for documents under Windows 7 and up
+#            return os.path.join(documents, Constants.DEFAULT_NXDRIVE_FOLDER)
+#        elif os.path.exists(my_documents):
+#            # Compat for Windows XP
+#            return os.path.join(my_documents, Constants.DEFAULT_NXDRIVE_FOLDER)
 
     # Fallback to home folder otherwiseConstants.DEFAULT_NXDRIVE_FOLDER)
     return os.path.join(os.path.expanduser('~'), Constants.DEFAULT_NXDRIVE_FOLDER)
+
 
 class Event(object):
     def __init__(self, name = 'none'):
@@ -90,6 +96,7 @@ class Event(object):
 
 class ExceptionEvent(Event):
     evant_names = {401: 'unauthorized',
+                   403: 'forbidden',
                    61: 'invalid_proxy',
                    600: 'invalid_proxy',
                    601: 'invalid_proxy',
@@ -161,8 +168,11 @@ class Controller(object):
     __instance = None
 
     @staticmethod
-    def getController():
-        # not exactly a singleton
+    def getController(config_folder = None, echo = None, poolclass = None, timeout = 60):
+        if not Controller.__instance:
+            if not config_folder:
+                return None
+            Controller.__instance = Controller(config_folder, echo = None, poolclass = None, timeout = 60)
         return Controller.__instance
 
     def __init__(self, config_folder, echo = None, poolclass = None, timeout = 60):
@@ -190,10 +200,18 @@ class Controller(object):
         # metadata sqlite database.
         self._engine, self._session_maker = init_db(
             self.config_folder, echo = echo, poolclass = poolclass)
+        
+        config_file = Constants.CONFIG_FILE
+        config_file = os.path.join(normalized_path(config_folder), config_file)
+        if os.path.exists(config_file):
+            read_config_file(config_file)
+        else:
+            create_config_file(config_file)
+        self.init_fswatcher()
         self._local = local()
         self._remote_error = None
         self.device_id = self.get_device_config().device_id
-       	self.loop_count = 0
+        self.loop_count = 0
         self._init_storage()
         self.mydocs_folder = None
         self.synchronizer = Synchronizer(self)
@@ -336,7 +354,7 @@ class Controller(object):
         for _, sub_pair_state in results:
             if sub_pair_state != 'synchronized':
                 pair_state = 'children_modified'
-            break
+                break
         # Pre-pend the folder state to the descendants
         return [(doc_pair, pair_state)] + results
 
@@ -411,7 +429,6 @@ class Controller(object):
         server_url = self._normalize_url(server_url)
         nxclient = self.remote_doc_client_factory(
             server_url, username, self.device_id, password)
-        token = nxclient.request_token()
         try:
             server_binding = session.query(ServerBinding).filter(
                 ServerBinding.local_folder == local_folder).one()
@@ -428,8 +445,12 @@ class Controller(object):
                 server_binding.remote_password = password
                 log.info("Updating password for user '%s' on server '%s'",
                         username, server_url)
-
-            if token is not None and server_binding.remote_token != token:
+            # revoke previous token (token==device), as there is a cap on the # of devices
+            if server_binding.remote_token is not None:
+                nxclient.revoke_token()
+            token = nxclient.request_token()
+#            if token is not None and server_binding.remote_token != token:
+            if token is not None:
                 log.info("Updating token for user '%s' on server '%s'",
                         username, server_url)
                 # Update the token info if required
@@ -466,13 +487,29 @@ class Controller(object):
                                    remote_info = remote_info,
                                    remote_state = 'synchronized')
             session.add(state)
-            session.commit()
+#            self.lock_folder(server_binding.local_folder)
+#            mydocs = self.get_mydocs_folder_synced(state, session=session)
+#            if mydocs is not None:
+#                self.lock_folder(mydocs)
+#            otherdocs = self.get_mydocs_folder_synced(state, session=session)
+#            if otherdocs is not None:
+#                self.lock_folder(otherdocs)
+                          
+            session.commit()      
             return server_binding
         except Exception as e:
             log.debug("Failed to bind server: %s", str(e))
             session.rollback()
             return None
 
+#        self.lock_folder(server_binding.local_folder)
+#        mydocs = self.get_mydocs_folder_synced(state, session=session)
+#        if mydocs is not None:
+#            self.lock_folder(mydocs)
+#        otherdocs = self.get_mydocs_folder_synced(state, session=session)
+#        if otherdocs is not None:
+#            self.lock_folder(otherdocs)
+            
         session.commit()
         return server_binding
 
@@ -524,7 +561,15 @@ class Controller(object):
         for se in server_events:
             session.delete(se)
                 
-        session.delete(binding)
+#        self.unlock_folder(binding.local_folder)
+#        mydocs = self.get_mydocs_folder_synced(binding, session=session)
+#        if mydocs is not None:
+#            self.unlock_folder(mydocs)
+#        otherdocs = self.get_mydocs_folder_synced(binding, session=session)
+#        if otherdocs is not None:
+#            self.unlock_folder(otherdocs)
+#        session.delete(binding)
+
         session.commit()
 
     def unbind_all(self):
@@ -542,8 +587,6 @@ class Controller(object):
         server_url = self._normalize_url(server_url)
         nxclient = self.remote_doc_client_factory(server_url, username, self.device_id,
                                                   password)
-        # TODO request token
-        # How to validate the returned token that it is a valid token (vs e,g, the login page)
         if nxclient.request_token() is None:
             raise Unauthorized(server_url, username)
 
@@ -744,12 +787,77 @@ class Controller(object):
 
             try:
                 mydocs = session.query(SyncFolders).\
+                    filter(SyncFolders.local_folder == server_binding.local_folder).\
                     filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
                 self.mydocs_folder = mydocs.remote_id
             except NoResultFound:
                 self.mydocs_folder = None
+            except MultipleResultsFound:
+                log.debug("multiple My Docs found error!")
+                return None
 
         return self.mydocs_folder
+    
+    def get_root_folder_synced(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        try:
+            root = session.query(LastKnownState).\
+                filter(LastKnownState.local_folder == server_binding.local_folder).\
+                filter(or_(LastKnownState.pair_state == 'synchronized', LastKnownState.pair_state == 'locally_deleted')).\
+                filter(LastKnownState.local_path == '/').one()
+            return root
+        except NoResultFound:
+            return None
+        except MultipleResultsFound:
+            log.debug("multiple My Docs folders found error!")
+            return None
+        
+        
+    def get_mydocs_folder_synced(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        try:
+            mydocs = session.query(LastKnownState).\
+                filter(LastKnownState.local_folder == server_binding.local_folder).\
+                filter(or_(LastKnownState.pair_state == 'synchronized', LastKnownState.pair_state == 'locally_deleted')).\
+                filter(LastKnownState.remote_name == Constants.MY_DOCS).one()
+            return mydocs
+        except NoResultFound:
+            return None
+        except MultipleResultsFound:
+            log.debug("multiple My Docs folders found error!")
+            return None
+        
+    def get_guest_folder_synced(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        try:
+            guest_folder = session.query(LastKnownState).\
+                filter(LastKnownState.local_folder == server_binding.local_folder).\
+                filter(or_(LastKnownState.pair_state == 'synchronized', LastKnownState.pair_state == 'locally_deleted')).\
+                filter(LastKnownState.remote_name == Constants.GUEST_FOLDER).one()
+            return guest_folder
+        except NoResultFound:
+            return None
+        except MultipleResultsFound:
+            log.debug("multiple My Docs folders found error!")
+            return None        
+            
+    def get_otherdocs_folder_synced(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        try:
+            otherdocs = session.query(LastKnownState).\
+                filter(LastKnownState.local_folder == server_binding.local_folder).\
+                filter(or_(LastKnownState.pair_state == 'synchronized', LastKnownState.pair_state == 'locally_deleted')).\
+                filter(LastKnownState.remote_name == Constants.OTHERS_DOCS).one()
+            return otherdocs
+        except NoResultFound:
+            return None
+        except MultipleResultsFound:
+            log.debug("multiple Other Docs folders found error!")
+            return None
 
     def _log_offline(self, exception, context):
         if isinstance(exception, urllib2.HTTPError):
@@ -782,7 +890,7 @@ class Controller(object):
 
     def recover_from_invalid_credentials(self, server_binding, exception, session = None):
         code = getattr(exception, 'code', None)
-        if code == 401 or code == 403:
+        if code == 401:
             log.debug('Detected invalid credentials for: %s', server_binding.local_folder)
             self.invalidate_client_cache(server_binding.server_url)
             folder = server_binding.local_folder
@@ -896,7 +1004,7 @@ class Controller(object):
             if total == 0:
                 return None, False
             else:
-                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used / 1000000000, used / total, total / 1000000000),\
+                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used, used / total, total),\
                         used >= total
         except KeyError:
             return None, False
@@ -910,19 +1018,26 @@ class Controller(object):
 
     def start_status_thread(self):
         if self.status_thread is None or not self.status_thread.isAlive():
-            self.http_server = HttpServer(Constants.INTERNAL_HTTP_PORT, self.sync_status_app)
-            self.status_thread = Thread(target = http_server_loop,
-                                      args = (self.http_server,))
-            self.status_thread.start()
+            try:
+                self.http_server = HttpServer(Constants.INTERNAL_HTTP_PORT, self)
+                self.status_thread = Thread(target = http_server_loop,
+                                          args = (self.http_server,))
+                self.status_thread.start()
+            except:
+                pass
 
     def stop_status_thread(self):
-        if self.http_server:
+        if self.status_thread is not None or self.status_thread.isAlive():
             try:
                 url = 'http://localhost:%d/stop' % self.http_server.port
                 urllib2.urlopen(url, None, 10)
             except:
                 log.trace("terminating the http thread with an error.")
-
+                
+    def status_thread_cleanup(self):
+        self.status_thread = None
+        self.http_server = None
+                        
     def sync_status_app(self, state, folder, transition):
         import json
         from cgi import escape
@@ -958,13 +1073,13 @@ class Controller(object):
         session = self.get_session()
         # force a local scan
         try:
-            self.synchronizer.scan_local(folder, session=session)
             folder_struct = {}
             folder_struct['name'] = folder
             if state == 'synchronized':
                 states = self.children_states_as_files(folder, session=session)
                 files = [f for f, status in states if status == state]
             elif state == 'progress' and not transition:
+                self.synchronizer.scan_local(folder, session=session)
                 states = self.children_states_as_files(folder, session=session)
                 files = [f for f, status in states if status in PROGRESS_STATES]
             elif state == 'progress' and transition:
@@ -1081,3 +1196,63 @@ class Controller(object):
             Thread(target = self._get_folders_and_sync_roots,
                                       args = (self, server_binding,)).start()
             
+    def lock_folder(self, path):
+        if not os.path.exists(path):
+            return
+        # os.chflags does not work on Mac
+        if sys.platform == 'darwin':
+            from subprocess import call
+            try:
+#                call(['chflags', 'uchg', path])
+                pass
+            except Exception as e:
+                log.debug('error locking path %s: %s', path, e)
+        elif sys.platform == 'win32':
+            pass
+            
+    def unlock_folder(self, path):
+        if not os.path.exists(path):
+            return
+        # os.chflags does not work on Mac
+        if sys.platform == 'darwin':
+            from subprocess import call
+            try:
+#                call(['chflags', 'nouchg', path])
+                pass
+            except Exception as e:
+                log.debug('error unlocking path %s: %s', path, e)
+        elif sys.platform == 'win32':
+            pass
+        
+    def check_nonremovable_folders(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        folders = (self.get_root_folder_synced(server_binding, session=session),
+                   self.get_mydocs_folder_synced(server_binding, session=session),
+                   self.get_guest_folder_synced(server_binding, session=session),
+                   self.get_otherdocs_folder_synced(server_binding, session=session),)
+        
+        for fld in folders:
+            if fld:
+                local_client = fld.get_local_client()
+                if not local_client.exists(fld.local_path):
+                    local_client.make_folder(fld.local_parent_path, fld.local_name)
+                    if fld.pair_state == 'locally_deleted':
+                        # change it back to synchronized
+                        fld.update_state('synchronized', 'synchronized')
+                        
+        if len(session.dirty):
+            # Make refreshed state immediately available to other processes
+            session.commit()
+
+    def init_fswatcher(self):
+        config_file = Constants.CONFIG_FILE
+        config_file = os.path.join(normalized_path(self.config_folder), config_file)
+        self.fs_watcher = QtCore.QFileSystemWatcher([config_file,])
+        self.fs_watcher.fileChanged.connect(self.file_changed)
+        
+    @QtCore.Slot(str)
+    def file_changed(self, path):
+        # reload properties that may change at runtime
+        reload_config_file(path)
+        

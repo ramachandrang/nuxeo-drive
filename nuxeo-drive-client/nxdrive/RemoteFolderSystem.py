@@ -27,12 +27,19 @@ class ModelUpdater(QObject):
         self.server_binding = server_binding
         self.controller = controller
 
-def get_model(session, controller = None):
+def get_model(session, frontend):
     model = QStandardItemModel()
     rootItem = model.invisibleRootItem()
 
     try:
-        server_binding = controller.get_server_binding()
+        server_binding = frontend.server_binding
+        controller = frontend.controller
+        if server_binding is None:
+            log.debug('invalid get_model() arguments: server_binding')
+            return None
+        if controller is None:
+            log.debug('invalid get_model() arguments: controller')
+            return None
         controller.synchronizer.get_folders(server_binding = server_binding, session = session)
         controller.synchronizer.update_roots(server_binding = server_binding, session = session)
 
@@ -46,7 +53,7 @@ def get_model(session, controller = None):
         item.setIcon(QIcon(Constants.APP_ICON_DIALOG))
         item.setData(sync_folder.remote_id, ID_ROLE)
         rootItem.appendRow(item)
-        add_subfolders(session, item, sync_folder.remote_id)
+        add_subfolders(session, item, sync_folder.remote_id, server_binding.local_folder)
         return model
     except NoResultFound:
         log.debug('Cloud Portal Office root not found.')
@@ -58,9 +65,10 @@ def get_model(session, controller = None):
         log.debug("failed to retrieve folders or sync roots (%s)", str(e))
         return None
 
-def add_subfolders(session, root, data):
+def add_subfolders(session, root, data, local_folder):
     sync_folders = session.query(SyncFolders).\
                            filter(SyncFolders.remote_parent == data).\
+                           filter(SyncFolders.local_folder == local_folder).\
                            order_by(SyncFolders.remote_name).all()
 
     if len(sync_folders) > 1:
@@ -73,9 +81,9 @@ def add_subfolders(session, root, data):
         check_state = Qt.Checked if fld.check_state else Qt.Unchecked
         item.setData(check_state, CHECKED_ROLE)
         root.appendRow(item)
-        add_subfolders(session, item, fld.remote_id)
+        add_subfolders(session, item, fld.remote_id, local_folder)
 
-def update_model(session, parent):
+def update_model(session, parent, local_folder):
     """Walk the model and inform the view if there are any changes.
     Only process added and deleted folders."""
 
@@ -84,6 +92,7 @@ def update_model(session, parent):
     parentId = parent.data(ID_ROLE)
     subfolders = session.query(SyncFolders).\
                         filter(SyncFolders.remote_parent == parentId).\
+                        filter(SyncFolders.local_folder == local_folder).\
                         order_by(SyncFolders.remote_name).all()
     subfolders_dict = dict((folder.remote_id, folder) for folder in subfolders)
 
@@ -128,7 +137,7 @@ def update_model(session, parent):
     else:
         # otherwise process its children
         for i in range(parent.rowCount()):
-            update_model(session, parent.child(i))
+            update_model(session, parent.child(i), local_folder)
 
 
 def no_bindings(session):

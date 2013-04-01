@@ -25,16 +25,18 @@ from sqlalchemy.sql.expression import asc, desc
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
 from nxdrive import Constants
-from nxdrive import DEBUG
+from nxdrive import isDebug
 from nxdrive.async.operations import SyncOperations
 # from utils.helpers import Communicator, ProxyInfo, RecoverableError
 from nxdrive.utils import Communicator
 from nxdrive.utils import RecoverableError
+
 # this import is flagged erroneously as unused import - do not remove
 import nxdrive.gui.qrc_resources
 from nxdrive.async.worker import Worker
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
+from nxdrive.logging_config import _find_logger_basefilename
 from nxdrive.utils import create_settings
 from nxdrive.utils import find_data_path
 from nxdrive.model import RecentFiles
@@ -42,11 +44,10 @@ from nxdrive.model import ServerEvent
 from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
 from nxdrive.gui.info_dlg import InfoDlg
-from nxdrive.client import Unauthorized
+from nxdrive.client import DeviceQuotaExceeded
 from nxdrive._version import _is_newer_version
 
 if sys.platform == 'win32':
-    from nxdrive.protocol_handler import win32
     from nxdrive.utils import win32utils
 
 settings = create_settings()
@@ -134,7 +135,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
         self.controller = controller
         self.options = options
-        self.communicator = Communicator()
+        self.communicator = Communicator.getCommunicator()
         self.state = Constants.APP_STATE_STOPPED
         self.substate = Constants.APP_SUBSTATE_AVAILABLE
         self.worker = None
@@ -174,12 +175,13 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionAbout = QtGui.QAction(self.tr("About"), self)
         self.actionAbout.setObjectName("actionAbout")
         # TO BE REMOVED - BEGIN
-        if DEBUG:
-            self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
-            self.actionDebug.setObjectName("actionDebug")
-            self.actionDebug.setCheckable(True)
+        self.actionDebug = QtGui.QAction(self.tr("HTTP Trace"), self)
+        self.actionDebug.setObjectName("actionDebug")
+        self.actionDebug.setCheckable(True)
+        self.actionViewLog = QtGui.QAction(self.tr("View Log"), self)
+        self.actionDebug.setObjectName("actionViewLog")
         # TO BE REMOVED - END
-        self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
+        self.actionQuit = QtGui.QAction(self.tr("Exit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
         # add a new notification (about maintenance) action
         self.actionNotification = QtGui.QAction(self.tr("Notification..."), self)
@@ -202,9 +204,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.menuCloudDesk.addAction(self.actionNotification)
         self.menuCloudDesk.addAction(self.actionUpgrade)
         # TO BE REMOVED - BEGIN
-        if DEBUG:
-            self.menuCloudDesk.addSeparator()
-            self.menuCloudDesk.addAction(self.actionDebug)
+        self.debugSeparator = self.menuCloudDesk.addSeparator()
+        self.menuCloudDesk.addAction(self.actionDebug)
+        self.menuCloudDesk.addAction(self.actionViewLog)
         # TO BE REMOVED - END
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionHelp)
@@ -229,18 +231,29 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionUpgrade.triggered.connect(self.show_upgrade_info)
 
         # BEGIN TO BE REMOVED
-        if DEBUG:
-            self.actionDebug.setChecked(False)
-            self.actionDebug.toggled.connect(self.enable_trace)
+        self.actionDebug.setChecked(False)
+        self.actionDebug.toggled.connect(self.enable_trace)
+        self.actionViewLog.triggered.connect(self.view_log)
         # END TO BE REMOVED
 
         # copy to local binding
         for sb in self.controller.list_server_bindings():
             self.get_binding_info(sb.local_folder)
         # save current server binding
-        self.server_binding = self.controller.get_server_binding(self._get_local_folder())
+        local_folder = self._get_local_folder()
+        self.server_binding = self.controller.get_server_binding(local_folder)
+        # lock folders to prevent user deletion
+        self.controller.lock_folder(local_folder)
+            
         if self.server_binding is not None:
             session = self.controller.get_session()
+#            mydocs = self.controller.get_mydocs_folder_synced(self.server_binding, session=session)
+#            if mydocs is not None:
+#                self.controller.lock_folder(mydocs)
+#            otherdocs = self.controller.get_otherdocs_folder_synced(self.server_binding, session=session)
+#            if otherdocs is not None:
+#                self.controller.lock_folder(otherdocs)
+
             # reset older version events
             self.controller._reset_upgrade_info(self.server_binding, session=session)
             # reset the nag schedules
@@ -255,6 +268,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.communicator.invalid_credentials.connect(self.handle_invalid_credentials)
         self.communicator.invalid_proxy.connect(self.handle_invalid_proxy)
         self.communicator.error.connect(self.handle_recoverable_error)
+        
+        self.communicator.messageReceived.connect(self.notify_another_instance)
 
         # Show 'up-to-date' notification message only once
         self.firsttime_pending_message = True
@@ -282,11 +297,15 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def enable_trace(self, state):
         self.controller.enable_trace(state)
-        # this is not working on OS X
-#        self.communicator.message.emit(self.tr("CloudDesk Authentication"),
-#                               self.tr('Update credentials'),
-#                               QtGui.QSystemTrayIcon.Critical)
 
+    def view_log(self):
+        log_filename = _find_logger_basefilename(log)
+        self.controller.open_local_file(log_filename)
+
+    def notify_another_instance(self, msg):
+        dlg = SingleInstanceDlg()
+        dlg.exec_()
+    
     def about(self):
         msgbox = QMessageBox()
         msgbox.setWindowTitle(Constants.APP_NAME)
@@ -562,7 +581,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         if code is None:
             return
-        elif code == 401 or code == 403:
+        elif code == 401:
             log.debug('Detected invalid credentials for: %s', local_folder)
             self.communicator.invalid_credentials.emit(local_folder)
         elif code == 61 or code == 600 or code == 601:
@@ -570,7 +589,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             msg = 'Detected invalid proxy server settings' + '' if text is None else ': %s' % text
             log.debug(msg)
             self.communicator.invalid_proxy.emit(local_folder, msg)
-
+        elif code == 403 and isinstance(exception, DeviceQuotaExceeded):
+            log.debug('max number of linked devices exceeded.')
+            # force user to sign in to handle max number of linked devices exceeded
+            self.communicator.invalid_credentials.emit(local_folder)
+            
     def notify_pending(self, local_folder, n_pending, or_more = False):
         if self.state == Constants.APP_STATE_QUITTING:
             return
@@ -726,6 +749,14 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 self._resumeSync()
             self.controller.stop()
         else:
+#            self.controller.unlock_folder(self.local_folder)
+#            if self.server_binding is not None:
+#                mydocs = self.controller.get_mydocs_folder_synced(self.server_binding)
+#                if mydocs is not None:
+#                    self.controller.unlock_folder(mydocs)
+#                otherdocs = self.controller.get_otherdocs_folder_synced(self.server_binding)
+#                if otherdocs is not None:
+#                    self.controller.unlock_folder(otherdocs)
             # quit directly
             QtGui.QApplication.quit()
 
@@ -764,6 +795,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # Do not disable the 'quit' menu for now
 #        self.actionQuit.setEnabled(self.state != Constants.APP_STATE_QUITTING)
 
+        self.debugSeparator.setVisible(isDebug())
+        self.actionDebug.setVisible(isDebug())
+        self.actionViewLog.setVisible(isDebug())
+        
         self.menuViewRecentFiles.clear()
         recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == self.local_folder).all()
         for recent_file in recent_files:
@@ -804,7 +839,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def showPreferences(self):
         if self.preferencesDlg is not None:
             return
-
+            
         self.preferencesDlg = PreferencesDlg(frontend = self)
         if self.preferencesDlg.exec_() == QDialog.Rejected:
             self.preferencesDlg = None
@@ -875,7 +910,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         elif self.state == Constants.APP_STATE_RUNNING:
             return self.tr("Running")
         elif self.state == Constants.APP_STATE_QUITTING:
-            return self.tr('Quitting...')
+            return self.tr('Exiting...')
 
     def doWork(self):
         if self.state == Constants.APP_STATE_STOPPED:
@@ -893,8 +928,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             # Launch the GUI to create a binding
             from nxdrive.gui.authentication import prompt_authentication
             result = prompt_authentication(self.controller, self.local_folder,
-                                       url = Constants.DEFAULT_CLOUDDESK_URL,
-                                       username = Constants.DEFAULT_ACCOUNT)
+                                       url = Constants.CLOUDDESK_URL,
+                                       username = Constants.ACCOUNT)
             ok = result[0]
             if not ok:
                 return
@@ -1084,10 +1119,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.show_upgrade_info()
 
     def _getUserName(self):
-#        local_folder = default_nuxeo_drive_folder()
-#        local_folder = os.path.abspath(os.path.expanduser(local_folder))
         server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
-        return server_binding.remote_user if not server_binding == None else Constants.DEFAULT_ACCOUNT
+        return server_binding.remote_user if not server_binding == None else Constants.ACCOUNT
 
     def _createImageWithOverlay(self, baseImage, overlayImage):
         imageWithOverlay = QImage(baseImage.size(), QImage.Format_ARGB32_Premultiplied)
@@ -1112,17 +1145,21 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.quit()
         
 
-
 from nxdrive.utils import QApplicationSingleton
+from nxdrive.gui.single_instance_dlg import SingleInstanceDlg
 
 def startApp(controller, options):
-    app = QApplicationSingleton()
+    app = QApplicationSingleton(Constants.APP_ID)
+    if app.isRunning(): 
+        sys.exit(0)
+    
     app.setQuitOnLastWindowClosed(False)
     app.setAttribute(Qt.AA_DontShowIconsInMenus)
     i = CloudDeskTray(controller, options)
     app.commitData = i.commitData
     i.show()
     return app.exec_()
+
 
 if __name__ == "__main__":
     sys.exit(startApp)

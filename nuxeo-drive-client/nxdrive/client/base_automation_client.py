@@ -27,7 +27,7 @@ from nxdrive.utils import classproperty
 from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.utils import get_maintenance_message
 from nxdrive import Constants
-from nxdrive import DEBUG, DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION
+from nxdrive import DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION
 
 log = get_logger(__name__)
 
@@ -39,9 +39,28 @@ DEVICE_DESCRIPTIONS = {
     'win32': 'Windows Desktop',
 }
 
+class DeviceQuotaExceeded(Exception):
+    def __init__(self, url, user_id, max_devices, href, return_url, code=403):
+        self.url = url
+        self.user_id = user_id
+        self.code = code
+        self.max_devices = 3
+        self.href = href
+        self.return_url = return_url
+        self.message = _("Maximum number of <font color='red'>%d linked devices</font> has been reached. Click <a href='%s'>here</a> to unlink.")
 
+class Forbidden(Exception):
+    def __init__(self, url, user_id, code = 403, data = ''):
+        self.url = url
+        self.user_id = user_id
+        self.code = code
+        self.data = data
+
+    def __str__(self):
+        return (_("'%s' cannot access '%s' "
+                "http code=%d, data=%s") % (self.user_id, self.url, self.code, str(self.data)))
+        
 class Unauthorized(Exception):
-
     def __init__(self, url, user_id, code = 401, data = ''):
         self.url = url
         self.user_id = user_id
@@ -51,8 +70,8 @@ class Unauthorized(Exception):
     def __str__(self):
         return (_("'%s' is not authorized to access '%s' with"
                 " the provided credentials. http code=%d, data=%s") % (self.user_id, self.url, self.code, str(self.data)))
-
-class QuotaExceeded(Exception):
+        
+class StorageQuotaExceeded(Exception):
     def __init__(self, url, user_id, ref, size):
         self.url = url
         self.user_id = user_id
@@ -63,6 +82,21 @@ class QuotaExceeded(Exception):
         return (_("'%s' exceeded quota for '%s' when"
                 " storing document %s") % (self.user_id, self.url, self.ref))
 
+def raise_403_error(url, user, e):
+    if e is not None and isinstance(e, urllib2.HTTPError) and e.code==403:
+        if hasattr(e, "fp"):
+            data = e.fp.read()
+            try:
+                error_detail = json.loads(data)
+                max_devices = int(error_detail['max_devices'])
+                href = error_detail['href']
+                return_url = error_detail['returnURL']
+                raise DeviceQuotaExceeded(url, user, max_devices, href, return_url)
+            except:
+                raise Forbidden(url, user)
+        else:
+            raise Forbidden(url, user)
+    
 class MaintenanceMode(Exception):
     def __init__(self, url, user_id, retry_after, schedules):
         self.url = url
@@ -363,12 +397,14 @@ class BaseAutomationClient(object):
             self.log_response(raw_response, data)
             # --- END DEBUG ----
         except urllib2.HTTPError as e:
-            if e.code == 401 or e.code == 403:
-                raise Unauthorized(self.server_url, self.user_id, e.code)
+            if e.code == 401:
+                raise Unauthorized(self.automation_url, self.user_id, e.code)
+            elif e.code == 403:
+                raise_403_error(self.automation_url, self.user_id, e)
             elif e.code == 503:
                 retry_after, schedules = self._check_maintenance_mode(e)
                 if retry_after > 0:
-                    raise MaintenanceMode(self.server_url, self.user_id, retry_after, schedules)
+                    raise MaintenanceMode(self.automation_url, self.user_id, retry_after, schedules)
                 else:
                     raise
             else:
@@ -446,8 +482,10 @@ class BaseAutomationClient(object):
         except urllib2.HTTPError as e:
             # NOTE cannot rewind the error stream from maintenance server!
 #            self._log_details(e)
-            if e.code == 401 or e.code == 403:
+            if e.code == 401:
                 raise Unauthorized(url, self.user_id, e.code, data)
+            elif e.code == 403:
+                raise_403_error(self.automation_url, self.user_id, e)
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None
@@ -578,15 +616,17 @@ class BaseAutomationClient(object):
             # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             self._log_details(e)
-            if e.code == 401 or e.code == 403:
+            if e.code == 401:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
+            elif e.code == 403:
+                raise_403_error(self.automation_url, self.user_id, e)
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None
             elif e.code == 500:
                 if self.check_quota_exceeded_error(e):
                     ref = params['document']
-                    raise QuotaExceeded(self.server_url, self.user_id, ref, len(blob_content))
+                    raise StorageQuotaExceeded(self.server_url, self.user_id, ref, len(blob_content))
                 else:
                     raise
             elif e.code == 503:
@@ -666,9 +706,11 @@ class BaseAutomationClient(object):
             token2 = token.decode('ascii')
             log.debug("received token: %s", token)
         except urllib2.HTTPError as e:
-            self._log_details(e)
-            if e.code == 401 or e.code == 403:
+#            self._log_details(e)
+            if e.code == 401:
                 raise Unauthorized(url, self.user_id, e.code)
+            elif e.code == 403:
+                raise_403_error(self.automation_url, self.user_id, e)
             elif e.code == 404:
                 # Token based auth is not supported by this server
                 return None

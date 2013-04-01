@@ -6,7 +6,6 @@ import os.path
 from time import time
 from time import sleep
 from datetime import datetime
-from dateutil import tz
 import urllib2
 import socket
 import httplib
@@ -22,10 +21,11 @@ from nxdrive.client import DEDUPED_BASENAME_PATTERN
 from nxdrive.client import safe_filename
 from nxdrive.client import NotFound
 from nxdrive.client import Unauthorized
-from nxdrive.client import QuotaExceeded
+from nxdrive.client import StorageQuotaExceeded
+from nxdrive.client import DeviceQuotaExceeded
 from nxdrive.client import MaintenanceMode
-from nxdrive.client import LocalClient
 from nxdrive.client import FolderInfo
+from nxdrive.client import LocalClient
 from nxdrive.model import ServerBinding
 from nxdrive.model import LastKnownState
 from nxdrive.model import RecentFiles
@@ -37,6 +37,7 @@ from nxdrive import Constants
 from nxdrive.utils import exceptions
 from nxdrive.utils import get_maintenance_message
 from nxdrive.utils import safe_long_path
+from nxdrive.utils import normalized_path
 
 WindowsError = None
 try:
@@ -252,8 +253,11 @@ class Synchronizer(object):
                 from_state = session.query(LastKnownState).filter_by(
                     local_path = '/',
                     local_folder = server_binding.local_folder).one()
+                path = normalized_path(from_state.local_folder)
+                if not os.path.exists(path):
+                    os.mkdir(path)
             except NoResultFound:
-                return
+                self.create_toplevel_state(server_binding, session=session)
 
         client = from_state.get_local_client()
         info = client.get_info(from_state.local_path)
@@ -394,7 +398,9 @@ class Synchronizer(object):
                 from_state = session.query(LastKnownState).filter_by(
                     local_path = '/', local_folder = server_binding.local_folder).one()
             except NoResultFound:
-                return
+                self.create_toplevel_state(server_binding, session=session)
+                from_state = session.query(LastKnownState).filter_by(
+                    local_path = '/', local_folder = server_binding.local_folder).one()
 
         try:
             client = self.get_remote_fs_client(from_state.server_binding)
@@ -543,9 +549,10 @@ class Synchronizer(object):
                 nxclient = self.get_remote_client(sb, repository = repo)
                 remote_roots = nxclient.get_roots()
                 remote_roots_ids = [rr.uid for rr in remote_roots]
-                for folder in session.query(SyncFolders).all():
+                for folder in session.query(SyncFolders).filter(SyncFolders.local_folder == sb.local_folder).all():
                     folder.bind_state = False
                 folders = session.query(SyncFolders).\
+                                filter(SyncFolders.local_folder == sb.local_folder).\
                                 filter(SyncFolders.remote_id.in_(remote_roots_ids)).\
                                 all()
                 for folder in folders:
@@ -1110,23 +1117,28 @@ class Synchronizer(object):
         """Forever loop to scan / refresh states and perform sync"""
 
         delay = delay if delay is not None else self.delay
+        
+        # TODO Validating credentials by requesting a token would bump into the limit
         # Turn the icon indicator on
-        if self._frontend is None:
-            local_folder = None
-        else:
-            local_folder = self._frontend.local_folder
-        server_binding = self._controller.get_server_binding(local_folder)
-        if server_binding is not None:
-            try:
-                self._controller.validate_credentials(server_binding.server_url,
-                                                     server_binding.remote_user,
-                                                     server_binding.remote_password)
-                if self._frontend is not None:
-                    self._frontend.get_info(server_binding.local_folder).online = True
-            except Unauthorized:
-                log.debug("Invalid credentials.")
-            except Exception as e:
-                log.debug("Unable to connect to %s (%s)", server_binding.server_url, str(e), exc_info = True)
+#        if self._frontend is None:
+#            local_folder = None
+#        else:
+#            local_folder = self._frontend.local_folder
+#        server_binding = self._controller.get_server_binding(local_folder)
+#        if server_binding is not None:
+#            try:
+#                self._controller.validate_credentials(server_binding.server_url,
+#                                                     server_binding.remote_user,
+#                                                     server_binding.remote_password)
+#                if self._frontend is not None:
+#                    self._frontend.get_info(server_binding.local_folder).online = True
+#            except Unauthorized:
+#                log.debug("Invalid credentials.")
+#            except DeviceQuotaExceeded:
+#                # TODO fire a notification, sign off...
+#                log.debug('max number of linked devices exceeded.')
+#            except Exception as e:
+#                log.debug("Unable to connect to %s (%s)", server_binding.server_url, str(e), exc_info = True)
 
         if self._frontend is not None:
             self._frontend.notify_sync_started()
@@ -1153,8 +1165,14 @@ class Synchronizer(object):
         self._controller.start_status_thread()
 
         try:
+            server_binding = None
+            if self._frontend is not None:
+                server_binding = self._frontend.server_binding
+                if server_binding is None:
+                    local_folder = self._frontend.local_folder
+                    server_binding = self._controller.get_server_binding(local_folder)
+                
             self.get_folders(server_binding = server_binding, session = session)
-
             count = session.query(SyncFolders).\
                    filter(and_(SyncFolders.bind_state == True,
                                SyncFolders.local_folder == server_binding.local_folder)).\
@@ -1185,14 +1203,27 @@ class Synchronizer(object):
                     log.info("Stopping synchronization after %d loops",
                              self.loop_count)
                     break
-
-                bindings = session.query(ServerBinding).all()
-                if len(bindings) == 0:
-                    self.notify_to_signin()
-                    break
-                if self._frontend is not None:
-                    local_folders = [sb.local_folder for sb in bindings]
-                    self._frontend.notify_local_folders(local_folders)
+                try:
+                    bindings = session.query(ServerBinding).all()
+                    if len(bindings) == 0:
+                        self.notify_to_signin()
+                        break
+                    if self._frontend is not None:
+                        local_folders = [sb.local_folder for sb in bindings]
+                        self._frontend.notify_local_folders(local_folders)
+                except Exception, e:
+                    # TODO: sometimes this exception occurs on this query:
+                    # ProgrammingError: (ProgrammingError) Cannot operate on a closed database...
+                    current_time = time()
+                    spent = current_time - previous_time
+                    sleep_time = delay - spent
+                    if sleep_time > 0:
+                        log.debug("Sleeping %0.3fs", sleep_time)
+                        sleep(sleep_time)
+                    previous_time = time()
+                    log.debug("iteration %d, error occurred: %s", self.loop_count, e)
+                    self.loop_count += 1
+                    continue
 
                 status = {}
                 for sb in bindings:
@@ -1212,7 +1243,10 @@ class Synchronizer(object):
                         sb, session = session, status = status)
 
                 if self._frontend is not None:
-                    self._frontend.notify_sync_completed(status)                
+                    self._frontend.notify_sync_completed(status)     
+                    
+                # start status thread if it crashed
+                self._controller.start_status_thread()           
 
                 # safety net to ensure that Nuxeo Drive won't eat all the CPU,
                 # disk and network resources of the machine scanning over an
@@ -1421,6 +1455,8 @@ class Synchronizer(object):
             # from this point next time
             self._checkpoint(server_binding, checkpoint, session = session)
 
+            # check if any special folder has been deleted
+            self._controller.check_nonremovable_folders(server_binding)
             # Scan local folders to detect changes
             # XXX: OPTIM: use file system monitoring instead
             self.scan_local(server_binding, session = session)
@@ -1520,7 +1556,7 @@ class Synchronizer(object):
                 self._frontend.notify_maintenance_mode(server_binding.local_folder, e.msg, e.detail)
             return False
 
-        elif isinstance(e, QuotaExceeded):
+        elif isinstance(e, StorageQuotaExceeded):
             log.info("quota exceeded on %s for user %s (doc: %s)", e.url, e.user_id, e.ref)
             assert e.url.startswith(server_binding.server_url), \
                     'binding url=%s is different from exception url=%s' % (server_binding.server_url, e.url)
@@ -1535,11 +1571,10 @@ class Synchronizer(object):
                 self._frontend.notify_quota_exceeded(server_binding.local_folder, msg, detail)
             return True
 
+        elif isinstance(e, DeviceQuotaExceeded):
+            pass
         else:
-            if self._controller.recover_from_invalid_credentials(server_binding, e):
-                return True
-            else:
-                return False
+            return self._controller.recover_from_invalid_credentials(server_binding, e)
 
     def get_remote_client(self, server_binding, base_folder = None,
                           repository = 'default'):
@@ -1600,6 +1635,7 @@ class Synchronizer(object):
         dirty = {}
         dirty['add'] = 0
         dirty['del'] = 0
+        success = False
         if session is None:
             session = self.get_session()
         if server_binding is not None:
@@ -1611,6 +1647,7 @@ class Synchronizer(object):
                 # Skip servers with missing credentials
                 continue
             try:
+                success = False
                 nxclient = self._controller.get_remote_client(sb)
                 if not nxclient.is_addon_installed():
                     continue
@@ -1662,7 +1699,7 @@ class Synchronizer(object):
             server_bindings = session.query(ServerBinding).all()
         for sb in server_bindings:
             # clear all checked folders
-            all_folders = session.query(SyncFolders).all()
+            all_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == sb.local_folder).all()
             for fld in all_folders:
                 fld.check_state = False
 
@@ -1683,7 +1720,8 @@ class Synchronizer(object):
         if session is None:
             session = self.get_session()
         try:
-            folder = session.query(SyncFolders).filter_by(remote_id = Constants.CLOUDDESK_UID).one()
+            folder = session.query(SyncFolders).filter_by(remote_id = Constants.CLOUDDESK_UID).\
+                                                filter_by(local_folder = local_folder).one()
         except MultipleResultsFound:
             log.error("more than one %s folder found!" % Constants.APP_NAME)
         except NoResultFound:
@@ -1707,7 +1745,8 @@ class Synchronizer(object):
         docId = docs[u'uid']
         # check if already exists
         try:
-            folder = session.query(SyncFolders).filter_by(remote_id = docId).one()
+            folder = session.query(SyncFolders).filter_by(remote_id = docId).\
+                                                filter_by(local_folder = local_folder).one()
         except MultipleResultsFound:
             log.error("more than one of 'My Docs' or 'Others' Docs' folder each found!")
         except NoResultFound:
@@ -1722,7 +1761,7 @@ class Synchronizer(object):
 
         # add all subfolders
         root_folder = Constants.ROOT_OTHERS_DOCS if docId == Constants.OTHERS_DOCS_UID else Constants.ROOT_MYDOCS
-        self._remove_folders(nodes, docId, session, dirty = dirty)
+        self._remove_folders(nodes, docId, local_folder, session, dirty = dirty)
         self._add_folders(nodes, repo, local_folder, root_folder, session, dirty = dirty)
         session.commit()
 
@@ -1739,7 +1778,8 @@ class Synchronizer(object):
         folder = SyncFolders(folder_info.docId, folder_info.title, folder_info.parentId, local_folder, remote_root = root_folder)
 
         try:
-            sync_folder = session.query(SyncFolders).filter_by(remote_id = folder_info.docId).one()
+            sync_folder = session.query(SyncFolders).filter_by(remote_id = folder_info.docId).\
+                                                     filter_by(local_folder = local_folder).one()
             # check if anything needs to be updated
             # TODO check whether a remote folder can be renamed?
             if sync_folder.remote_name != folder.remote_name:
@@ -1752,16 +1792,17 @@ class Synchronizer(object):
             if dirty is not None:
                 dirty['add'] += 1
 
-    def _remove_folders(self, t, docId, session = None, dirty = None):
+    def _remove_folders(self, t, docId, local_folder, session = None, dirty = None):
         if session is None:
             session = self.get_session()
-        for folder in session.query(SyncFolders).filter(SyncFolders.remote_parent == docId).all():
+        for folder in session.query(SyncFolders).filter(SyncFolders.remote_parent == docId).\
+                                                filter(SyncFolders.local_folder == local_folder).all():
             if not t.has_key(folder.remote_name):
                 session.delete(folder)
                 if dirty is not None:
                     dirty['del'] += 1
             else:
-                self._remove_folders(t[folder.remote_name], folder.remote_id, session, dirty)
+                self._remove_folders(t[folder.remote_name], folder.remote_id, local_folder, session, dirty)
 
     def set_roots(self, server_binding = None, session = None):
         """Update binding roots based on client folders selection"""
@@ -1828,12 +1869,13 @@ class Synchronizer(object):
             self._local_bind_root(server_binding, remote_roots_by_id[ref],
                                   rc, session)
 
-    def notify_to_signin(self, server_binding = None):
+    def notify_to_signin(self, server_binding = None, error=None):
         if self._frontend is None:
             return
 
         if server_binding is None:
-            error = Unauthorized(Constants.DEFAULT_CLOUDDESK_URL, Constants.DEFAULT_ACCOUNT)
+            if error is None:
+                error = Unauthorized(Constants.CLOUDDESK_URL, Constants.ACCOUNT)
             self._frontend.notify_offline(Constants.DEFAULT_NXDRIVE_FOLDER, error)
         elif server_binding.nag_signin:
             self._frontend.notify_signin(server_binding.server_url)
@@ -1845,7 +1887,8 @@ class Synchronizer(object):
         # use path for MyDocs as the root client
         try:
             my_docs = session.query(SyncFolders).\
-                filter(SyncFolders.remote_name == Constants.MY_DOCS).one()
+                filter(SyncFolders.remote_name == Constants.MY_DOCS).\
+                filter(SyncFolders.local_folder == server_binding.local_folder).one()
             base_folder = my_docs.remote_id
         except NoResultFound:
             base_folder = None
@@ -2019,4 +2062,25 @@ class Synchronizer(object):
                                     filter(ServerEvent.data2 < datetime.now()).all()
         map(session.delete, maint_schedules)
 
-    
+    def create_toplevel_state(self, server_binding, session=None):
+        """Creating the toplevel state for the server binding"""
+        
+        if session is None:
+            session = self._controller.get_session()
+        if not os.path.exists(server_binding.local_folder):
+            os.mkdir(server_binding.local_folder)
+
+        local_client = LocalClient(server_binding.local_folder)
+        local_info = local_client.get_info('/')
+
+        remote_client = self.get_remote_fs_client(server_binding)
+        remote_info = remote_client.get_filesystem_root_info()
+
+        state = LastKnownState(server_binding.local_folder,
+                               local_info = local_info,
+                               local_state = 'synchronized',
+                               remote_info = remote_info,
+                               remote_state = 'synchronized')
+        session.add(state)
+        session.commit()
+                

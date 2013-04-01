@@ -4,7 +4,7 @@ Created on Oct 28, 2012
 @author: mconstantin
 '''
 import sys
-from nxdrive import USE_LOCAL_SERVICE, DEBUG
+from nxdrive import USE_LOCAL_SERVICE
 
 try:
     import _version
@@ -18,11 +18,11 @@ APP_NAME = PRODUCT_NAME + _(' Desktop')
 SHORT_APP_NAME = 'CpoDesktop'
 OSX_APP_NAME = APP_NAME
 
-APP_STATE_RUNNING = _('running')
-APP_STATE_STOPPED = _('stopped')
-APP_STATE_QUITTING = _('quitting')
-APP_SUBSTATE_AVAILABLE = _('available')
-APP_SUBSTATE_MAINTENANCE = _('maintenance')
+APP_STATE_RUNNING = 'running'
+APP_STATE_STOPPED = 'stopped'
+APP_STATE_QUITTING = 'quitting'
+APP_SUBSTATE_AVAILABLE = 'available'
+APP_SUBSTATE_MAINTENANCE = 'maintenance'
 
 INFO_STATE_NONE = 'none'
 INFO_STATE_MAINTENANCE_SCHEDULE = 'maint_schedule'
@@ -32,11 +32,13 @@ INFO_STATE_INVALID_CREDENTIALS = 'invalid_cred'
 INFO_STATE_INVALID_PROXY = 'invalid_proxy'
 
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
+CONFIG_FILE = 'nxdrive.cfg'
+
 # TODO replace with CloudDesk url and admin(?) account
-DEFAULT_CLOUDDESK_URL = r'https://qadm.sharpb2bcloud.com/app1'
-DEFAULT_ACCOUNT = "user4@qt1.com"
-# DEFAULT_CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
-# DEFAULT_ACCOUNT = "user@shiro.com"
+CLOUDDESK_URL = r'https://devdm.sharpb2bcloud.com/app1'
+ACCOUNT = "user1@dt1.com"
+# CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
+# ACCOUNT = "user@shiro.com"
 SERVICE_NAME = 'Cloud Portal Office'
 
 if USE_LOCAL_SERVICE:
@@ -49,8 +51,10 @@ else:
 
 INTERNAL_HTTP_PORT = 63111
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
-MY_DOCS = 'My Docs'
-OTHERS_DOCS = 'Others Docs'
+APP_ID = CLOUDDESK_UID
+MY_DOCS = r'My Documents'
+OTHERS_DOCS = r'Other Documents'
+GUEST_FOLDER = r'Guest Folder'
 OTHERS_DOCS_UID = '3910c811-4977-11e2-8a7d-3c075442cb05'
 ROOT_CLOUDDESK = 0
 ROOT_MYDOCS = 1

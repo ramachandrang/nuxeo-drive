@@ -5,7 +5,6 @@ import argparse
 from getpass import getpass
 import traceback
 
-import nxdrive
 from nxdrive.controller import Controller
 from nxdrive.daemon import daemonize
 from nxdrive.logging_config import configure
@@ -370,7 +369,7 @@ class CliHandler(object):
         self._configure_logger(options)
 
         # Initialize a controller for this process
-        self.controller = Controller(options.nxdrive_home, poolclass = SingletonThreadPool)
+        self.controller = Controller.getController(options.nxdrive_home, poolclass = SingletonThreadPool)
 
         # Find the command to execute based on the
         handler = getattr(self, command, None)

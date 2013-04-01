@@ -9,7 +9,7 @@ import sys
 import cherrypy
 from cherrypy import tools
 
-from nxdrive import DEBUG
+from nxdrive import isDebug
 from nxdrive.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -29,16 +29,25 @@ def http_server_loop(server, **kwargs):
 
 class HttpServer(object):
     exposed = True
-    def __init__(self, port, app):
+    def __init__(self, port, controller):
         try:
             self.port = port
-            self.app = app
+            self.controller = controller
+            self.app = getattr(self.controller, 'sync_status_app')
+        except AttributeError:
+            log.debug("failed to start HTTP server on port %d: 'sync_status_app' does not exist", port, exc_info=True)
+            raise
         except Exception, e:
             log.debug("failed to start HTTP server on port %d: %s", port, e, exc_info=True)
+            raise
             
     @tools.json_out()
     def GET(self, state=None, folder=None, transition='false'):
-        if DEBUG:
+#        if self.app is None:
+#            cherrypy.response.status = '500 Internal Server Error'
+#            return {"error": "'sync_status_app' is not defined"}
+        
+        if isDebug():
             return self.app(state, folder, transition)
         else:
             try:
@@ -58,6 +67,9 @@ class HttpServer(object):
             }
         }
         self.stop = Terminator()
+        cleanup = getattr(self.controller, 'status_thread_cleanup', None)
+        if cleanup is not None:
+            cherrypy.engine.subscribe('exit', cleanup)
         cherrypy.quickstart(self, '/', conf)
         
     

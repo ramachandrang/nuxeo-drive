@@ -5,7 +5,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2013-03-07 15:10+PST\n"
+"POT-Creation-Date: 2013-03-31 15:03+PDT\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -23,215 +23,223 @@ msgstr ""
 msgid " Desktop"
 msgstr ""
 
-#: Constants.py:21
-msgid "running"
+#: commandline.py:79
+msgid "print the program version."
 msgstr ""
 
-#: Constants.py:22
-msgid "stopped"
-msgstr ""
-
-#: Constants.py:23
-msgid "quitting"
-msgstr ""
-
-#: Constants.py:24
-msgid "available"
-msgstr ""
-
-#: Constants.py:25
-msgid "maintenance"
-msgstr ""
-
-#: commandline.py:76
+#: commandline.py:85
 msgid "Folder to store the %s configuration."
 msgstr ""
 
-#: commandline.py:81
+#: commandline.py:90
 msgid "Minimum log level for the file log (under NXDRIVE_HOME/logs)."
 msgstr ""
 
-#: commandline.py:86
+#: commandline.py:95
 msgid "Minimum log level for the console log."
 msgstr ""
 
-#: commandline.py:90
+#: commandline.py:99
 msgid "File used to store the logs, default NXDRIVE_HOME/logs/nxaudit.logs"
 msgstr ""
 
-#: commandline.py:95
+#: commandline.py:104
 msgid "Fire a debugger (ipdb or pdb) one uncaught error."
 msgstr ""
 
-#: commandline.py:99
+#: commandline.py:108
 msgid "Delay in seconds between consecutive sync operations."
 msgstr ""
 
-#: commandline.py:105
+#: commandline.py:114
 msgid "Stop the process on first unexpected error.Useful for developers and Continuous Integration."
 msgstr ""
 
-#: commandline.py:110
+#: commandline.py:119
 msgid "start synchronization as soon as the gui starts."
 msgstr ""
 
-#: commandline.py:114
+#: commandline.py:123
 msgid "Command line interface for %s operations."
 msgstr ""
 
-#: commandline.py:132
+#: commandline.py:141
 msgid "Password for the %s account"
 msgstr ""
 
-#: commandline.py:135
+#: commandline.py:144
 msgid "Local folder that will host the list of synchronized workspaces with a remote %s server."
 msgstr ""
 
-#: commandline.py:140
+#: commandline.py:149
 msgid "User account to connect to %s"
 msgstr ""
 
-#: commandline.py:142
+#: commandline.py:151
 msgid "URL of the %s server."
 msgstr ""
 
-#: commandline.py:145
+#: commandline.py:154
 msgid "Path synchronization roots (reference or path for folderish %s documents such as Workspaces or Folders)."
 msgstr ""
 
-#: commandline.py:149 commandline.py:185
+#: commandline.py:158 commandline.py:194
 msgid "Name of the remote repository."
 msgstr ""
 
-#: commandline.py:160
+#: commandline.py:169
 msgid "Local folder that hosts the list of synchronized workspaces with a remote %s server."
 msgstr ""
 
-#: commandline.py:168
+#: commandline.py:177
 msgid "Attach a local folder as a root for synchronization."
 msgstr ""
 
-#: commandline.py:174
+#: commandline.py:183
 msgid "Remote path or id reference of a folder to synchronize."
 msgstr ""
 
-#: commandline.py:178
+#: commandline.py:187
 msgid "Local folder that will host the list of synchronized workspaces with a remote %s server. Must be bound with the 'bind-server' command."
 msgstr ""
 
-#: commandline.py:195
+#: commandline.py:204
 msgid "Local sub-folder to de-synchronize."
 msgstr ""
 
-#: commandline.py:200
+#: commandline.py:209
 msgid "Start the synchronization as a GUI-less daemon"
 msgstr ""
 
-#: commandline.py:205
+#: commandline.py:214
 msgid "Stop the synchronization daemon"
 msgstr ""
 
-#: commandline.py:211
+#: commandline.py:220
 msgid "Start a GUI-less synchronization without detaching the process."
 msgstr ""
 
-#: commandline.py:218
+#: commandline.py:227
 msgid "Fetch the status info of the children of a given folder."
 msgstr ""
 
-#: commandline.py:223
+#: commandline.py:232
 msgid "Path to a local Nuxeo Drive folder."
 msgstr ""
 
-#: commandline.py:228
+#: commandline.py:237
 msgid "Start as a TrayIcon application."
 msgstr ""
 
-#: commandline.py:235
+#: commandline.py:244
 msgid "Register or Unregister the COM Local Server"
 msgstr ""
 
-#: commandline.py:242
+#: commandline.py:251
 msgid "Register COM Local Server"
 msgstr ""
 
-#: commandline.py:245
+#: commandline.py:254
 msgid "Unregister COM Local Server"
 msgstr ""
 
-#: commandline.py:251
+#: commandline.py:260
 msgid "Run the %s test suite."
 msgstr ""
 
-#: commandline.py:257
+#: commandline.py:266
 msgid "Run the wizard."
 msgstr ""
 
-#: commandline.py:264
+#: commandline.py:273
 msgid "Switch between wizard and normal mode, when launching the app with no command"
 msgstr ""
 
-#: commandline.py:276
+#: commandline.py:285
 msgid "Compute coverage report."
 msgstr ""
 
-#: commandline.py:280
+#: commandline.py:289
 msgid "Compute profiling report."
 msgstr ""
 
-#: controller.py:297
+#: controller.py:337
 msgid "Illegal state %r: at least path or remote_ref should be not None."
 msgstr ""
 
-#: controller.py:338
+#: controller.py:383
 msgid "Could not find any server binding for "
 msgstr ""
 
-#: controller.py:341
+#: controller.py:386
 msgid "Found more than one binding for %s: %r"
 msgstr ""
 
-#: controller.py:365
+#: controller.py:411
 msgid "Folder '%s' is not bound to any %s server"
 msgstr ""
 
-#: controller.py:393
+#: controller.py:438
 msgid "%s is already bound to '%s' with user '%s'"
 msgstr ""
 
-#: controller.py:754 synchronizer.py:60
+#: controller.py:864 synchronizer.py:65
 msgid "Client offline in %s: HTTP error with code %d"
 msgstr ""
 
-#: controller.py:757
+#: controller.py:867
 msgid "Client offline in %s: %s"
 msgstr ""
 
-#: controller.py:850
+#: controller.py:960
 msgid "Invalid url: %r"
 msgstr ""
 
-#: model.py:504
+#: model.py:526
 msgid "State %r (%s) cannot be mapped to remote doc %r (%s)"
 msgstr ""
 
-#: synchronizer.py:280
+#: synchronizer.py:288
 msgid "Cannot bind %r to missing local info"
 msgstr ""
 
-#: synchronizer.py:433
+#: synchronizer.py:443
 msgid "Cannot bind %r to missing remote info"
 msgstr ""
 
-#: synchronizer.py:591
+#: synchronizer.py:605
 msgid "Unhandled pair_state: %r for %r"
 msgstr ""
 
-#: synchronizer.py:681
+#: synchronizer.py:704
 msgid "Could not find parent folder of doc %r (%r) folder"
 msgstr ""
 
-#: synchronizer.py:687
+#: synchronizer.py:710
 msgid "Parent folder of doc %r (%r) is not bound to a local folder"
+msgstr ""
+
+#: synchronizer.py:1569
+msgid "Quota execceded"
+msgstr ""
+
+#: synchronizer.py:1570
+msgid "You used %d of %d"
+msgstr ""
+
+#: synchronizer.py:1914
+msgid "Storage Quota exceeded"
+msgstr ""
+
+#: synchronizer.py:1993
+msgid "An update is available for download"
+msgstr ""
+
+#: synchronizer.py:1995
+msgid "Click to go to download page"
+msgstr ""
+
+#: synchronizer.py:1997
+msgid "Use Upgrade Available menu to download"
 msgstr ""
 

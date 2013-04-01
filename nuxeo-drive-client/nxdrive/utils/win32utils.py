@@ -58,12 +58,11 @@ def create_or_replace_shortcut(shortcut, target):
                 shlink.SetPath(target)
                 shlink.QueryInterface(pythoncom.IID_IPersistFile).Save(None, True)
         except pythoncom.com_error as e:
-            exe_path = find_exe_path()
-            if os.path.splitext(exe_path)[1] == '.exe':
-                icon = exe_path
-            else:
+            exe_path = icon = find_exe_path()
+            if os.path.splitext(exe_path)[1] == '.py':
+                # FOR TESTING
                 icon = ''
-            create_shortcut(shortcut, target, icon=icon)
+            create_shortcut(shortcut, target, icon = icon)
     else:
         # TODO find the Favorites location for other Windows versions
         pass
@@ -77,13 +76,11 @@ def create_shortcut_if_not_exists(shortcut, target):
         try:
             shlink.QueryInterface(pythoncom.IID_IPersistFile).Load(shortcut)
         except pythoncom.com_error as e:
-            exe_path = find_exe_path()
-            
-            if os.path.splitext(exe_path)[1] == '.exe':
-                icon = exe_path
-            else:
-                icon = os.path.join(os.path.split(exe_path)[0], 'data', 'icons', Constants.ICON_APP_ENABLED)
-            create_shortcut(shortcut, target, icon=icon)            
+            exe_path = icon = find_exe_path()
+            if os.path.splitext(exe_path)[1] == '.py':
+                # FOR TESTING
+                icon = ''
+            create_shortcut(shortcut, target, icon = icon)
     else:
         # TODO find the Favorites location for other Windows versions
         pass
