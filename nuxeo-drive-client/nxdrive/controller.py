@@ -463,6 +463,7 @@ class Controller(object):
         except NoResultFound:
             log.info("Binding '%s' to '%s' with account '%s'",
                      local_folder, server_url, username)
+            token = nxclient.request_token()
             server_binding = ServerBinding(local_folder, server_url, username,
                                            remote_password = password,
                                            remote_token = token)

@@ -76,12 +76,14 @@ class CpoWizard(QWizard):
 
         self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setFixedSize(700, 500)
-        self.setPixmap(QWizard.LogoPixmap, QPixmap(Constants.APP_IMG_WIZARD_BANNER))
         self.setWindowTitle(self.tr('%s Setup') % Constants.APP_NAME)
-        if sys.platform == 'win32':
-            self.setWizardStyle(QWizard.ModernStyle)
-        elif sys.platform == 'darwin':
+        if sys.platform == 'darwin':
+            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
             self.setWizardStyle(QWizard.MacStyle)
+        elif sys.platform == 'win32':
+            self.setPixmap(QWizard.LogoPixmap, QPixmap(Constants.APP_IMG_WIZARD_BANNER))
+            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
+            self.setWizardStyle(QWizard.ModernStyle)
 
     def add_skip_tour(self, forward):
         self.setButtonText(QWizard.CustomButton1, self.tr('&Skip Tour'))
@@ -144,11 +146,10 @@ class CpoWizard(QWizard):
         else:
             return False
 
-    def _bind(self, folder):
+    def _bind(self, url, folder):
         self._unbind_if_bound(folder)
         username = self.field('username')
         pwd = self.field('pwd')
-        url = Constants.CLOUDDESK_URL
         self.controller.bind_server(folder, url, username, pwd)
 
     def notify_folders_changed(self):
@@ -227,11 +228,8 @@ class IntroPage(QWizardPage):
 #        self.setTitle(self.tr("<html><style font-size:14px; font-weight:bold>Welcome to %s</style></html>") % Constants.APP_NAME)
 
         self.setTitle(welcome)
-        if sys.platform == 'darwin':
-            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        elif sys.platform == 'win32':
-            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
-
+        # force logo display on win32
+        self.setSubTitle(' ')
         self.lblInstr = QLabel(self.tr('Please sign in to %s') % Constants.PRODUCT_NAME)
         self.lblInstr.setToolTip(Constants.CLOUDDESK_URL)
         # BEGIN remove site url
@@ -280,8 +278,7 @@ class IntroPage(QWizardPage):
         hlayout2 = QHBoxLayout()
         hlayout2.addWidget(self.lblMessage)
         hlayout2.addWidget(self.btnProxy)
-        hlayout2.setStretch(0, 4)
-        hlayout2.setStretch(1, 1)
+        hlayout2.setStretch(0, 1)
         grid.addLayout(hlayout2, 3, 0, 1, 2, Qt.AlignLeft)
         self.setLayout(grid)
 
@@ -311,13 +308,13 @@ class IntroPage(QWizardPage):
             self.installEventFilter(process_filter)
             
             url = Constants.CLOUDDESK_URL
-            username = self.txtUsername.text()
-            password = self.txtPwd.text()
-            self.wizard().controller.validate_credentials(url, username, password)
+#            username = self.txtUsername.text()
+#            password = self.txtPwd.text()
+#            self.wizard().controller.validate_credentials(url, username, password)
             local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
             self.wizard().local_folder = local_folder
             # create the default server binding
-            self.wizard()._bind(local_folder)
+            self.wizard()._bind(url, local_folder)
             
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
@@ -350,6 +347,7 @@ class IntroPage(QWizardPage):
                             'Submit': 'Log in'
                             }
             url = p1 + p2 + p3 + p4 + urllib.urlencode(query_params)
+            self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
             self.auth_ok = False
             msg = e.message % (e.max_devices, url)
         except Exception as e:
@@ -365,8 +363,7 @@ class IntroPage(QWizardPage):
                 return
             elif useProxy == ProxyInfo.PROXY_AUTODETECT:
                 settings.setValue('preferences/useProxy', ProxyInfo.PROXY_SERVER)
-                msg = self.tr("""Unable to connect to %s.
-If a proxy server is required, please configure it here by selecting the Proxy... button""") % \
+                msg = self.tr("Unable to connect to %s. If a proxy server is required, please configure it here by selecting the Proxy... button") % \
                         Constants.CLOUDDESK_URL
 
                 self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: gray }")
@@ -403,11 +400,8 @@ class InstallOptionsPage(QWizardPage):
 #        self.typical = True
 
         self.setTitle(self.tr('Choose Setup Type'))
-        if sys.platform == 'darwin':
-            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        elif sys.platform == 'win32':
-            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
-
+        # force logo display on win32
+        self.setSubTitle(' ')
         # Typical option
         self.rdButtonTypical = QRadioButton(self)
 #        self.lblImgTypical = QLabel()
@@ -544,11 +538,10 @@ class InstallOptionsPage(QWizardPage):
 class GuideOnePage(QWizardPage):
     def __init__(self, parent = None):
         super(GuideOnePage, self).__init__(parent)
-
-        if sys.platform == 'darwin':
-            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        elif sys.platform == 'win32':
-            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
+        
+        # force logo display on win32
+        # Note: title must be initialized with the page since it displays user's name
+        self.setSubTitle(' ')
 
         click_type = 'right ' if sys.platform == 'win32' else ''    
         from nxdrive.gui.resources import find_icon
@@ -586,17 +579,15 @@ class GuideTwoPage(QWizardPage):
     def __init__(self, parent = None):
         super(GuideTwoPage, self).__init__(parent)
 
-        if sys.platform == 'darwin':
-            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        elif sys.platform == 'win32':
-            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
+        self.setTitle(self.tr('Access your files from everywhere using %s!') % Constants.PRODUCT_NAME)
+        # force logo display on win32
+        self.setSubTitle(' ')
         click_type = 'right ' if sys.platform == 'win32' else ''
         from nxdrive.gui.resources import find_icon
         icon1_path = find_icon(Constants.ICON_APP_ENABLED)
         data_uri1 = open(icon1_path, "rb").read().encode("base64").replace("\n", "")
         img_tag1 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri1)
         
-        self.setTitle(self.tr('Access your files from everywhere using %s!') % Constants.PRODUCT_NAME)
         self.lblDetail = QLabel(self.tr("<html>To launch the {0} website, {1}click {2}, select <b>Open {0} <u>Website</u></b>.<br/>"
                                         "To view your synced files, select <b>Open {0} <u>Folder</u></b>.<br/>"
                                         "You can also access your files from any computer at any time by logging into the {0} website "
@@ -620,12 +611,9 @@ class GuideThreePage(QWizardPage):
     def __init__(self, parent = None):
         super(GuideThreePage, self).__init__(parent)
 
-        if sys.platform == 'darwin':
-            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        elif sys.platform == 'win32':
-            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
         self.setTitle(self.tr('The %s Notification Icon') % Constants.APP_NAME)
-
+        # force logo display on win32
+        self.setSubTitle(' ')
         from nxdrive.gui.resources import find_icon
         icon1_path = find_icon(Constants.ICON_APP_ENABLED)
         data_uri1 = open(icon1_path, "rb").read().encode("base64").replace("\n", "")
@@ -658,12 +646,9 @@ class AdvancedPage(QWizardPage):
     def __init__(self, parent = None):
         super(AdvancedPage, self).__init__(parent)
 
-        if sys.platform == 'darwin':
-            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-        elif sys.platform == 'win32':
-            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
-        self.setSubTitle(self.tr('Advanced Setup'))
-
+        self.setTitle(self.tr('Advanced Setup'))
+        # force logo display on win32
+        self.setSubTitle(' ')
         folderGroup = QGroupBox(self.tr('Select Location'))
         innerVLayout1 = QVBoxLayout()
         innerVLayout1.setObjectName('innerVLayout1')
@@ -738,6 +723,7 @@ class AdvancedPage(QWizardPage):
             location = self.txtLocationSelect.text()
 
         folder = os.path.join(location, Constants.DEFAULT_NXDRIVE_FOLDER)
+        url = Constants.CLOUDDESK_URL
         if os.path.exists(folder) and not self.wizard().keep_location:
             msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
                                                       self.tr("Folder %s already exists. Do you want to use it?" % folder))
@@ -775,7 +761,7 @@ class AdvancedPage(QWizardPage):
             self.wizard().local_folder = folder
 
         if self.wizard()._unbind_if_bound(folder):
-            self.wizard()._bind(folder)
+            self.wizard()._bind(url, folder)
 
         return True
 
@@ -836,11 +822,6 @@ class AdvancedPage(QWizardPage):
 class FinalPage(QWizardPage):
     def __init__(self, parent = None):
         super(FinalPage, self).__init__(parent)
-
-#        if sys.platform == 'darwin':
-#            self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
-#        elif sys.platform == 'win32':
-#            self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
 
         self.setTitle(self.tr('Successfully Completed.'))
         self.setSubTitle(self.tr('Thanks for using it!'))
