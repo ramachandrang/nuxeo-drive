@@ -15,6 +15,7 @@ from sqlalchemy import not_, or_, and_
 from sqlalchemy import asc, desc
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
+import nxdrive
 from collections import defaultdict, Iterable
 from nxdrive.client import DEDUPED_BASENAME_PATTERN
 from nxdrive.client import safe_filename
@@ -37,7 +38,6 @@ from nxdrive.utils import exceptions
 from nxdrive.utils import get_maintenance_message
 from nxdrive.utils import safe_long_path
 from nxdrive.utils import normalized_path
-from nxdrive import DEBUG_SYNC_CONFLICTED
 
 WindowsError = None
 try:
@@ -196,6 +196,7 @@ class Synchronizer(object):
     # Log sync error date and skip document pairs in error while syncing up
     # to a fixed cooldown period
     error_skip_period = 300  # 5 minutes
+
 
     def __init__(self, controller):
         self._controller = controller
@@ -770,7 +771,7 @@ class Synchronizer(object):
 
     def _synchronize_conflicted(self, doc_pair, session,
         local_client, remote_client, local_info, remote_info, status = None):
-        if DEBUG_SYNC_CONFLICTED:
+        if nxdrive.DEBUG_SYNC_CONFLICTED:
             if doc_pair.local_digest == doc_pair.remote_digest:
                 # Note: this also handles folders
                 log.debug('Automated conflict resolution using digest for %s',

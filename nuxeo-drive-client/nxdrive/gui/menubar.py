@@ -24,6 +24,7 @@ from sqlalchemy import func
 from sqlalchemy.sql.expression import asc, desc
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
+import nxdrive
 from nxdrive import Constants
 from nxdrive import isDebug
 from nxdrive.async.operations import SyncOperations
@@ -46,7 +47,6 @@ from nxdrive.gui.preferences_dlg import PreferencesDlg
 from nxdrive.gui.info_dlg import InfoDlg
 from nxdrive.client import DeviceQuotaExceeded
 from nxdrive._version import _is_newer_version
-from nxdrive import DEBUG_SYNC_CONFLICTED
 
 if sys.platform == 'win32':
     from nxdrive.utils import win32utils
@@ -310,7 +310,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.controller.open_local_file(log_filename)
         
     def sync_conflicted(self):
-        DEBUG_SYNC_CONFLICTED = not DEBUG_SYNC_CONFLICTED
+        nxdrive.DEBUG_SYNC_CONFLICTED = not nxdrive.DEBUG_SYNC_CONFLICTED
         
     def notify_another_instance(self, msg):
         dlg = SingleInstanceDlg()

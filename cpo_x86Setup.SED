@@ -3,7 +3,7 @@ Class=IEXPRESS
 SEDVersion=3
 [Options]
 PackagePurpose=InstallApp
-ShowInstallProgramWindow=0
+ShowInstallProgramWindow=1
 HideExtractAnimation=0
 UseLongFileName=1
 InsideCompressed=0
@@ -24,16 +24,16 @@ SourceFiles=SourceFiles
 InstallPrompt=
 DisplayLicense=
 FinishMessage=
-TargetName=F:\cpo_x86Setup.exe
-FriendlyName=Cloud Portal Office Desktop Redist Package
-AppLaunched=cmd /c setup_x86.bat
+TargetName=C:\Users\test1\cpo\cpo_x86Setup.exe
+FriendlyName=Cloud Portal Office Microsoft Redistributable Package
+AppLaunched=cmd.exe /c setup_x86.bat
 PostInstallCmd=<None>
 AdminQuietInstCmd=
 UserQuietInstCmd=
 FILE0="setup_x86.bat"
 FILE1="vcredist_x86.exe"
 [SourceFiles]
-SourceFiles0=F:\
+SourceFiles0=C:\Users\test1\cpo\
 SourceFiles1=C:\Program Files\Microsoft SDKs\Windows\v7.0A\Bootstrapper\Packages\vcredist_x86\
 [SourceFiles0]
 %FILE0%=
