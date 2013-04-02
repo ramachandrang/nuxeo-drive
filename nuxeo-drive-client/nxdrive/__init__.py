@@ -12,6 +12,8 @@ DEBUG_QUOTA_EXCEPTION = False
 DEBUG_MAINTENANCE_EXCEPTION = False
 """Flag for checking maintenance and upgrade services every loop (iteration)"""
 NAG_EVERY_LOOP = False
+"""Synchronize 'conflicted' state"""
+DEBUG_SYNC_CONFLICTED = True
 
 """Setup i18n"""
 import gettext

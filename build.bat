@@ -4,6 +4,7 @@ set BUILD_DIR=c:\temp\cpo\build
 set PROGRAM_FILES=C:\Program Files (x86)
 set INSTALL_DIR=Cloud Portal Office Desktop
 set SETUP_SCRIPT=CPODesktop-setup-script.iss
+set SETUP_SCRIPT2=InfoAfterInstall.txt
 set INNO_COMPILER=c:\Program Files (x86)\Inno Setup 5\iscc
 set CPO_EXE=CpoDesktop.exe
 set VERSION=0.1.11
@@ -36,6 +37,7 @@ xcopy /R /Y /S /I "%GITREPO%\PreReqDll" "%BUILD_DIR%\PreReqDll"
 
 echo copy setup script...
 copy /Y %SETUP_SCRIPT% %BUILD_DIR%
+copy /Y %SETUP_SCRIPT2% %BUILD_DIR%
 
 echo build the setup exe...
 rem "%BUILD_DIR%\%INSTALL_DIR%\%CPO_EXE%" -v > version.txt

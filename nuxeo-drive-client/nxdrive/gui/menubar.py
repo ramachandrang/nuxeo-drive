@@ -46,6 +46,7 @@ from nxdrive.gui.preferences_dlg import PreferencesDlg
 from nxdrive.gui.info_dlg import InfoDlg
 from nxdrive.client import DeviceQuotaExceeded
 from nxdrive._version import _is_newer_version
+from nxdrive import DEBUG_SYNC_CONFLICTED
 
 if sys.platform == 'win32':
     from nxdrive.utils import win32utils
@@ -180,6 +181,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionDebug.setCheckable(True)
         self.actionViewLog = QtGui.QAction(self.tr("View Log"), self)
         self.actionDebug.setObjectName("actionViewLog")
+        self.actionSyncConflicted = QtGui.QAction(self.tr("Sync Conflicted"), self)
+        self.actionSyncConflicted.setObjectName("actionSyncConflicted")
+        self.actionSyncConflicted.setCheckable(True)
         # TO BE REMOVED - END
         self.actionQuit = QtGui.QAction(self.tr("Exit %s") % Constants.APP_NAME, self)
         self.actionQuit.setObjectName("actionQuit")
@@ -207,6 +211,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.debugSeparator = self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionDebug)
         self.menuCloudDesk.addAction(self.actionViewLog)
+        self.menuCloudDesk.addAction(self.actionSyncConflicted)
         # TO BE REMOVED - END
         self.menuCloudDesk.addSeparator()
         self.menuCloudDesk.addAction(self.actionHelp)
@@ -234,6 +239,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionDebug.setChecked(False)
         self.actionDebug.toggled.connect(self.enable_trace)
         self.actionViewLog.triggered.connect(self.view_log)
+        self.actionSyncConflicted.triggered.connect(self.sync_conflicted)
+        self.actionSyncConflicted.setChecked(True)
         # END TO BE REMOVED
 
         # copy to local binding
@@ -301,7 +308,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def view_log(self):
         log_filename = _find_logger_basefilename(log)
         self.controller.open_local_file(log_filename)
-
+        
+    def sync_conflicted(self):
+        DEBUG_SYNC_CONFLICTED = not DEBUG_SYNC_CONFLICTED
+        
     def notify_another_instance(self, msg):
         dlg = SingleInstanceDlg()
         dlg.exec_()
@@ -798,6 +808,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.debugSeparator.setVisible(isDebug())
         self.actionDebug.setVisible(isDebug())
         self.actionViewLog.setVisible(isDebug())
+        self.actionSyncConflicted.setVisible(isDebug())
         
         self.menuViewRecentFiles.clear()
         recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == self.local_folder).all()

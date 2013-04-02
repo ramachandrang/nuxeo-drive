@@ -3,7 +3,7 @@ Class=IEXPRESS
 SEDVersion=3
 [Options]
 PackagePurpose=InstallApp
-ShowInstallProgramWindow=0
+ShowInstallProgramWindow=1
 HideExtractAnimation=0
 UseLongFileName=1
 InsideCompressed=0
@@ -25,16 +25,16 @@ InstallPrompt=
 DisplayLicense=
 FinishMessage=
 TargetName=C:\gitrepo\nuxeo-drive\cpo_x64Setup.exe
-FriendlyName=Cloud Portal Office Desktop Redist
+FriendlyName=Cloud Portal Office Desktop MS Redistributable Package
 AppLaunched=cmd.exe /c setup_x64.bat
 PostInstallCmd=<None>
 AdminQuietInstCmd=
 UserQuietInstCmd=
-FILE0="setup_x64.bat"
-FILE1="vcredist_x64.exe"
+FILE0="vcredist_x64.exe"
+FILE1="setup_x64.bat"
 [SourceFiles]
-SourceFiles0=C:\gitrepo\nuxeo-drive\
-SourceFiles1=C:\Program Files (x86)\Microsoft SDKs\Windows\v7.0A\Bootstrapper\Packages\vcredist_x64\
+SourceFiles0=C:\Program Files (x86)\Microsoft SDKs\Windows\v7.0A\Bootstrapper\Packages\vcredist_x64\
+SourceFiles1=C:\gitrepo\nuxeo-drive\
 [SourceFiles0]
 %FILE0%=
 [SourceFiles1]
