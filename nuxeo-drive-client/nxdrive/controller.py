@@ -449,12 +449,10 @@ class Controller(object):
             if server_binding.remote_token is not None:
                 nxclient.revoke_token()
             token = nxclient.request_token()
-#            if token is not None and server_binding.remote_token != token:
-            if token is not None:
-                log.info("Updating token for user '%s' on server '%s'",
-                        username, server_url)
-                # Update the token info if required
-                server_binding.remote_token = token
+            log.info("Updating token for user '%s' on server '%s'",
+                    username, server_url)
+            # Update the token info if required
+            server_binding.remote_token = token
             # reset the nag schedules
             server_binding.reset_nags()
             # clear old version upgrade events
@@ -501,7 +499,7 @@ class Controller(object):
         except Exception as e:
             log.debug("Failed to bind server: %s", str(e))
             session.rollback()
-            return None
+            raise
 
 #        self.lock_folder(server_binding.local_folder)
 #        mydocs = self.get_mydocs_folder_synced(state, session=session)
@@ -522,7 +520,6 @@ class Controller(object):
         local_folder = normalized_path(local_folder)
         binding = self.get_server_binding(local_folder, raise_if_missing = True,
                                           session = session)
-
         # Revoke token if necessary
         if binding.remote_token is not None:
             try:
@@ -547,21 +544,28 @@ class Controller(object):
         # Delete binding info in local DB
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
-
+        session.delete(binding)
         # delete all sync folders but do not clear sync roots on server
         # other device(s) may be linked to the same server, using the same account
+        log.debug("Removing sync folders for %s", binding.local_folder)
         sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == binding.local_folder).all()
         for sf in sync_folders:
             session.delete(sf)
         # delete recent files
+        log.debug("Removing recent files for %s", binding.local_folder)
         recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == binding.local_folder).all()
         for f in recent_files:
             session.delete(f)
         # delete server events
+        log.debug("Removing server events for %s", binding.local_folder)
         server_events = session.query(ServerEvent).filter(ServerEvent.local_folder == binding.local_folder).all()
         for se in server_events:
             session.delete(se)
-                
+        # delete sync states
+        log.debug("Removing last sync states for %s", binding.local_folder)
+        last_known_states = session.query(LastKnownState).filter(LastKnownState.local_folder == binding.local_folder).all()
+        for lks in last_known_states:
+            session.delete(lks)                
 #        self.unlock_folder(binding.local_folder)
 #        mydocs = self.get_mydocs_folder_synced(binding, session=session)
 #        if mydocs is not None:
@@ -570,7 +574,6 @@ class Controller(object):
 #        if otherdocs is not None:
 #            self.unlock_folder(otherdocs)
 #        session.delete(binding)
-
         session.commit()
 
     def unbind_all(self):
@@ -588,8 +591,10 @@ class Controller(object):
         server_url = self._normalize_url(server_url)
         nxclient = self.remote_doc_client_factory(server_url, username, self.device_id,
                                                   password)
-        if nxclient.request_token() is None:
-            raise Unauthorized(server_url, username)
+        token = nxclient.request_token()
+        log.debug("validated credentials with new token %s", token)
+        nxclient.revoke_token()
+        log.debug("revoked the new token %s", token)
 
     def _update_hash(self, password):
         return md5.new(password).digest()

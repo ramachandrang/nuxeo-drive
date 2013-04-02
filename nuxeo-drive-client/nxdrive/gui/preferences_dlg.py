@@ -387,7 +387,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         result, self.values = prompt_authentication(self.controller, local_folder, url = server_url, username = remote_user, update = False)
         if result:
             self.frontend.server_binding = self.server_binding = ServerBinding(local_folder,
-                                                                                self.values['url'],
+                                                                                server_url,
                                                                                 self.values['username'],
                                                                                 remote_password = self.values['password']
                                                                                 )
@@ -406,6 +406,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if self.previous_local_folder is not None:
             previous_binding = self.controller.get_server_binding(local_folder = self.previous_local_folder, raise_if_missing = False)
         same_binding = self.server_binding == previous_binding
+        previous_user = previous_binding.remote_user if previous_binding else None
+        current_user = self.server_binding.remote_user if self.server_binding else None
+        same_user = current_user == previous_user and (previous_user or current_user)
 
         if not same_binding:
             try:
@@ -439,7 +442,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 QMessageBox(QMessageBox.Critical, self.tr("%s Error") % Constants.APP_NAME, self.tr("Failed to connect to server, please try again.")).exec_()
                 return QDialog.Rejected
 
-        if self.local_folder is not None and self.prev_local_folder is not None and self.local_folder != self.prev_local_folder:
+        if self.local_folder is not None and self.prev_local_folder is not None and \
+            self.local_folder != self.prev_local_folder and same_user:
             if self._isConnected():
                 # prompt for moving the Nuxeo Drive folder for current binding
                 msg = QMessageBox(QMessageBox.Question, self.tr('Move Root Folder'),
@@ -451,14 +455,14 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 if msg.exec_() == QMessageBox.No:
                     return
 
-
-            if os.path.exists(self.local_folder):
-                error = QMessageBox(QMessageBox.Warning, self.tr("Path Error"),
-                                                          self.tr("Folder %s already exists" % self.local_folder),
-                                                          QMessageBox.Ok)
-                error.setInformativeText(self.tr("Select a folder where %s does not exist." % Constants.DEFAULT_NXDRIVE_FOLDER))
-                error.exec_()
-                return QDialog.Rejected
+            # the folder had already been created when clicked sign-in
+#            if os.path.exists(self.local_folder):
+#                error = QMessageBox(QMessageBox.Warning, self.tr("Path Error"),
+#                                                          self.tr("Folder %s already exists" % self.local_folder),
+#                                                          QMessageBox.Ok)
+#                error.setInformativeText(self.tr("Select a folder where %s does not exist." % Constants.DEFAULT_NXDRIVE_FOLDER))
+#                error.exec_()
+#                return QDialog.Rejected
 
             self.result = ProgressDialog.stopServer(self.frontend, parent = self)
             if self.result == ProgressDialog.CANCELLED:
@@ -564,11 +568,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                     target = sys.executable + ' ' + target + ' gui --start'
                 win32utils.create_shortcut_if_not_exists(shortcut_path, target)
             else:
-                try:
-                    os.unlink(shortcut_path)
-                except WindowsError as e:
-                    log.debug('error deleting shortcut: %s', e)
-                    
+                os.unlink(shortcut_path)
+
         elif sys.platform == 'darwin':
 #            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/%s.%s.plist') % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME),
 #                                       QSettings.NativeFormat)
