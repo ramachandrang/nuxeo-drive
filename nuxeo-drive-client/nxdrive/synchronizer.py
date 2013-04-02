@@ -248,7 +248,7 @@ class Synchronizer(object):
         else:
             server_binding = server_binding_or_local_path
 
-        if from_state is None:
+        while from_state is None:
             try:
                 from_state = session.query(LastKnownState).filter_by(
                     local_path = '/',
@@ -393,14 +393,15 @@ class Synchronizer(object):
         # update is ongoing
         self._notify_refreshing(server_binding)
 
-        if from_state is None:
+        while from_state is None:
             try:
                 from_state = session.query(LastKnownState).filter_by(
                     local_path = '/', local_folder = server_binding.local_folder).one()
+                path = normalized_path(from_state.local_folder)
+                if not os.path.exists(path):
+                    os.mkdir(path)
             except NoResultFound:
                 self.create_toplevel_state(server_binding, session=session)
-                from_state = session.query(LastKnownState).filter_by(
-                    local_path = '/', local_folder = server_binding.local_folder).one()
 
         try:
             client = self.get_remote_fs_client(from_state.server_binding)

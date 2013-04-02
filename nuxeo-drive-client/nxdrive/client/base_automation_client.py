@@ -728,7 +728,7 @@ class BaseAutomationClient(object):
             log.debug('token contains non-ascii characters')
             # NOTE this is a workaround the issue of CloudDesk redirecting to
             # the login page: intermittently, and when providing invalid credentials
-            return None
+            raise ValueError("invalid token")
         except Exception as e:
             self._log_details(e)
             if hasattr(e, 'msg'):
