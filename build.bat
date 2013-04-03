@@ -28,8 +28,8 @@ echo copy batch files...
 xcopy /R /Y /S /I BatchFiles "%BUILD_DIR%\BatchFiles"
 
 echo copy redist packages...
-echo f | xcopy cpo_x86Setup.exe /S /Y %BUILD_DIR%\RedistPackages\32bit\setup.exe
-echo f | xcopy cpo_x64Setup.exe /S /Y %BUILD_DIR%\RedistPackages\64bit\setup.exe
+echo f | xcopy cpo_x86Setup.exe /S /Y %BUILD_DIR%\RedistPackages\32bit\
+echo f | xcopy cpo_x64Setup.exe /S /Y %BUILD_DIR%\RedistPackages\64bit\
 
 echo copy DLLs...
 xcopy /R /Y /S /I "%GITREPO%\nuxeo-drive-client\nxdrive\data\bin" "%BUILD_DIR%\Dll"

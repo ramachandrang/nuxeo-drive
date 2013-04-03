@@ -7,7 +7,7 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{5D0411E3-47F5-441A-B595-C1DCE87519C2}}
 AppName=Cloud Portal Office Desktop
-AppVersion=0.1.10.1
+AppVersion=0.1.11
 AppPublisher=SHARP
 AppPublisherURL=http://www.sharp.com/
 AppSupportURL=http://www.sharp.com/
@@ -19,7 +19,7 @@ UsePreviousAppDir=no
 DefaultDirName={pf}\SHARP\Cloud Portal Office Desktop
 DefaultGroupName=Cloud Portal Office Desktop
 OutputDir=dist
-OutputBaseFilename=CPODesktop-0.1.10.1-Win32-setup
+OutputBaseFilename=CPODesktop-0.1.11-Win32-setup
 SetupIconFile=Cloud Portal Office Desktop\icons\CP_Red_Office_64.ico
 UninstallDisplayIcon={app}\icons\CP_Red_Office_64.ico
 UninstallDisplayName=Cloud Portal Office Desktop
@@ -59,13 +59,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "Cloud Portal Office Desktop\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "BatchFiles\*"; DestDir: "{app}\BatchFiles\"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "RedistPackages\*"; DestDir: "{app}\RedistPackages\"; Flags: ignoreversion recursesubdirs;  
 ;If 64 bit installation
-Source: "RedistPackages\64bit\*"; DestDir: "{app}\RedistPackages\"; Flags: ignoreversion;  Check: Is64BitInstallMode
 Source: "dll\64bit\CpoIconOverlayConflicted.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion  ;  Check: Is64BitInstallMode
 Source: "dll\64bit\CpoIconOverlayInProgress.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion ;  Check: Is64BitInstallMode
 Source: "dll\64bit\CpoIconOverlaySynced.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion  ;  Check: Is64BitInstallMode
 ;If 32 bit installation
-Source: "RedistPackages\32bit\*"; DestDir: "{app}\RedistPackages\"; Flags: ignoreversion;  Check: not Is64BitInstallMode
 Source: "dll\32bit\CpoIconOverlayConflicted.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion ;  Check: not Is64BitInstallMode
 Source: "dll\32bit\CpoIconOverlayInProgress.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion ;  Check: not Is64BitInstallMode
 Source: "dll\32bit\CpoIconOverlaySynced.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion  ;  Check: not Is64BitInstallMode
@@ -78,12 +77,15 @@ Name: "{userdesktop}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.e
 
 [Run]
 ;Filename: {app}\RedistPackages\Setup.exe; Parameters: "/passive /q /norestart "; StatusMsg: Installing 2010 RunTime...
-Filename: "{app}\RedistPackages\Setup.exe"; Description: "{cm:LaunchProgram, Install Redist packages}"; Flags: waituntilterminated  
-Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Parameters:"""{app}""" ; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: nowait runhidden 64bit 
+Filename: "{app}\RedistPackages\64bit\cpo_x64Setup.exe"; Description: "{cm:LaunchProgram, Install Redist packages - 64bit}"; Flags: waituntilterminated ; Check: Is64BitInstallMode
+Filename: "{app}\RedistPackages\32bit\cpo_x86Setup.exe"; Description: "{cm:LaunchProgram, Install Redist packages - 32bit}"; Flags: waituntilterminated ; Check: not Is64BitInstallMode
+Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Parameters:"""{app}""" ; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: nowait runhidden 64bit ; Check: Is64BitInstallMode
+Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Parameters:"""{app}""" ; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: nowait runhidden ; Check: not Is64BitInstallMode
 Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent 
 
 [UninstallRun]
-Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}""" ; Flags: nowait runhidden 64bit
+Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}""" ; Flags: nowait runhidden 64bit  ; Check: Is64BitInstallMode
+Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}""" ; Flags: nowait runhidden ; Check: not Is64BitInstallMode
 
 [Registry]
 Root: HKCU; Subkey: "Software\SHARP\CLOUD PORTAL OFFICE Desktop"; Flags: uninsdeletekey
