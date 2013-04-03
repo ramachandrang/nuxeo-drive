@@ -787,8 +787,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.actionUsedStorage.setIconVisibleInMenu(exceeded)
 
         session = self.controller.get_session()
-
-        self.actionUsername.setText(self._getUserName())
+        username = self._getUserName()
+        self.actionUsername.setText(username if username else self.tr('Not signed in'))
         connected = len(self.binding_info.values()) > 0
         self.actionShowCloudDeskInfo.setEnabled(connected)
         # Notification (for maintenance info) menu is always available

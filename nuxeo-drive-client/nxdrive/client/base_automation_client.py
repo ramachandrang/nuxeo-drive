@@ -615,7 +615,7 @@ class BaseAutomationClient(object):
                 raise urllib2.HTTPError(url, 500, "internal server error", None, fp)
             # ---- END DEBUG -----
         except urllib2.HTTPError as e:
-            self._log_details(e)
+#            self._log_details(e)
             if e.code == 401:
                 raise Unauthorized(self.server_url, self.user_id, e.code)
             elif e.code == 403:
