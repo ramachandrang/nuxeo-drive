@@ -7,7 +7,7 @@ set SETUP_SCRIPT=CPODesktop-setup-script.iss
 set SETUP_SCRIPT2=InfoAfterInstall.txt
 set INNO_COMPILER=c:\Program Files (x86)\Inno Setup 5\iscc
 set CPO_EXE=CpoDesktop.exe
-set VERSION=0.1.11
+set VERSION=0.1.11.1
 
 pushd
 
