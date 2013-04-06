@@ -975,17 +975,22 @@ class Controller(object):
             storage_key = (sb.server_url, sb.remote_user)
             self.storage[storage_key] = None
 
-    def update_storage_used(self, session = None):
+    def update_storage_used(self, server_binding=None, session=None):
         if session is None:
             session = self.get_session()
-        for sb in session.query(ServerBinding).all():
+        if server_binding:
+            server_bindings = [server_binding]
+        else:
+            server_bindings = session.query(ServerBinding).all()
+        for sb in server_bindings:
             remote_client = self.get_remote_client(sb)
             if remote_client is not None:
                 try:
                     sb.used_storage, sb.total_storage = remote_client.get_storage_used()
+                    log.debug("used storage=%s, total storage=%s", str(sb.used_storage), str(sb.total_storage))
                 except ValueError:
                     # operation not implemented
-                    pass
+                    log.debug("failed to retrieve storage for url: %s, user: %s", sb.server_url, sb.remote_user)
 
     def update_server_storage_used(self, url, user, session = None):
         if session is None:
@@ -1242,7 +1247,8 @@ class Controller(object):
             if fld:
                 local_client = fld.get_local_client()
                 if not local_client.exists(fld.local_path):
-                    local_client.make_folder(fld.local_parent_path, fld.local_name)
+                    path = local_client._abspath(fld.local_path)
+                    os.makedirs(path)
                     if fld.pair_state == 'locally_deleted':
                         # change it back to synchronized
                         fld.update_state('synchronized', 'synchronized')

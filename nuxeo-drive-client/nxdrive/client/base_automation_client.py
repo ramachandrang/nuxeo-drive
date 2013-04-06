@@ -27,7 +27,7 @@ from nxdrive.utils import classproperty
 from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.utils import get_maintenance_message
 from nxdrive import Constants
-from nxdrive import DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION
+from nxdrive import DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION, DEBUG_UNAVAILABLE
 
 log = get_logger(__name__)
 
@@ -44,7 +44,7 @@ class DeviceQuotaExceeded(Exception):
         self.url = url
         self.user_id = user_id
         self.code = code
-        self.max_devices = 3
+        self.max_devices = max_devices
         self.href = href
         self.return_url = return_url
         self.message = _("Maximum number of <font color='red'>%d linked devices</font> has been reached. Click <a href='%s'>here</a> to unlink.")
@@ -91,9 +91,9 @@ def raise_403_error(url, user, e):
                 max_devices = int(error_detail['max_devices'])
                 href = error_detail['href']
                 return_url = error_detail['returnURL']
-                raise DeviceQuotaExceeded(url, user, max_devices, href, return_url)
             except:
                 raise Forbidden(url, user)
+            raise DeviceQuotaExceeded(url, user, max_devices, href, return_url)
         else:
             raise Forbidden(url, user)
     
@@ -118,28 +118,29 @@ class MaintenanceMode(Exception):
 class ProxyInfo(object):
     """Holder class for proxy information"""
 
-    PORT = '8090'
+    PORT = '8080'
     PORT_INTEGER = int(PORT)
     PROXY_SERVER = 'server'
     PROXY_AUTODETECT = 'autodetect'
     PROXY_DIRECT = 'direct'
 
-    def __init__(self, autodetect = False, server_url = None, port = None, authn_required = False, user = None, pwd = None):
+    def __init__(self, autodetect = False, server_url = None, port = None, 
+                 authn_required = False, user = None, pwd = None, realm = None):
         self.autodetect = autodetect
+        self.server_url = server_url
+        self.port = port
+        self.authn_required = authn_required
+        self.user = user
+        self.pwd = pwd
+        self.realm = realm
         if self.autodetect:
             return
 
-        self.authn_required = authn_required
         if authn_required and not user:
             raise ProxyConfigurationError('missing username')
 
-        self.user = user
-        self.pwd = pwd
-        if not server_url is None and not port:
+        if not autodetect and (server_url is None or port is None):
             raise ProxyConfigurationError('missing server or port')
-
-        self.server_url = server_url
-        self.port = port
 
     @staticmethod
     def get_proxy():
@@ -151,7 +152,10 @@ class ProxyInfo(object):
         if useProxy == ProxyInfo.PROXY_DIRECT:
             return None
         elif useProxy == ProxyInfo.PROXY_AUTODETECT:
-            return ProxyInfo(autodetect = True)
+            user = settings.value('preferences/proxyUser')
+            pwd = settings.value('preferences/proxyPwd')
+            realm = settings.value('preferences/proxyRealm')
+            return ProxyInfo(autodetect = True, user = user, pwd = pwd, realm = realm)
         elif useProxy == ProxyInfo.PROXY_SERVER:
             server = settings.value('preferences/proxyServer')
             if not server:
@@ -160,7 +164,7 @@ class ProxyInfo(object):
             else:
                 user = settings.value('preferences/proxyUser')
                 pwd = settings.value('preferences/proxyPwd')
-
+                realm = settings.value('preferences/proxyRealm')
                 if sys.platform == 'win32':
                     authnAsString = settings.value('preferences/proxyAuthN', 'false')
                     if authnAsString.lower() == 'true':
@@ -178,8 +182,8 @@ class ProxyInfo(object):
                 else:
                     authN = settings.value('preferences/proxyAuthN', False)
                     port = settings.value('preferences/proxyPort', 0)
-
-                return ProxyInfo(server_url = server, port = port, authn_required = authN, user = user, pwd = pwd)
+                return ProxyInfo(server_url = server, port = port, authn_required = authN, 
+                                 user = user, pwd = pwd, realm = realm)
         else:
             return None
 
@@ -265,7 +269,6 @@ class BaseAutomationClient(object):
         cls._proxy_error_count = val
 
     permission = 'ReadWrite'
-    cookiejar = CookieJar()
 
     def __init__(self, server_url, user_id, device_id,
                  password = None, token = None, repository = "default",
@@ -299,7 +302,8 @@ class BaseAutomationClient(object):
 
         handlers = []
         proxy_support = None
-        cookie_processor = urllib2.HTTPCookieProcessor(BaseAutomationClient.cookiejar)
+        self.cookiejar = CookieJar()
+        cookie_processor = urllib2.HTTPCookieProcessor(self.cookiejar)
 
         # NOTE 'proxy' classproperty does not work here (sample works!)
         # replace 'proxy' with 'get_proxy' and 'set_proxy' class methods
@@ -313,6 +317,19 @@ class BaseAutomationClient(object):
                 # from the registry Internet Settings section and in a Mac OS X environment, proxy information
                 # is retrieved from the OS X System Configuration Framework.
                 proxy_support = urllib2.ProxyHandler()
+#                pwd_mgr = HTTPPasswordMgr()
+#                pwd_mgr.add_password('sla', r'http://' + proxy_url,
+#                                    BaseAutomationClient.get_proxy().user,
+#                                    BaseAutomationClient.get_proxy().pwd)
+#                pwd_mgr.add_password('sla', r'https://' + proxy_url,
+#                                    BaseAutomationClient.get_proxy().user,
+#                                    BaseAutomationClient.get_proxy().pwd)
+#                proxy_auth = ProxyBasicAuthHandler(pwd_mgr)
+                proxy_auth = ProxyBasicAuthHandler()
+                proxy_auth.add_password('sla', self.server_url,
+                                    BaseAutomationClient.get_proxy().user,
+                                    BaseAutomationClient.get_proxy().pwd)
+                handlers.append(proxy_auth)
         else:
             proxy_url = r'%s:%d' % (BaseAutomationClient.get_proxy().server_url,
                                     BaseAutomationClient.get_proxy().port)
@@ -325,15 +342,22 @@ class BaseAutomationClient(object):
                                               BaseAutomationClient.get_proxy().port)
                 proxy_support = urllib2.ProxyHandler({'http' : r'http://' + proxy_url,
                                                       'https' : r'https://' + proxy_url})
-                pwd_mgr = HTTPPasswordMgr()
-
-                pwd_mgr.add_password('sla', r'http://' + proxy_url,
+#                pwd_mgr = HTTPPasswordMgr()
+#
+#                pwd_mgr.add_password('sla', r'http://' + proxy_url,
+#                                    BaseAutomationClient.get_proxy().user,
+#                                    BaseAutomationClient.get_proxy().pwd)
+#                pwd_mgr.add_password('sla', r'https://' + proxy_url,
+#                                    BaseAutomationClient.get_proxy().user,
+#                                    BaseAutomationClient.get_proxy().pwd)
+#                proxy_auth = ProxyBasicAuthHandler(pwd_mgr)
+                proxy_auth = ProxyBasicAuthHandler()
+                proxy_auth.add_password('sla', self.server_url,
                                     BaseAutomationClient.get_proxy().user,
                                     BaseAutomationClient.get_proxy().pwd)
-                pwd_mgr.add_password('sla', r'https://' + proxy_url,
-                                    BaseAutomationClient.get_proxy().user,
-                                    BaseAutomationClient.get_proxy().pwd)
-                proxy_auth = ProxyBasicAuthHandler(pwd_mgr)
+#                proxy_auth.add_password('sla', r'https://' + proxy_url,
+#                                    BaseAutomationClient.get_proxy().user,
+#                                    BaseAutomationClient.get_proxy().pwd)
                 handlers.append(proxy_auth)
 
         handlers.append(proxy_support)
@@ -383,14 +407,11 @@ class BaseAutomationClient(object):
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
             req = urllib2.Request(self.automation_url, headers = headers)
-            response = json.loads(self.opener.open(
-                req, timeout = self.timeout).read())
-            req = urllib2.Request(self.automation_url, headers = headers)
-            BaseAutomationClient.cookiejar.add_cookie_header(req)
+            self.cookiejar.add_cookie_header(req)
             # --- BEGIN DEBUG ----
             self.log_request(req)
             # --- END DEBUG ----
-            raw_response = self.opener.open(req)
+            raw_response = self.opener.open(req, timeout = self.timeout)
             data = raw_response.read()
             response = json.loads(data)
             # --- BEGIN DEBUG ----
@@ -459,7 +480,7 @@ class BaseAutomationClient(object):
 
         req = urllib2.Request(url, data, headers)
         timeout = self.timeout if timeout == -1 else timeout
-        BaseAutomationClient.cookiejar.add_cookie_header(req)
+        self.cookiejar.add_cookie_header(req)
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
@@ -478,6 +499,8 @@ class BaseAutomationClient(object):
                         }'
                 fp = StringIO(msg)
                 raise urllib2.HTTPError(url, 503, "service unavailable", None, fp)
+            if DEBUG_UNAVAILABLE:
+                raise urllib2.HTTPError(url, 503, "service unavailable", None, None)
             # ---- END DEBUG -----
         except urllib2.HTTPError as e:
             # NOTE cannot rewind the error stream from maintenance server!
@@ -596,7 +619,7 @@ class BaseAutomationClient(object):
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         log.trace("Calling '%s' for file '%s'", url, filename)
         req = urllib2.Request(url, data, headers)
-        BaseAutomationClient.cookiejar.add_cookie_header(req)
+        self.cookiejar.add_cookie_header(req)
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
@@ -701,7 +724,7 @@ class BaseAutomationClient(object):
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers = headers)
-            BaseAutomationClient.cookiejar.add_cookie_header(req)
+            self.cookiejar.add_cookie_header(req)
             token = self.opener.open(req, timeout = self.timeout).read()
             token2 = token.decode('ascii')
             log.debug("received token: %s", token)
@@ -838,24 +861,28 @@ class BaseAutomationClient(object):
         return False
 
     def _check_maintenance_mode(self, e):
-        retry_after = 0
         schedules = None
+        retry_after = 0
         # get retry-after header
-        #------BEGIN DEBUG------
-#        s_retry_after = e.headers['retry-after']
-        s_retry_after = '10'
-        try:
-            retry_after = int(s_retry_after)
-        except ValueError:
-            pass
-        #-------END DEBUG-------
-
-        if hasattr(e, "fp"):
-            detail = e.fp.read()
+        s_retry_after = e.headers['retry-after']
+        if s_retry_after:
             try:
-                schedules = json.loads(detail)
-            except:
+                retry_after = int(s_retry_after)
+            except ValueError:
+                # value is a date
+                import email.utils as eut
+                dt_retry_after = datetime(*eut.parsedate(s_retry_after)[:6])
+                delta = dt_retry_after - datetime.utcnow()
+                retry_after = int(delta.total_seconds())
+            except AttributeError:
                 pass
+    
+            if hasattr(e, "fp") and e.fp is not None:
+                detail = e.fp.read()
+                try:
+                    schedules = json.loads(detail)
+                except:
+                    pass
 
         return retry_after, schedules
 

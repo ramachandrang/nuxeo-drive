@@ -27,6 +27,7 @@ from nxdrive.utils.helpers import find_exe_path
 from nxdrive.client.base_automation_client import ProxyInfo
 from ui_preferences import Ui_preferencesDlg
 from proxy_dlg import ProxyDlg
+from proxy_authn_dlg import ProxyAuthnDlg
 from progress_dlg import ProgressDialog
 from folders_dlg import SyncFoldersDlg
 import nxdrive.gui.qrc_resources
@@ -103,6 +104,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.txtCloudfolder.textEdited.connect(self.folder_text_changed)
         self.btnSelect.clicked.connect(self.selectFolders)
         self.btnProxy.clicked.connect(self.configProxy)
+        self.btnProxy2.clicked.connect(self.configProxy2)
 #        self.cbEnablelog.stateChanged.connect(self.enableLog)
         self.cbNotifications.stateChanged.connect(self.setNotifications)
         self.cbAutostart.stateChanged.connect(self.setAutostart)
@@ -154,7 +156,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         # REMOVE proxy auto-detect
         self.rbAutodetect.setChecked(self.useProxy == ProxyInfo.PROXY_AUTODETECT)
         self.btnProxy.setEnabled(self.useProxy == ProxyInfo.PROXY_SERVER)
-
+        self.btnProxy2.setEnabled(self.useProxy == ProxyInfo.PROXY_AUTODETECT)
         self.setAttribute(Qt.WA_DeleteOnClose, False)
 
         self.tabWidget.currentChanged.connect(self.tab_changed)
@@ -234,9 +236,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
 
     def configProxy(self):
-        # Proxy... button is only enabled in this case
-        self.useProxy = ProxyInfo.PROXY_SERVER
         dlg = ProxyDlg(frontend = self.frontend)
+        self.result = dlg.exec_()
+
+    def configProxy2(self):
+        dlg = ProxyAuthnDlg(frontend = self.frontend)
         self.result = dlg.exec_()
 
     def setAutostart(self, state):
@@ -253,13 +257,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
     def setProxy(self, state):
         # ignore state as is called from multiple toggle events
-        if self.rbProxy.isChecked():
-            self.btnProxy.setEnabled(True)
-        # REMOVE proxy auto-detect
-        elif self.rbAutodetect.isChecked():
-            self.btnProxy.setEnabled(False)
-        else:
-            self.btnProxy.setEnabled(False)
+        self.btnProxy.setEnabled(self.rbProxy.isChecked())
+        self.btnProxy2.setEnabled(self.rbAutodetect.isChecked())
 
     def folder_text_changed(self, text):
         self.local_folder_text_changed = True
@@ -359,7 +358,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
         parent_folder = self.txtCloudfolder.text()
         local_folder = os.path.join(parent_folder, Constants.DEFAULT_NXDRIVE_FOLDER)
-        if not self.reuse_folder:
+        if not self.reuse_folder and os.path.exists(local_folder):
             msg = QMessageBox(QMessageBox.Warning, self.tr('Folder Exists'),
                               self.tr("The folder %s already exists.") % local_folder,
                               QMessageBox.Ok)
@@ -408,7 +407,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         same_binding = self.server_binding == previous_binding
         previous_user = previous_binding.remote_user if previous_binding else None
         current_user = self.server_binding.remote_user if self.server_binding else None
-        same_user = current_user == previous_user and (previous_user or current_user)
+        same_user = (current_user == previous_user) and (previous_user is not None or current_user is not None)
 
         if not same_binding:
             try:
@@ -523,28 +522,23 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             useProxy = ProxyInfo.PROXY_DIRECT
 
         if useProxy != self.useProxy:
-            if useProxy == ProxyInfo.PROXY_SERVER:
-                dlg = ProxyDlg(frontend = self)
-                if dlg.exec_() == QDialog.Rejected:
-                    return
-            elif useProxy == ProxyInfo.PROXY_DIRECT:
-                # restart sync to clear all cached remote clients using the proxy
-                self.result = ProgressDialog.stopServer(self.frontend, parent = self)
-                if self.result == ProgressDialog.CANCELLED:
-                    return QDialog.Rejected
-#                self.controller.nuxeo_client_factory(...).proxy = None
-                # NOTE: this will not work for a remote client factory different from RemoteDocumentClient
-                # but requires at least 4 params
-                self.controller.reset_proxy()
+            # restart sync to clear all cached remote clients using the proxy
+            self.result = ProgressDialog.stopServer(self.frontend, parent = self)
+            if self.result == ProgressDialog.CANCELLED:
+                return QDialog.Rejected
+            # NOTE: this will not work for a remote client factory different from RemoteDocumentClient
+            # but requires at least 4 params
+            self.controller.reset_proxy()
 
             self.useProxy = useProxy
             if self.useProxy == ProxyInfo.PROXY_AUTODETECT or self.useProxy == ProxyInfo.PROXY_DIRECT:
                 settings.setValue('preferences/proxyServer', '')
                 settings.setValue('preferences/proxyPort', '')
-            if self.useProxy == ProxyInfo.PROXY_DIRECT:
+                settings.setValue('preferences/proxyAuthN', False)
+            if self.useProxy == ProxyInfo.PROXY_DIRECT:    
                 settings.setValue('preferences/proxyUser', '')
                 settings.setValue('preferences/proxyPwd', '')
-                settings.setValue('preferences/proxyAuthN', False)
+                settings.setValue('preferences/proxyRealm', '')
         elif useProxy and self.controller.proxy_changed():
             self.result = ProgressDialog.stopServer(self.frontend, parent = self)
             if self.result == ProgressDialog.CANCELLED:

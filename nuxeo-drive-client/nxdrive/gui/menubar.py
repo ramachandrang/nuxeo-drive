@@ -185,7 +185,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionSyncConflicted.setObjectName("actionSyncConflicted")
         self.actionSyncConflicted.setCheckable(True)
         # TO BE REMOVED - END
-        self.actionQuit = QtGui.QAction(self.tr("Exit %s") % Constants.APP_NAME, self)
+        if sys.platform == 'win32':
+            self.actionQuit = QtGui.QAction(self.tr("Exit"), self)
+        elif sys.platform == 'darwin':
+            self.actionQuit = QtGui.QAction(self.tr("Quit %s") % Constants.APP_NAME, self)
+        else:
+            self.actionQuit = QtGui.QAction(self.tr("Exit"), self)
         self.actionQuit.setObjectName("actionQuit")
         # add a new notification (about maintenance) action
         self.actionNotification = QtGui.QAction(self.tr("Notification..."), self)
@@ -1052,7 +1057,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             session = self.controller.get_session()
             try:
                 server_maint_event = session.query(ServerEvent).\
-                                filter(ServerEvent.local_folder == self.server_binding.local_folder).\
+                                filter(ServerEvent.local_folder == self.local_folder).\
                                 filter(ServerEvent.message_type == 'maintenance').\
                                 order_by(desc(ServerEvent.utc_time)).first()
                 if server_maint_event is not None:

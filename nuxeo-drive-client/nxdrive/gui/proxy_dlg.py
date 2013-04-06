@@ -15,7 +15,7 @@ from nxdrive import Constants
 from nxdrive.gui.progress_dlg import ProgressDialog
 
 settings = create_settings()
-PORT = '8090'
+PORT = '8080'
 PORT_INTEGER = int(PORT)
 
 class ProxyDlg(QDialog, Ui_ProxyDialog):
@@ -35,6 +35,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
         self.port = None
         self.user = None
         self.pwd = None
+        self.realm = None
         self.AuthN = False
 
         proxy = ProxyInfo.get_proxy()
@@ -43,6 +44,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
             self.txtPort.clear()
             self.txtUser.clear()
             self.txtPwd.clear()
+            self.txtRealm.clear()
             self.cbAuthN.setChecked(False)
             self.txtUser.setEnabled(False)
             self.txtPwd.setEnabled(False)
@@ -51,33 +53,39 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
             self.port = proxy.port
             self.user = proxy.user
             self.pwd = proxy.pwd
+            self.realm = proxy.realm
             if proxy.authn_required:
                 self.AuthN = proxy.authn_required
 
             self.txtServer.setText(self.server)
-            self.txtPort.setText(str(self.port))
+            self.txtPort.setText(str(self.port) if self.port else '')
             self.cbAuthN.setChecked(self.AuthN)
             if self.AuthN:
                 self.txtUser.setEnabled(True)
                 self.txtUser.setText(self.user)
                 self.txtPwd.setEnabled(True)
                 self.txtPwd.setText(self.pwd)
+                self.txtRealm.setText(self.realm)
             else:
                 self.txtUser.setEnabled(False)
                 self.txtUser.clear()
                 self.txtPwd.setEnabled(False)
                 self.txtPwd.clear()
+                self.txtRealm.clear()
 
     def setAuthN(self, state):
         self.AuthN = state
         if self.AuthN:
             self.txtUser.setEnabled(True)
             self.txtPwd.setEnabled(True)
+            self.txtRealm.setEnabled(True)
         else:
             self.txtUser.setEnabled(False)
             self.txtPwd.setEnabled(False)
+            self.txtRealm.setEnabled(False)
             self.txtUser.clear()
             self.txtPwd.clear()
+            self.txtRealm.clear()
 
     def applyChanges(self):
         invalidate = False
@@ -145,7 +153,11 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
             if pwd != self.pwd:
                 self.pwd = pwd
                 invalidate = True
-
+            realm = self.txtRealm.text()
+            if realm != self.realm:
+                self.realm = realm
+                invalidate = True
+                
         if invalidate:
             result = ProgressDialog.stopServer(self.frontend, parent = self)
             if result == ProgressDialog.CANCELLED:
@@ -154,6 +166,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
             settings.setValue('preferences/proxyServer', self.server)
             settings.setValue('preferences/proxyUser', self.user)
             settings.setValue('preferences/proxyPwd', self.pwd)
+            settings.setValue('preferences/proxyRealm', self.realm)
             settings.setValue('preferences/proxyAuthN', self.AuthN)
             settings.setValue('preferences/proxyPort', self.port)
             settings.sync()

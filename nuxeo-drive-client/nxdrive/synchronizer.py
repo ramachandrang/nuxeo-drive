@@ -1504,7 +1504,7 @@ class Synchronizer(object):
             if n_synchronized > 0:
                 self.update_last_access(server_binding)
             if n_synchronized > 0 or self.loop_count == 0:
-                self._controller.update_storage_used(session = session)
+                self._controller.update_storage_used(server_binding=server_binding, session = session)
             self.fire_notifications(session = session)
 
             return n_synchronized

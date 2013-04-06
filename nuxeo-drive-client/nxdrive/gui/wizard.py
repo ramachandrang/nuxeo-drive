@@ -170,10 +170,6 @@ class CpoWizard(QWizard):
             win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
 
         settings = create_settings()
-        settings.setValue('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
-        settings.setValue('preferences/proxyUser', '')
-        settings.setValue('preferences/proxyPwd', '')
-        settings.setValue('preferences/proxyAuthN', False)
         settings.setValue('preferences/notifications', True)
         settings.setValue('preferences/icon-overlays', True)
         settings.setValue('preferences/autostart', True)
@@ -290,6 +286,10 @@ class IntroPage(QWizardPage):
         # clear previous proxy setting
         settings = create_settings()
         settings.setValue('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
+        settings.setValue('preferences/proxyUser', '')
+        settings.setValue('preferences/proxyPwd', '')
+        settings.setValue('preferences/proxyRealm', '')
+        settings.setValue('preferences/proxyAuthN', False)
         self.btnProxy.clicked.connect(self.showProxy)
 
     def login(self):
@@ -622,14 +622,14 @@ class GuideThreePage(QWizardPage):
         data_uri2 = open(icon2_path, "rb").read().encode("base64").replace("\n", "")
         img_tag2 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri2)
         click_type = 'right ' if sys.platform == 'win32' else ''
-        
-        self.lblDetail = QLabel(self.tr("<html><body style='font-size:10px'>Your Mac Menu Bar will display {0} icon for convenient access."
+        sys_bar = 'PC System Tray' if sys.platform == 'win32' else 'Mac Menu Bar'
+        self.lblDetail = QLabel(self.tr("<html><body style='font-size:10px'>Your %s will display {0} icon for convenient access."
                                         "<br>{1} means you are signed in and connected.<br/>"
                                         "Note: an animated icon indicates synchronization is in progress."
                                         "<br>{2} Shows your are offline.<br/>"
                                         "To connect, <b>{3}click</b> {1} and select <b>Properties</b>. Select <b>Account</b> tab and enter your credentials. "
                                         "You will be automatically logged in from now on.</body></html>").\
-                             format(Constants.PRODUCT_NAME, img_tag1, img_tag2, click_type))
+                             format(sys_bar, Constants.PRODUCT_NAME, img_tag1, img_tag2, click_type))
                                 
         self.lblDetail.setWordWrap(True)
         self.lblDetail.setStyleSheet('QLabel { font-size: 10px }')

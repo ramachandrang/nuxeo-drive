@@ -10,6 +10,8 @@ USE_LOCAL_SERVICE = False
 DEBUG_QUOTA_EXCEPTION = False
 """Flag for simulating a maintenance exception"""
 DEBUG_MAINTENANCE_EXCEPTION = False
+"""Flag for simulating a 503 error"""
+DEBUG_UNAVAILABLE = False
 """Flag for checking maintenance and upgrade services every loop (iteration)"""
 NAG_EVERY_LOOP = False
 """Synchronize 'conflicted' state"""

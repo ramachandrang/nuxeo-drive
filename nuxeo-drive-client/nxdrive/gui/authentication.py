@@ -5,6 +5,7 @@ import urllib
 from nxdrive.client import Unauthorized, DeviceQuotaExceeded
 from nxdrive.logging_config import get_logger
 from nxdrive import Constants
+from nxdrive.client import MaintenanceMode
 
 log = get_logger(__name__)
 
@@ -162,27 +163,38 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
             dialog.show_message(_("Invalid credentials."))
             return False
         except DeviceQuotaExceeded as e:
-            client = controller.remote_doc_client_factory(url, username, controller.device_id, password)
-            mydocs = client.get_mydocs()
-            p1 = e.href
-            if p1[-1] != '/': p1 += '/'
-            p2 = 'nxpath/default'
-            p3 = mydocs['path']
-            if p3[-1] != '/': p3 += '/'
-            p4 = e.return_url
-            if p4[-1] != '&': p4 += '&'
-            query_params = {
-                            'user_name': username,
-                            'user_password': password,
-                            'language': 'en_US',
-                            'requestedUrl': '',
-                            'form_submitted_marker': '',
-                            'Submit': 'Log in'
-                            }
-            url = p1 + p2 + p3 + p4 + urllib.urlencode(query_params)
-            dialog.show_message(e.message % (e.max_devices, url))
+            try:
+                client = controller.remote_doc_client_factory(url, username, controller.device_id, password)
+                mydocs = client.get_mydocs()
+                p1 = e.href
+                if p1[-1] != '/': p1 += '/'
+                p2 = 'nxpath/default'
+                p3 = mydocs['path']
+                if p3[-1] != '/': p3 += '/'
+                p4 = e.return_url
+                if p4[-1] != '&': p4 += '&'
+                query_params = {
+                                'user_name': username,
+                                'user_password': password,
+                                'language': 'en_US',
+                                'requestedUrl': '',
+                                'form_submitted_marker': '',
+                                'Submit': 'Log in'
+                                }
+                url = p1 + p2 + p3 + p4 + urllib.urlencode(query_params)
+                dialog.show_message(e.message % (e.max_devices, url))
+            except Exception as e:
+                msg = _("Unable to connect to %s (%s)") % (url, e)
+                log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
+                # TODO: catch a new ServerUnreachable catching network issues
+                dialog.show_message(msg)
+                return False
+        except MaintenanceMode as e:
+            msg = '%s (%s)' % (e.msg, e.detail)
+            dialog.show_message(msg)
+            return False
         except Exception as e:
-            msg = _("Unable to connect to %s") % url
+            msg = _("Unable to connect to %s (%s)") % (url, e)
             log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
             # TODO: catch a new ServerUnreachable catching network issues
             dialog.show_message(msg)
