@@ -350,6 +350,8 @@ class IntroPage(QWizardPage):
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
             self.auth_ok = False
             msg = e.message % (e.max_devices, url)
+        except RuntimeError as e:
+            msg = str(e)
         except Exception as e:
             self.auth_ok = False
             self.wizard().controller.invalidate_client_cache(Constants.CLOUDDESK_URL)
