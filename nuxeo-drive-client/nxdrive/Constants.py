@@ -50,6 +50,7 @@ else:
 
 INTERNAL_HTTP_PORT = 63111
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
+CLOUDDESK_REMOTE_NAME = "Nuxeo Drive"
 APP_ID = CLOUDDESK_UID
 MY_DOCS = r'My Documents'
 OTHERS_DOCS = r'Other Documents'
@@ -102,6 +103,7 @@ elif sys.platform == 'win32':
     APP_IMG_WIZARD_BANNER = ':/banner.png'
 
 COPYRIGHT_FILE = r'CloudDesk_EULA.txt'
+HELP_FILE = r'Cloud_Portal_Office_Help.pdf'
 ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
 ICON_APP_ENABLED = r'CP_Red_Office_16x16_Online.png'
 ICON_APP_DISABLED = r'CP_Red_Office_16x16_Offline.png'

@@ -148,7 +148,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
             url = Constants.CLOUDDESK_URL
             username = values['username']
             if not username:
-                dialog.show_message(_("A user name is required"))
+                dialog.show_message(_("A username is required."))
                 return False
             password = values['password']
             dialog.show_message(_("Connecting to %s ...") % url)

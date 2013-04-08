@@ -87,7 +87,7 @@ packages = [
 ]
 package_data = {
     'nxdrive.data.icons': ['*.png', '*.svg', '*.ico', '*.icns'],
-    'nxdrive.data': ['*.txt', '*.xml'],
+    'nxdrive.data': ['*.txt', '*.xml', '*.pdf'],
 }
 
 # TODO: icons are already copied into 'icons' subfolder - investigate this

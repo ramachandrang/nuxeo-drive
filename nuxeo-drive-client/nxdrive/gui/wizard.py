@@ -58,6 +58,7 @@ class CpoWizard(QWizard):
         super(CpoWizard, self).__init__(parent)
 
         self.controller = controller
+        self.server_binding = None
         self.controller.synchronizer.register_frontend(self)
         self.session = self.controller.get_session()
         self.communicator = Communicator.getCommunicator()
@@ -85,15 +86,17 @@ class CpoWizard(QWizard):
             self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
             self.setWizardStyle(QWizard.ModernStyle)
 
-    def add_skip_tour(self, forward):
+    def add_skip_tour(self, back=True):
         self.setButtonText(QWizard.CustomButton1, self.tr('&Skip Tour'))
         self.setOption(QWizard.HaveCustomButton1 , True)
         self.customButtonClicked.connect(self.skip_tour)
 
-        btnList = [QWizard.Stretch, QWizard.CustomButton1, QWizard.CommitButton, QWizard.BackButton, QWizard.NextButton, QWizard.FinishButton]
+        btnList = [QWizard.Stretch, QWizard.CustomButton1, QWizard.CommitButton, QWizard.NextButton, QWizard.FinishButton]
+        if back:
+            btnList.insert(3, QWizard.BackButton)
         self.setButtonLayout(btnList)
 
-    def remove_skip_tour(self):
+    def remove_skip_tour(self, back=True):
         # NOTE: this cause a Python exception
 #        self.setOption(QWizard.CustomButton1, False)
         btn = self.button(QWizard.CustomButton1)
@@ -101,9 +104,15 @@ class CpoWizard(QWizard):
             self.customButtonClicked.disconnect(self.skip_tour)
 
         self.setOption(QWizard.HaveCustomButton1 , False)
-        btnList = [QWizard.Stretch, QWizard.BackButton, QWizard.CommitButton, QWizard.NextButton, QWizard.FinishButton]
+        btnList = [QWizard.Stretch, QWizard.CommitButton, QWizard.NextButton, QWizard.FinishButton]
+        if back:
+            btnList.insert(2, QWizard.BackButton)
         self.setButtonLayout(btnList)
 
+    def remove_back_button(self):
+        btnList = [QWizard.Stretch, QWizard.CommitButton, QWizard.NextButton, QWizard.FinishButton]
+        self.setButtonLayout(btnList)
+        
     def skip_tour(self, custom_button):
         if custom_button == QWizard.CustomButton1:
             # Skip Tour button
@@ -142,6 +151,7 @@ class CpoWizard(QWizard):
 
         if unbind:
             self.controller.unbind_server(server_binding.local_folder)
+            self.server_binding = None
             return True
         else:
             return False
@@ -150,7 +160,7 @@ class CpoWizard(QWizard):
         self._unbind_if_bound(folder)
         username = self.field('username')
         pwd = self.field('pwd')
-        self.controller.bind_server(folder, url, username, pwd)
+        self.server_binding = self.controller.bind_server(folder, url, username, pwd)
 
     def notify_folders_changed(self):
         self.communicator.folders.emit()
@@ -308,8 +318,8 @@ class IntroPage(QWizardPage):
             self.installEventFilter(process_filter)
             
             url = Constants.CLOUDDESK_URL
-#            username = self.txtUsername.text()
-#            password = self.txtPwd.text()
+            username = self.txtUsername.text()
+            password = self.txtPwd.text()
 #            self.wizard().controller.validate_credentials(url, username, password)
             local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
             self.wizard().local_folder = local_folder
@@ -394,6 +404,8 @@ class IntroPage(QWizardPage):
 #        return bool(self.txtUsername.text()) and bool(self.txtPwd.text())
 
     def validatePage(self):
+        self.lblMessage.clear()
+        self.setCommitPage(True)
         return self.login()
 
 class InstallOptionsPage(QWizardPage):
@@ -462,7 +474,7 @@ class InstallOptionsPage(QWizardPage):
 
     def initializePage(self):
         self.rdButtonTypical.setChecked(True)
-        self.wizard().add_skip_tour(True)
+        self.wizard().add_skip_tour(back=False)
 
         app = QApplication.instance()
         process_filter = EventFilter(self)
@@ -533,9 +545,9 @@ class InstallOptionsPage(QWizardPage):
 
     def change_option(self, state):
         if state:
-            self.wizard().remove_skip_tour()
+            self.wizard().remove_skip_tour(back=False)
         else:
-            self.wizard().add_skip_tour(True)
+            self.wizard().add_skip_tour(back=False)
 
 class GuideOnePage(QWizardPage):
     def __init__(self, parent = None):
@@ -569,13 +581,15 @@ class GuideOnePage(QWizardPage):
     def initializePage(self):
         username = self.field('username')
         self.setTitle(self.tr('Welcome to %s, %s!') % (Constants.APP_NAME, username))
+        # this i sadd the Back button
+        self.wizard().add_skip_tour()
         
     def cleanupPage(self):
         advanced = self.wizard().field('advanced')
         if not advanced:
-            self.wizard().add_skip_tour(False)
+            self.wizard().add_skip_tour(back=False)
         else:
-            self.wizard().remove_skip_tour()
+            self.wizard().remove_skip_tour(back=False)
 
 class GuideTwoPage(QWizardPage):
     def __init__(self, parent = None):
@@ -717,7 +731,7 @@ class AdvancedPage(QWizardPage):
         self.txtLocationSelect.setEnabled(False)
         self.rdSyncDefault.setChecked(True)
         self.btnSyncSelect.setEnabled(False)
-        self.wizard().add_skip_tour(True)
+        self.wizard().add_skip_tour()
 
     def validatePage(self):
         location = os.path.split(DEFAULT_EX_NX_DRIVE_FOLDER)[0]
@@ -770,7 +784,7 @@ class AdvancedPage(QWizardPage):
     def cleanupPage(self):
         advanced = self.wizard().field('advanced')
         if not advanced:
-            self.wizard().add_skip_tour(False)
+            self.wizard().add_skip_tour()
         else:
             self.wizard().remove_skip_tour()
 
@@ -849,7 +863,7 @@ class FinalPage(QWizardPage):
         self.setFinalPage(True)
 
     def cleanupPage(self):
-        self.wizard().add_skip_tour(False)
+        self.wizard().add_skip_tour()
 
 
 def startWizard(controller, options):

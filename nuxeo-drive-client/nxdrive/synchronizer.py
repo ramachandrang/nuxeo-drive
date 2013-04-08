@@ -289,6 +289,19 @@ class Synchronizer(object):
             raise ValueError(_("Cannot bind %r to missing local info") %
                              doc_pair)
 
+        # find if doc pair is under a synchronized root
+#        remote_name = doc_pair.remote_name
+#        if remote_name == Constants.CLOUDDESK_REMOTE_NAME:
+#            remote_name = Constants.DEFAULT_NXDRIVE_FOLDER
+#            
+#        if not remote_name:
+#            # check the parent local path
+#            
+#        else:
+#            # check if an ancestor is a sync folder
+#            while True:
+#                sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_name == remote_name).one()
+            
         # Update the pair state from the collected local info
         doc_pair.update_local(local_info)
 

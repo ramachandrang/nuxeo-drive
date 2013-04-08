@@ -441,6 +441,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 QMessageBox(QMessageBox.Critical, self.tr("%s Error") % Constants.APP_NAME, self.tr("Failed to connect to server, please try again.")).exec_()
                 return QDialog.Rejected
 
+        self.changeFolder()
         if self.local_folder is not None and self.prev_local_folder is not None and \
             self.local_folder != self.prev_local_folder and same_user:
             if self._isConnected():
@@ -479,31 +480,28 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             # Update the database
             if self.frontend is not None:
                 session = self.frontend.controller.get_session()
-                recent_files = session.query(RecentFiles).all()
-                for rf in recent_files:
-#                    rf.local_folder = rf.local_root.replace(self.local_folder, self.local_folder)
-                    rf.local_folder = self.local_folder
-
-                last_known_states = session.query(LastKnownState).all()
-                for lks in last_known_states:
-#                    if lks.local_root.find(self.local_folder) != -1:
-#                        lks.local_root = lks.local_root.replace(self.local_folder, self.local_folder)
-                    lks.local_folder = self.local_folder
-
-                # Update this last as it cascades primary key change to the other tables
-                server_bindings = session.query(ServerBinding).filter(ServerBinding.local_folder == self.local_folder).all()
+                # Update this first as it cascades primary key change to the other tables
+                # Check the rest just in case...
+                server_bindings = session.query(ServerBinding).filter(ServerBinding.local_folder == self.prev_local_folder).all()
                 for sb in server_bindings:
                     sb.local_folder = self.local_folder
                     
-                server_events = session.query(ServerEvent).filter(ServerEvent.local_folder == self.local_folder).all()
+                recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == self.prev_local_folder).all()
+                for rf in recent_files:
+                    rf.local_folder = self.local_folder
+
+                last_known_states = session.query(LastKnownState).filter(LastKnownState.local_folder == self.prev_local_folder).all()
+                for lks in last_known_states:
+                    lks.local_folder = self.local_folder
+                    
+                server_events = session.query(ServerEvent).filter(ServerEvent.local_folder == self.prev_local_folder).all()
                 for se in server_events:
                     se.local_folder = self.local_folder
                     
-                sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == self.local_folder).all()
+                sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == self.prev_local_folder).all()
                 for sf in sync_folders:
                     sf.local_folder = self.local_folder
                 session.commit()
-
                 self.frontend.local_folder = self.local_folder
 
         # Update the Favorites link (Windows only)

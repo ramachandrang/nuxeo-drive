@@ -133,7 +133,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def __init__(self, controller, options):
         super(CloudDeskTray, self).__init__()
 
-        self.local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
+        self.local_folder = None
         self.controller = controller
         self.options = options
         self.communicator = Communicator.getCommunicator()
@@ -239,6 +239,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.messageClicked.connect(self.handle_message_clicked)
         self.actionNotification.triggered.connect(self.show_maintenance_info)
         self.actionUpgrade.triggered.connect(self.show_upgrade_info)
+        self.actionHelp.triggered.connect(self.help)
 
         # BEGIN TO BE REMOVED
         self.actionDebug.setChecked(False)
@@ -341,6 +342,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox.setDefaultButton(QMessageBox.Ok)
         msgbox.exec_()
 
+    def help(self):
+        path = find_data_path()
+        self.controller.open_local_file(os.path.join(path, Constants.HELP_FILE))
+        
     def _authenticate(self):
         # Launch the GUI to create a binding
         from nxdrive.gui.authentication import prompt_authentication

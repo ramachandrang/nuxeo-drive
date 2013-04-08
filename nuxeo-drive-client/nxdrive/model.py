@@ -114,11 +114,11 @@ class ServerBinding(Base):
     next_nag_upgrade_notification = Column(DateTime)
     next_maintenance_check = Column(DateTime)
     remote_password = Column(String)
-    __remote_password = Column('remote_password', String)
+    _remote_password = Column('remote_password', String)
     remote_token = Column(String)
     last_sync_date = Column(Integer)
     last_root_definitions = Column(String)
-    __fdtoken = Column('fdtoken', String)
+    _fdtoken = Column('fdtoken', String)
     password_hash = Column(String)
     password_key = Column(String)
     fdtoken_creation_date = Column(DateTime)
@@ -159,26 +159,26 @@ class ServerBinding(Base):
 
     @declared_attr
     def fdtoken(self):
-        return synonym('__fdtoken', descriptor = property(self.get_fdtoken, self.set_fdtoken))
+        return synonym('_fdtoken', descriptor = property(self.get_fdtoken, self.set_fdtoken))
 
     def get_fdtoken(self):
-        return self.__fdtoken
+        return self._fdtoken
 
     def set_fdtoken(self, v):
-        self.__fdtoken = v
+        self._fdtoken = v
         if v is not None:
             self.fdtoken_creation_date = datetime.now()
 
     @declared_attr
     def remote_password(self):
-        return synonym('__remote_password', descriptor = property(self.get_remote_password, self.set_remote_password))
+        return synonym('_remote_password', descriptor = property(self.get_remote_password, self.set_remote_password))
 
     def get_remote_password(self):
-        return decrypt_password(self.__remote_password, self.password_key)
+        return decrypt_password(self._remote_password, self.password_key)
 
     def set_remote_password(self, v):
         if v is not None:
-            self.__remote_password, self.password_key = encrypt_password(v)
+            self._remote_password, self.password_key = encrypt_password(v)
 
     def invalidate_credentials(self):
         """Ensure that all stored credentials are zeroed."""

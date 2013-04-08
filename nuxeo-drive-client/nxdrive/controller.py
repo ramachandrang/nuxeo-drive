@@ -55,6 +55,7 @@ from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy import func
 from sqlalchemy import asc
 from sqlalchemy import or_
+from sqlalchemy import not_
 
 schema_url = r'federatedloginservices.xml'
 # service_url = 'https://swee.sharpb2bcloud.com/login/auth.ejs'
@@ -398,7 +399,11 @@ class Controller(object):
             session = self.get_session()
         try:
             if local_folder is None:
-                server_binding = session.query(ServerBinding).first()
+                # TODO change the function first() to one() 
+                # Should be only one binding with token and or password
+                server_binding = session.query(ServerBinding).filter(ServerBinding._remote_password != None).\
+                                                              filter(ServerBinding.remote_token != None).\
+                                                              first()
             else:
                 local_folder = normalized_path(local_folder)
                 server_binding = session.query(ServerBinding).filter(
@@ -407,9 +412,13 @@ class Controller(object):
 
         except NoResultFound:
             if raise_if_missing:
-                raise RuntimeError(
-                    _("Folder '%s' is not bound to any %s server")
-                    % (local_folder, Constants.PRODUCT_NAME))
+                msg = _('No bound server found') if local_folder is None else _("Folder '%s' is not bound to any server") % local_folder
+                raise RuntimeError(msg)
+            return None
+        except MultipleResultsFound:
+            msg = _('More than one bound server found') if local_folder is None else _("More than one server is bound to %s") % local_folder
+            if raise_if_missing:
+                raise RuntimeError(msg)
             return None
 
     def list_server_bindings(self, session = None):
