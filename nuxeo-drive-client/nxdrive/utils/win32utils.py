@@ -32,23 +32,26 @@ def update_win32_reg_key(reg, path, attributes = ()):
         _winreg.SetValueEx(key, attribute, 0, type_, value)
     _winreg.CloseKey(key)
 
-def create_shortcut(path, target, wDir = '', icon = ''):
+def create_shortcut(path, target, wDir='', args=None, icon=None):
     try:
         shell = Dispatch('WScript.Shell')
         shortcut = shell.CreateShortCut(path)
-        shortcut.Targetpath = target
+        shortcut.TargetPath = target
         shortcut.WorkingDirectory = wDir
-        if icon == '':
-            pass
-        else:
+        if args:
+            shortcut.Arguments = args
+        if icon:
             shortcut.iconLocation = icon
         shortcut.save()
     except Exception, e:
         log.debug('error creating shortcut %s for %s: %s', path, target, e)
 
-def create_or_replace_shortcut(shortcut, target):
+SUPPORTED_WINVER_MAJOR = 6
+SUPPORTED_WINVER_MINOR = 1
+
+def create_or_replace_shortcut(shortcut, target, args=None):
     win_version = sys.getwindowsversion()
-    if win_version.major == 6 and win_version.minor == 1:
+    if win_version.major >= SUPPORTED_WINVER_MAJOR and win_version.minor >= SUPPORTED_WINVER_MINOR:
         # check if the link already exists
         shlink = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None,
                                               pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
@@ -56,32 +59,17 @@ def create_or_replace_shortcut(shortcut, target):
             shlink.QueryInterface(pythoncom.IID_IPersistFile).Load(shortcut)
             if shlink.GetPath(shell.SLGP_RAWPATH)[0].lower() != target.lower():
                 shlink.SetPath(target)
+                if args:
+                    shlink.SetArguments(args)
                 shlink.QueryInterface(pythoncom.IID_IPersistFile).Save(None, True)
         except pythoncom.com_error as e:
             exe_path = icon = find_exe_path()
             if os.path.splitext(exe_path)[1] == '.py':
                 # FOR TESTING
-                icon = ''
-            create_shortcut(shortcut, target, icon = icon)
+                icon = None
+            create_shortcut(shortcut, target, args=args, icon=icon)
     else:
         # TODO find the Favorites location for other Windows versions
-        pass
+        log.debug("failed to create shortcut. Windows version lower than %d.%d", SUPPORTED_WINVER_MAJOR, SUPPORTED_WINVER_MINOR)
 
-def create_shortcut_if_not_exists(shortcut, target):
-    win_version = sys.getwindowsversion()
-    if win_version.major == 6 and win_version.minor == 1:
-        # check if the link already exists
-        shlink = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None,
-                                              pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
-        try:
-            shlink.QueryInterface(pythoncom.IID_IPersistFile).Load(shortcut)
-        except pythoncom.com_error as e:
-            exe_path = icon = find_exe_path()
-            if os.path.splitext(exe_path)[1] == '.py':
-                # FOR TESTING
-                icon = ''
-            create_shortcut(shortcut, target, icon = icon)
-    else:
-        # TODO find the Favorites location for other Windows versions
-        pass
 
