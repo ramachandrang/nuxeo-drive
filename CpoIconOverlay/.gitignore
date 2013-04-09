@@ -10,10 +10,10 @@
 
 [Dd]ebug/
 [Rr]elease/
-x64/
 build/
-[Bb]in/
 [Oo]bj/
+*.exp
+*.lib
 
 # MSTest test Results
 [Tt]est[Rr]esult*/
@@ -62,19 +62,6 @@ ipch/
 # ReSharper is a .NET coding add-in
 _ReSharper*/
 *.[Rr]e[Ss]harper
-
-# TeamCity is a build add-in
-_TeamCity*
-
-# DotCover is a Code Coverage Tool
-*.dotCover
-
-# NCrunch
-*.ncrunch*
-.*crunch*.local.xml
-
-# Installshield output folder
-[Ee]xpress/
 
 # DocProject is a documentation generator add-in
 DocProject/buildhelp/
