@@ -214,7 +214,6 @@ class Controller(object):
         self.device_id = self.get_device_config().device_id
         self.loop_count = 0
         self._init_storage()
-        self.mydocs_folder = None
         self.synchronizer = Synchronizer(self)
         self.http_server = None
         self.status_thread = None
@@ -494,30 +493,14 @@ class Controller(object):
                                    local_state = 'synchronized',
                                    remote_info = remote_info,
                                    remote_state = 'synchronized')
-            session.add(state)
-#            self.lock_folder(server_binding.local_folder)
-#            mydocs = self.get_mydocs_folder_synced(state, session=session)
-#            if mydocs is not None:
-#                self.lock_folder(mydocs)
-#            otherdocs = self.get_mydocs_folder_synced(state, session=session)
-#            if otherdocs is not None:
-#                self.lock_folder(otherdocs)
-                          
+            session.add(state)                          
             session.commit()      
             return server_binding
         except Exception as e:
             log.debug("Failed to bind server: %s", str(e))
             session.rollback()
             raise
-
-#        self.lock_folder(server_binding.local_folder)
-#        mydocs = self.get_mydocs_folder_synced(state, session=session)
-#        if mydocs is not None:
-#            self.lock_folder(mydocs)
-#        otherdocs = self.get_mydocs_folder_synced(state, session=session)
-#        if otherdocs is not None:
-#            self.lock_folder(otherdocs)
-            
+                    
         session.commit()
         return server_binding
 
@@ -575,14 +558,6 @@ class Controller(object):
         last_known_states = session.query(LastKnownState).filter(LastKnownState.local_folder == binding.local_folder).all()
         for lks in last_known_states:
             session.delete(lks)                
-#        self.unlock_folder(binding.local_folder)
-#        mydocs = self.get_mydocs_folder_synced(binding, session=session)
-#        if mydocs is not None:
-#            self.unlock_folder(mydocs)
-#        otherdocs = self.get_mydocs_folder_synced(binding, session=session)
-#        if otherdocs is not None:
-#            self.unlock_folder(otherdocs)
-#        session.delete(binding)
         session.commit()
 
     def unbind_all(self):
@@ -795,6 +770,7 @@ class Controller(object):
             if client.server_url == server_url:
                 del cache[key]
 
+    # NOT USED
     def _get_mydocs_folder(self, server_binding, session = None):
         if self.mydocs_folder is None:
             if session is None:

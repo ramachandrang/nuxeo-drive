@@ -1684,7 +1684,7 @@ class Synchronizer(object):
 
                 self._update_docs(mydocs_folder, nodes, sb.local_folder, session = session, dirty = dirty)
 
-                othersdocs_folders = nxclient.get_othersdocs()
+                othersdocs_folders = nxclient.get_othersdocs(mydocs_folder['path'])
 
                 # create a fake Others' Docs folder
                 othersdocs_folder = {
@@ -1698,7 +1698,6 @@ class Synchronizer(object):
                     nxclient.get_subfolders(fld, nodes[fld[u'title']])
 
                 self._update_docs(othersdocs_folder, nodes, sb.local_folder, session = session, dirty = dirty)
-                self._controller._get_mydocs_folder(sb, session = session)
                 success = True
             except POSSIBLE_NETWORK_ERROR_TYPES as e:
                 # Ignore expected possible network related errors

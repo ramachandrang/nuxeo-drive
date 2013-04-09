@@ -357,23 +357,21 @@ class RemoteDocumentClient(BaseAutomationClient):
     def get_mydocs(self):
         return self.execute("UserWorkspace.Get")
 
-    def get_othersdocs(self):
-        query = """SELECT * FROM Document WHERE
-                   sh:rootshared = 1 AND
-                   sh:isWritePermission = 1 AND
-                   ecm:currentLifeCycleState!= 'deleted' AND
-                   ecm:mixinType = 'Folderish' AND
-                   dc:creator != 'system' AND
-                   ecm:name != 'Guest Folder' AND
-                   ecm:primaryType!='Domain' AND
-                   ecm:primaryType!='SocialDomain' AND
-                   ecm:mixinType != 'HiddenInNavigation'
-                   AND ecm:mixinType!='HiddenInFacetedSearch' AND
-                   dc:creator != '"+username+"'
-                   """
-
+    def get_othersdocs(self, mydocs_path):
+        query = """SELECT * FROM Document WHERE 
+                   sh:rootshared = 1 AND 
+                   sh:isWritePermission = 1 AND 
+                   ecm:currentLifeCycleState!= 'deleted' AND 
+                   ecm:mixinType = 'Folderish' AND 
+                   dc:creator != 'system' AND 
+                   ecm:name != 'Guest Folder' AND 
+                   ecm:primaryType != 'Domain' AND 
+                   ecm:primaryType != 'SocialDomain' AND 
+                   ecm:mixinType != 'HiddenInNavigation' AND 
+                   ecm:mixinType != 'HiddenInFacetedSearch' AND 
+                   NOT ecm:path STARTSWITH '%s'
+                   """ % mydocs_path
         return self.execute('Document.Query', query = query)[u'entries']
-        # TODO return result - any filtering needed?
 
     def get_subfolders(self, parent, nodes):
         docId = parent[u'uid']
