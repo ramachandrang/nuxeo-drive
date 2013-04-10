@@ -12,6 +12,7 @@ private:
 
 	syncMap myFileSyncMap;
 	time_t cacheResetTimer;
+	bool isValidConn;
 
     void isValidCache();
     void initDb();

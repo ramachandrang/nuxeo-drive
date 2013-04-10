@@ -21,8 +21,8 @@ FileState::FileState(LPCTSTR userPath)
 
 void FileState::isValidCache()
 {
-	bool isValid = urlReader.getConnState();
-	if(!isValid){//no connection clear chace
+	isValidConn = urlReader.getConnState();
+	if(!isValidConn){//no connection clear chace
 		clearCache();
 		return;
 	}
@@ -79,7 +79,7 @@ bool FileState::inProgress(LPCTSTR path)
 		}
 		delete fileFolder;
 		fileFolder = NULL;
-		if(isValidFolder){
+		if(isValidFolder && isValidConn){
 			//MessageBox(NULL, path, L"return false after everything", MB_OK);
 			//SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSHNOWAIT, path, NULL);
 			urlReader.longPull(tempPtr);
