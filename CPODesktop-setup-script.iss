@@ -19,7 +19,7 @@ UsePreviousAppDir=no
 DefaultDirName={pf}\SHARP\Cloud Portal Office Desktop
 DefaultGroupName=Cloud Portal Office Desktop
 OutputDir=dist
-OutputBaseFilename=CPODesktop-0.1.11-Win32-setup
+OutputBaseFilename=CPODesktop-0.1.12.1-Win32-setup
 SetupIconFile=Cloud Portal Office Desktop\icons\CP_Red_Office_64.ico
 UninstallDisplayIcon={app}\icons\CP_Red_Office_64.ico
 UninstallDisplayName=Cloud Portal Office Desktop
@@ -27,8 +27,9 @@ Compression=lzma
 SolidCompression=yes
 ChangesEnvironment=yes
 ChangesAssociations=yes
+;ArchitecturesAllowed=x86 x64
   ;If the machine is x64, then install in x64 bit mode; Else in 32 bit mode
-ArchitecturesInstallIn64BitMode=x64 
+ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
 AlwaysRestart=yes
 ;SignTool=MSSignTool 
@@ -52,22 +53,24 @@ Type: filesandordirs; Name: "{sd}\Users\{username}\.nuxeo-drive";
              ;  The following 2 lines will delete the 2 short cuts created by the installer
 Type: files; Name: "{sd}\Users\{username}\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\CpoDesktop.lnk";   
 Type: files; Name: "{sd}\Users\{username}\Links\Cloud Portal Office.lnk";
+Type: filesandordirs; Name: "{app}";   
+
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; 
 
 [Files]
-Source: "Cloud Portal Office Desktop\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "BatchFiles\*"; DestDir: "{app}\BatchFiles\"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "RedistPackages\*"; DestDir: "{app}\RedistPackages\"; Flags: ignoreversion recursesubdirs;  
+Source: "Cloud Portal Office Desktop\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs 
+Source: "BatchFiles\*"; DestDir: "{app}\BatchFiles\"; Flags: ignoreversion recursesubdirs createallsubdirs uninsrestartdelete
+Source: "RedistPackages\*"; DestDir: "{app}\RedistPackages\"; Flags: ignoreversion recursesubdirs uninsrestartdelete;  
 ;If 64 bit installation
-Source: "dll\64bit\CpoIconOverlayConflicted.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion  ;  Check: Is64BitInstallMode
-Source: "dll\64bit\CpoIconOverlayInProgress.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion ;  Check: Is64BitInstallMode
-Source: "dll\64bit\CpoIconOverlaySynced.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion  ;  Check: Is64BitInstallMode
+Source: "dll\64bit\CpoIconOverlayConflicted.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion uninsrestartdelete  ;  Check: Is64BitInstallMode
+Source: "dll\64bit\CpoIconOverlayInProgress.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion uninsrestartdelete;  Check: Is64BitInstallMode
+Source: "dll\64bit\CpoIconOverlaySynced.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion  uninsrestartdelete;  Check: Is64BitInstallMode
 ;If 32 bit installation
-Source: "dll\32bit\CpoIconOverlayConflicted.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion ;  Check: not Is64BitInstallMode
-Source: "dll\32bit\CpoIconOverlayInProgress.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion ;  Check: not Is64BitInstallMode
-Source: "dll\32bit\CpoIconOverlaySynced.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion  ;  Check: not Is64BitInstallMode
+Source: "dll\32bit\CpoIconOverlayConflicted.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion uninsrestartdelete;  Check: not Is64BitInstallMode
+Source: "dll\32bit\CpoIconOverlayInProgress.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion uninsrestartdelete;  Check: not Is64BitInstallMode
+Source: "dll\32bit\CpoIconOverlaySynced.dll"; DestDir: "{app}\bin\"; Flags: ignoreversion uninsrestartdelete ;  Check: not Is64BitInstallMode
 
 [Icons]                                                                                                        
 Name: "{group}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"
@@ -76,7 +79,6 @@ Name: "{userdesktop}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.e
 ;Name: "{userstartup}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"   
 
 [Run]
-;Filename: {app}\RedistPackages\Setup.exe; Parameters: "/passive /q /norestart "; StatusMsg: Installing 2010 RunTime...
 Filename: "{app}\RedistPackages\64bit\cpo_x64Setup.exe"; Description: "{cm:LaunchProgram, Install Redist packages - 64bit}"; Flags: waituntilterminated ; Check: Is64BitInstallMode
 Filename: "{app}\RedistPackages\32bit\cpo_x86Setup.exe"; Description: "{cm:LaunchProgram, Install Redist packages - 32bit}"; Flags: waituntilterminated ; Check: not Is64BitInstallMode
 Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Parameters:"""{app}""" ; Description: "{cm:LaunchProgram,Register Synch DLL}"; Flags: nowait runhidden 64bit ; Check: Is64BitInstallMode
@@ -84,7 +86,7 @@ Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Parameters:"""{app}""" ; Desc
 Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent 
 
 [UninstallRun]
-Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}""" ; Flags: nowait runhidden 64bit  ; Check: Is64BitInstallMode
+Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}""" ; Flags: nowait runhidden 64bit; Check: Is64BitInstallMode
 Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}""" ; Flags: nowait runhidden ; Check: not Is64BitInstallMode
 
 [Registry]
@@ -96,64 +98,33 @@ Root: HKCU; Subkey: "Software\SHARP\CpoDesktop"; Flags: uninsdeletekey
 [Code]
 procedure Alert(const Text: String);
 begin
-     MsgBox(Text, mbInformation, MB_OK)  ;
+     //MsgBox(Text, mbInformation, MB_OK)  ;
 end;
 
-procedure HandleInstallEventSteps(CurStep: TSetupStep);
+procedure StopApplication();
 var
   ResultCode: integer;
 begin
-  if(CurStep = ssPostInstall)  then
-  begin
-    Alert('After PostInstall');
-    // Start Explorer just After Install
-    Exec( ExpandConstant('{app}\BatchFiles\RegisterSynchDLL.bat'), '''' + ExpandConstant('{app}') + '''', '', SW_SHOW, ewWaitUntilTerminated, ResultCode) ;
-    Alert('After PostInstall After Registering DLLs');
-     // Start Explorer just After Install
-    //Exec( 'explorer', '', '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
-    //Alert('After PostInstall After starting Explorer')     ;
-   end;
-  if(CurStep = ssInstall)  then
-  begin
-    Alert('Before Install') ;
-    // Kill Explorer just Before Install
-    //Exec( 'taskkill', ' /F /IM explorer.exe', '', SW_SHOW, ewWaitUntilTerminated, ResultCode) ;
-    //Alert('Before Install After Killing Explorer')  ;
-  end;
-end;
+    Alert('Stopping Application') ;
+    if Is64BitInstallMode()  then
+      ShellExec( 'open', 'taskkill.exe', '/F /T /IM CPODesktop.exe', '', SW_HIDE, ewNoWait, ResultCode) ;       //For Win 7
+    if Is64BitInstallMode()  then
+      ShellExec( 'open', 'tskill.exe', ' CPODesktop.exe /a /v ', '', SW_HIDE, ewNoWait, ResultCode) ;    //For WinXP
+    if Not Is64BitInstallMode()  then
+      Exec( 'taskkill.exe', '/F /T /IM CPODesktop.exe', '', SW_HIDE, ewNoWait, ResultCode) ;       //For Win 7
+    if Not Is64BitInstallMode()  then
+      Exec( 'tskill.exe', ' CPODesktop.exe /a /v ', '', SW_HIDE, ewNoWait, ResultCode) ;    //For WinXP
+end;     
 
-procedure CurStepChanged(CurStep: TSetupStep);
+function InitializeSetup(): Boolean;
 begin
-  //HandleInstallEventSteps(CurStep);
+  StopApplication();
+  result := True;
 end;
-
-procedure HandleUnnstallEventSteps(CurUninstallStep: TUninstallStep);
-var
-  ResultCode: integer;
+ 
+function InitializeUninstall(): Boolean;
 begin
-  if(CurUninstallStep = usPostUninstall)  then
-  begin
-    Alert('After PostUninstall');
-    // Start Explorer just After Unnstall
-    //Exec( 'explorer', '', '', SW_SHOW, ewWaitUntilTerminated, ResultCode) ;
-    //Alert('After PostUninstall After starting Explorer')     ;
-  end;
-  if(CurUninstallStep = usUninstall)  then
-  begin
-    Alert('Before Uninstall') ;
-    // Kill Explorer just Before Uninstall
-    //Exec( 'taskkill', ' /F /IM explorer.exe', '', SW_SHOW, ewWaitUntilTerminated, ResultCode) ;
-    //Alert('Before Uninstall After Killing Explorer')  ;
-    // Start Explorer just After Install
-    Exec( ExpandConstant('{app}\BatchFiles\UnregisterSynchDLL.bat'), ExpandConstant('{app}'), '', SW_SHOW, ewWaitUntilTerminated, ResultCode) ;
-    Alert('After PostUninstall After Registering DLLs')     ;
-  end;
+  StopApplication();
+  result := True;
 end;
-
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-begin
-  //HandleUnnstallEventSteps(CurUninstallStep);
-end;
-
-
 
