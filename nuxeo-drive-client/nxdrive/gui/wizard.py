@@ -83,7 +83,7 @@ class CpoWizard(QWizard):
             self.setPixmap(QWizard.BackgroundPixmap, QPixmap(Constants.APP_IMG_WIZARD_BKGRND))
             self.setWizardStyle(QWizard.MacStyle)
         elif sys.platform == 'win32':
-            self.setPixmap(QWizard.LogoPixmap, QPixmap(Constants.APP_IMG_WIZARD_BANNER))
+#            self.setPixmap(QWizard.LogoPixmap, QPixmap(Constants.APP_IMG_WIZARD_BANNER))
             self.setPixmap(QWizard.WatermarkPixmap, QPixmap(Constants.APP_IMG_WIZARD_WATERMARK))
             self.setWizardStyle(QWizard.ModernStyle)
 
@@ -250,7 +250,7 @@ class IntroPage(QWizardPage):
 
         self.setTitle(welcome)
         # force logo display on win32
-        self.setSubTitle(' ')
+#        self.setSubTitle(' ')
         self.lblInstr = QLabel(self.tr('Please sign in to %s') % Constants.PRODUCT_NAME)
         self.lblInstr.setToolTip(Constants.CLOUDDESK_URL)
         # BEGIN remove site url
@@ -451,7 +451,7 @@ class InstallOptionsPage(QWizardPage):
 
         self.setTitle(self.tr('Choose Setup Type'))
         # force logo display on win32
-        self.setSubTitle(' ')
+#        self.setSubTitle(' ')
         # Typical option
         self.rdButtonTypical = QRadioButton(self)
 #        self.lblImgTypical = QLabel()
@@ -590,7 +590,7 @@ class GuideOnePage(QWizardPage):
         
         # force logo display on win32
         # Note: title must be initialized with the page since it displays user's name
-        self.setSubTitle(' ')
+#        self.setSubTitle(' ')
 
         click_type = 'right ' if sys.platform == 'win32' else ''    
         from nxdrive.gui.resources import find_icon
@@ -605,7 +605,7 @@ class GuideOnePage(QWizardPage):
                                         "shared with you by others. This mirrors the {0} website structure.").format(Constants.PRODUCT_NAME, click_type, img_tag1))
 
         self.lblDetail.setWordWrap(True)
-        self.lblDetail.setStyleSheet('QLabel { font-size: 10px }')
+        self.lblDetail.setStyleSheet('QLabel { font-size: 12px }')
         self.lblImg = QLabel()
         self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_FINDER_FOLDERS))
         vLayout = QVBoxLayout()
@@ -632,7 +632,7 @@ class GuideTwoPage(QWizardPage):
 
         self.setTitle(self.tr('Access your files from everywhere using %s!') % Constants.PRODUCT_NAME)
         # force logo display on win32
-        self.setSubTitle(' ')
+#        self.setSubTitle(' ')
         click_type = 'right ' if sys.platform == 'win32' else ''
         from nxdrive.gui.resources import find_icon
         icon1_path = find_icon(Constants.ICON_APP_ENABLED)
@@ -650,7 +650,7 @@ class GuideTwoPage(QWizardPage):
         self.lblDetail.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
         self.lblDetail.setOpenExternalLinks(True)
         self.lblDetail.setWordWrap(True)
-        self.lblDetail.setStyleSheet('QLabel { font-size: 10px }')
+        self.lblDetail.setStyleSheet('QLabel { font-size: 12px }')
         self.lblImg = QLabel()
         self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_ACCESS_FILES))
         vLayout = QVBoxLayout()
@@ -664,7 +664,7 @@ class GuideThreePage(QWizardPage):
 
         self.setTitle(self.tr('The %s Notification Icon') % Constants.APP_NAME)
         # force logo display on win32
-        self.setSubTitle(' ')
+#        self.setSubTitle(' ')
         from nxdrive.gui.resources import find_icon
         icon1_path = find_icon(Constants.ICON_APP_ENABLED)
         data_uri1 = open(icon1_path, "rb").read().encode("base64").replace("\n", "")
@@ -674,7 +674,7 @@ class GuideThreePage(QWizardPage):
         img_tag2 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri2)
         click_type = 'right ' if sys.platform == 'win32' else ''
         sys_bar = 'PC System Tray' if sys.platform == 'win32' else 'Mac Menu Bar'
-        self.lblDetail = QLabel(self.tr("<html><body style='font-size:10px'>Your {0} will display {1} icon for convenient access."
+        self.lblDetail = QLabel(self.tr("<html><body style='font-size:12px'>Your {0} will display {1} icon for convenient access."
                                         "<br>{2} means you are signed in and connected.<br/>"
                                         "Note: an animated icon indicates synchronization is in progress."
                                         "<br>{3} shows you are offline.<br/>"
@@ -683,7 +683,7 @@ class GuideThreePage(QWizardPage):
                              format(sys_bar, Constants.PRODUCT_NAME, img_tag1, img_tag2, click_type))
                                 
         self.lblDetail.setWordWrap(True)
-        self.lblDetail.setStyleSheet('QLabel { font-size: 10px }')
+        self.lblDetail.setStyleSheet('QLabel { font-size: 12px }')
         
         self.lblImg = QLabel()
         self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_APPBAR))
@@ -699,7 +699,7 @@ class AdvancedPage(QWizardPage):
 
         self.setTitle(self.tr('Advanced Setup'))
         # force logo display on win32
-        self.setSubTitle(' ')
+#        self.setSubTitle(' ')
         folderGroup = QGroupBox(self.tr('Select Location'))
         innerVLayout1 = QVBoxLayout()
         innerVLayout1.setObjectName('innerVLayout1')
