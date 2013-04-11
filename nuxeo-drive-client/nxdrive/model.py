@@ -179,6 +179,8 @@ class ServerBinding(Base):
     def set_remote_password(self, v):
         if v is not None:
             self._remote_password, self.password_key = encrypt_password(v)
+        else:
+            self._remote_password = self.password_key = None
 
     def invalidate_credentials(self):
         """Ensure that all stored credentials are zeroed."""
@@ -186,6 +188,7 @@ class ServerBinding(Base):
         self.remote_token = None
         self.password_hash = None
         self.federated_token = None
+        self.fdtoken_creation_date = None
 
     def has_invalid_credentials(self):
         """Check whether at least one credential is active"""
@@ -263,7 +266,9 @@ class ServerBinding(Base):
     def reset_nags(self):
         self.next_maint_nag_notification = None
         self.next_nag_upgrade_notification = None
+        self.next_nag_quota = None
         self.nag_signin = False
+        self.next_maintenance_check = None
         
     def nag_quota_exceeded(self):
         if self.next_nag_quota is None:
@@ -277,6 +282,12 @@ class ServerBinding(Base):
     def update_storage(self, used, total):
         self.total_storage = total
         self.used_storage = used
+        
+    def reset(self):
+        self.invalidate_credentials()
+        self.maintenance = False
+        self.quota_exceeded = False
+        self.reset_nags()
 
 class SyncFolders(Base):
     __tablename__ = 'sync_folders'

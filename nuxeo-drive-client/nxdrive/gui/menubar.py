@@ -384,9 +384,16 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if self.local_folder is not None:
             return self.local_folder
 
-        # get the 'first' existing binding, if any
+        # get the connected binding, if any
         binding = self.controller.get_server_binding(raise_if_missing = False)
-        self.local_folder = binding.local_folder if binding is not None else DEFAULT_EX_NX_DRIVE_FOLDER
+        if binding is None:
+            bindings = self.controller.list_server_bindings()
+            if len(bindings) == 1:
+                binding = bindings[0]
+        if binding:
+            self.local_folder = binding.local_folder 
+        else:
+            self.local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
 
         return self.local_folder
 
@@ -537,6 +544,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         """Called from controller when the sync thread target (controller.loop) starts"""
         log.debug('Synchronization started')
         self.state = Constants.APP_STATE_RUNNING
+        log.debug('app is %s', self.state)
 #        self.communicator.menu.emit()
         self.update_running_icon()
 
@@ -545,6 +553,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         log.debug('Synchronization stopped')
         self.notify_stop_transfer()
         self.state = Constants.APP_STATE_STOPPED
+        log.debug('app is %s', self.state)
         self.worker = None
         self.update_running_icon()
 #        self.communicator.menu.emit()
@@ -573,6 +582,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.communicator.menu.emit()
 
     def notify_offline(self, local_folder, exception = None):
+        if self.isStoppedOrQuitting():
+            return
+            
         info = self.get_info(local_folder)
         if exception is not None:
             code = getattr(exception, 'code', None)
@@ -608,7 +620,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.communicator.invalid_credentials.emit(local_folder)
             
     def notify_pending(self, local_folder, n_pending, or_more = False):
-        if self.state == Constants.APP_STATE_QUITTING:
+        if self.isStoppedOrQuitting():
             return
 
         info = self.get_info(local_folder)
@@ -634,7 +646,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def notify_pending_details(self, status):
         """NOT USED"""
-        if self.state == Constants.APP_STATE_QUITTING:
+        if self.isStoppedOrQuitting():
             return
 
         local_folder = self._get_local_folder()
@@ -667,7 +679,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def notify_sync_completed(self, status):
         """Update menu and create a notification message"""
-        if self.state == Constants.APP_STATE_QUITTING:
+        if self.isStoppedOrQuitting():
             return
 
         self.communicator.menu.emit()
@@ -709,21 +721,21 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
 
     def notify_start_transfer(self):
-        if self.state != Constants.APP_STATE_QUITTING:
+        if self.isStoppedOrQuitting():
             self.communicator.icon.emit('enabled_start')
 
     def notify_stop_transfer(self):
-        if self.state != Constants.APP_STATE_QUITTING:
+        if self.isStoppedOrQuitting():
             self.communicator.icon.emit('enabled_stop')
 
     def notify_pause_transfer(self):
-        if self.state != Constants.APP_STATE_QUITTING:
+        if self.isStoppedOrQuitting():
             self.communicator.icon.emit('enabled_pause')
 
     def notify_local_folders(self, local_folders):
         """Cleanup unbound server bindings if any"""
 
-        if self.state == Constants.APP_STATE_QUITTING:
+        if self.isStoppedOrQuitting():
             return
 
         refresh = False
@@ -742,19 +754,17 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.update_running_icon()
 
     def notify_folders_changed(self):
-        if self.state != Constants.APP_STATE_QUITTING:
+        if self.isStoppedOrQuitting():
             self.communicator.folders.emit()
 
     def quit(self):
-        if self.state != Constants.APP_STATE_QUITTING:
-            self.state = Constants.APP_STATE_QUITTING
-            self.quit_on_stop = True
-            self.communicator.menu.emit()
-
-        if self.state != Constants.APP_STATE_STOPPED:
-            self.communicator.icon.emit('stopping')
-
         if self.worker is not None and self.worker.isAlive():
+            if self.state != Constants.APP_STATE_QUITTING:
+                self.state = Constants.APP_STATE_QUITTING
+                log.debug('app is %s', self.state)
+                self.quit_on_stop = True
+                self.communicator.menu.emit()
+                self.communicator.icon.emit('stopping')
             # Ask the controller to stop: the synchronization loop will in turn
             # call notify_sync_stopped and finally handle_stop
             # This could be a race condition, resume first if paused
@@ -795,6 +805,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionUpgrade.setVisible(connected and self._is_new_version_available())
         self.actionStatus.setText(self._syncStatus())
         self.actionCommand.setText(self._syncCommand())
+        self.actionCommand.setEnabled(not self.isQuitting())
         self.actionOpenCloudDeskFolder.setText('Open %s Folder' % os.path.basename(self._get_local_folder()))
         # TO DO synchronize the stop between the 2 threads
         # Do not disable the 'quit' menu for now
@@ -916,7 +927,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         elif self.state == Constants.APP_STATE_RUNNING:
             return self.tr("Running")
         elif self.state == Constants.APP_STATE_QUITTING:
-            return self.tr('Exiting...')
+            if sys.platform == 'darwin':
+                return self.tr('Quitting...')
+            else:
+                return self.tr('Exiting...')
 
     def doWork(self):
         if self.state == Constants.APP_STATE_STOPPED:
@@ -953,6 +967,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.actionStatus.setText(self.tr("Completed"))
 
     def _pauseSync(self):
+        if self.isStoppedOrQuitting():
+            return
         self.worker.pause()
 
     def _resumeSync(self):
@@ -964,6 +980,12 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             log.info("application quit.")
             self.quit()
 
+    def isStoppedOrQuitting(self):
+        return self.state == Constants.APP_STATE_QUITTING or self.state == Constants.APP_STATE_STOPPED
+
+    def isQuitting(self):
+        return self.state == Constants.APP_STATE_QUITTING
+        
     @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
     def handle_message(self, title, message, icon_type):
         if self.notifications:

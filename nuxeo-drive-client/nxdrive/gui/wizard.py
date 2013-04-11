@@ -58,15 +58,16 @@ class CpoWizard(QWizard):
         super(CpoWizard, self).__init__(parent)
 
         self.controller = controller
-        self.server_binding = None
         self.controller.synchronizer.register_frontend(self)
         self.session = self.controller.get_session()
         self.communicator = Communicator.getCommunicator()
+        # get the server binding for authenticated user and server
+        self.local_folder = self.get_local_folder()
+        self.server_binding = self.controller.get_server_binding(self.local_folder)  
+        self.keep_location = self.server_binding is not None
         self.options = options
         self.skip = False
-        self.keep_location = False
-        self.local_folder = None
-
+        
         self.addPage(IntroPage())  # 0
         self.addPage(InstallOptionsPage())  # 1
         self.addPage(GuideOnePage())  # 2
@@ -161,6 +162,20 @@ class CpoWizard(QWizard):
         username = self.field('username')
         pwd = self.field('pwd')
         self.server_binding = self.controller.bind_server(folder, url, username, pwd)
+        
+    def get_local_folder(self):
+        # get the connected binding, if any
+        server_binding = self.controller.get_server_binding(raise_if_missing = False)
+        if server_binding is None:
+            bindings = self.controller.list_server_bindings()
+            if len(bindings) == 1:
+                server_binding = bindings[0]
+        if server_binding:
+            local_folder = server_binding.local_folder 
+        else:
+            local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
+
+        return local_folder
 
     def notify_folders_changed(self):
         self.communicator.folders.emit()
@@ -251,6 +266,8 @@ class IntroPage(QWizardPage):
         self.txtPwd = QLineEdit()
         self.lblPwd.setBuddy(self.txtPwd)
         self.txtPwd.setEchoMode(QLineEdit.Password)
+        self.txtPwd.textEdited.connect(self.password_text_changed)
+        self.password_has_changed = False
         self.lblMessage = QLabel()
         self.lblMessage.setObjectName('message')
         self.lblMessage.setWordWrap(True)
@@ -291,6 +308,12 @@ class IntroPage(QWizardPage):
         self.registerField('username*', self.txtUsername)
         self.registerField('pwd*', self.txtPwd)
 
+    def password_text_changed(self, text):
+        if not self.password_has_changed:
+            self.password_has_changed = True
+            self.auth_ok = False
+            self.lblMessage.clear()
+        
     def initializePage(self):
 #        self.wizard().setTitleFormat(Qt.RichText)
         # clear previous proxy setting
@@ -301,6 +324,20 @@ class IntroPage(QWizardPage):
         settings.setValue('preferences/proxyRealm', '')
         settings.setValue('preferences/proxyAuthN', False)
         self.btnProxy.clicked.connect(self.showProxy)
+
+        server_binding = self.wizard().server_binding
+        user = server_binding.remote_user if server_binding else Constants.ACCOUNT
+        pwd = server_binding.get_remote_password() if server_binding else None
+        self.txtUsername.setText(user)
+        self.txtPwd.setText(pwd)
+        self.txtUsername.setReadOnly(server_binding is not None)
+        self.wizard().keep_location = server_binding is not None
+        if server_binding \
+           and not server_binding.has_invalid_credentials() \
+           and not self.password_has_changed:
+            self.lblMessage.setText(self.tr("User %s is already signed in.") % user)
+            self.lblMessage.setVisible(True)
+            self.auth_ok = True
 
     def login(self):
         if self.auth_ok:
@@ -321,8 +358,7 @@ class IntroPage(QWizardPage):
             username = self.txtUsername.text()
             password = self.txtPwd.text()
 #            self.wizard().controller.validate_credentials(url, username, password)
-            local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
-            self.wizard().local_folder = local_folder
+            self.wizard().local_folder = local_folder = self.wizard().get_local_folder()
             # create the default server binding
             self.wizard()._bind(url, local_folder)
             
@@ -401,9 +437,12 @@ class IntroPage(QWizardPage):
 #        return bool(self.txtUsername.text()) and bool(self.txtPwd.text())
 
     def validatePage(self):
+        self.password_has_changed = False
         self.lblMessage.clear()
-        self.setCommitPage(True)
-        return self.login()
+        result = self.login()
+        if result:
+            self.setCommitPage(True)
+        return result        
 
 class InstallOptionsPage(QWizardPage):
     def __init__(self, parent = None):
@@ -480,8 +519,7 @@ class InstallOptionsPage(QWizardPage):
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
             # get the server binding for authenticated user and server
-            local_folder = DEFAULT_EX_NX_DRIVE_FOLDER
-            server_binding = self.wizard().controller.get_server_binding(local_folder)
+            server_binding = self.wizard().server_binding
             # retrieve folders for typical setup
             self.wizard().controller.synchronizer.get_folders(server_binding=server_binding)
             self.wizard().controller.synchronizer.update_roots(server_binding=server_binding)
@@ -496,13 +534,13 @@ class InstallOptionsPage(QWizardPage):
     def validatePage(self):
         if not self.rdButtonAdvanced.isChecked():
             # 'typical' route
-            folder = DEFAULT_EX_NX_DRIVE_FOLDER
+            folder = self.wizard().local_folder
 
             if os.path.exists(folder) and not self.wizard().keep_location:
                 msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
                                                           self.tr("Folder %s already exists. Do you want to use it?" % folder))
-                msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one on the Advanced next page."
-                                                  "Note that if you keep this folder, some files/folders may not be synchronized correctly."))
+                msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one on the Advanced next page.\n"
+                                                  "Note that if this folder was used by a different user, some files/folders may not be synchronized correctly."))
                 msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                 ret = msgbox.exec_()
                 if ret == QMessageBox.No:
@@ -636,11 +674,11 @@ class GuideThreePage(QWizardPage):
         img_tag2 = '<img alt="sample" src="data:image/png;base64,{0}">'.format(data_uri2)
         click_type = 'right ' if sys.platform == 'win32' else ''
         sys_bar = 'PC System Tray' if sys.platform == 'win32' else 'Mac Menu Bar'
-        self.lblDetail = QLabel(self.tr("<html><body style='font-size:10px'>Your %s will display {0} icon for convenient access."
-                                        "<br>{1} means you are signed in and connected.<br/>"
+        self.lblDetail = QLabel(self.tr("<html><body style='font-size:10px'>Your {0} will display {1} icon for convenient access."
+                                        "<br>{2} means you are signed in and connected.<br/>"
                                         "Note: an animated icon indicates synchronization is in progress."
-                                        "<br>{2} Shows your are offline.<br/>"
-                                        "To connect, <b>{3}click</b> {1} and select <b>Properties</b>. Select <b>Account</b> tab and enter your credentials. "
+                                        "<br>{3} shows you are offline.<br/>"
+                                        "To connect, <b>{4}click</b> {2} and select <b>Properties</b>. Select <b>Account</b> tab and enter your credentials. "
                                         "You will be automatically logged in from now on.</body></html>").\
                              format(sys_bar, Constants.PRODUCT_NAME, img_tag1, img_tag2, click_type))
                                 
@@ -665,15 +703,14 @@ class AdvancedPage(QWizardPage):
         folderGroup = QGroupBox(self.tr('Select Location'))
         innerVLayout1 = QVBoxLayout()
         innerVLayout1.setObjectName('innerVLayout1')
-        self.default_folder = os.path.split(DEFAULT_EX_NX_DRIVE_FOLDER)[0]
-        self.rdLocationDefault = QRadioButton(self.tr('Install the %s folder in %s') % (Constants.PRODUCT_NAME, self.default_folder))
+        # fake label for default radiobutton
+        self.rdLocationDefault = QRadioButton(self.tr('Install the %s folder in this location') % Constants.PRODUCT_NAME)
         self.rdLocationSelect = QRadioButton(self.tr('Choose your %s location') % Constants.PRODUCT_NAME)
         innerVLayout1.addWidget(self.rdLocationDefault)
         innerHLayout1 = QHBoxLayout()
         innerHLayout1.setObjectName('innerHLayout1')
         self.txtLocationSelect = QLineEdit()
         self.txtLocationSelect.setMinimumWidth(320)
-        self.txtLocationSelect.setText(self.default_folder)
         self.btnLocationSelect = QPushButton(self.tr('Change...'))
         self.btnLocationSelect.setMinimumWidth(100)
         innerHLayout1.addWidget(self.txtLocationSelect)
@@ -723,25 +760,30 @@ class AdvancedPage(QWizardPage):
         self.registerField('default_sync', self.rdSyncDefault)
 
     def initializePage(self):
+        local_folder = self.wizard().local_folder
+        self.default_folder = os.path.split(local_folder)[0]
+        self.rdLocationDefault.setText(self.tr('Install the %s folder in %s') % (Constants.PRODUCT_NAME, self.default_folder))
         self.rdLocationDefault.setChecked(True)
         self.btnLocationSelect.setEnabled(False)
+        self.txtLocationSelect.setText(self.default_folder)
         self.txtLocationSelect.setEnabled(False)
         self.rdSyncDefault.setChecked(True)
         self.btnSyncSelect.setEnabled(False)
         self.wizard().add_skip_tour()
 
     def validatePage(self):
-        location = os.path.split(DEFAULT_EX_NX_DRIVE_FOLDER)[0]
+        local_folder = self.wizard().local_folder
+        location = os.path.split(local_folder)[0]
         if not self.rdLocationDefault.isChecked():
             location = self.txtLocationSelect.text()
 
-        folder = os.path.join(location, Constants.DEFAULT_NXDRIVE_FOLDER)
+        local_folder = os.path.join(location, Constants.DEFAULT_NXDRIVE_FOLDER)
         url = Constants.CLOUDDESK_URL
-        if os.path.exists(folder) and not self.wizard().keep_location:
+        if os.path.exists(local_folder) and not self.wizard().keep_location:
             msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
-                                                      self.tr("Folder %s already exists. Do you want to use it?" % folder))
-            msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one."
-                                              "Note that if you keep this folder, some files/folders may not be synchronized correctly."))
+                                                      self.tr("Folder %s already exists. Do you want to use it?" % local_folder))
+            msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one.\n"
+                                              "Note that if this folder was used by a different user, some files/folders may not be synchronized correctly."))
             msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             ret = msgbox.exec_()
             # BUG?! when the default (radio button) location is selected, the MessageBox is ok.
@@ -755,7 +797,7 @@ class AdvancedPage(QWizardPage):
                 return False
             else:
                 self.wizard().keep_location = True
-                self.wizard().local_folder = folder
+                self.wizard().local_folder = local_folder
         else:
             if (not os.path.exists(location)):
                 mbox = QMessageBox(QMessageBox.Warning, Constants.APP_NAME, self.tr("Folder %s does not exist.") % location)
@@ -765,17 +807,15 @@ class AdvancedPage(QWizardPage):
                     self.txtLocationSelect.selectAll()
                     return False
 
-            if not os.path.exists(folder):
-                os.makedirs(folder)
+            if not os.path.exists(local_folder):
+                os.makedirs(local_folder)
                 self.setCommitPage()
                 if self.wizard().local_folder is not None:
                     os.unlink(self.wizard().local_folder)
 
-            self.wizard().local_folder = folder
+            self.wizard().local_folder = local_folder
 
-        if self.wizard()._unbind_if_bound(folder):
-            self.wizard()._bind(url, folder)
-
+        self.wizard()._bind(url, local_folder)
         return True
 
     def cleanupPage(self):
@@ -801,6 +841,8 @@ class AdvancedPage(QWizardPage):
                         current_location, QFileDialog.DontResolveSymlinks)
         if not selected_location:
             selected_location = self.default_folder
+        if current_location != selected_location:
+            self.wizard().keep_location = False
         self.txtLocationSelect.setText(selected_location)
 
     def sync_select(self):
