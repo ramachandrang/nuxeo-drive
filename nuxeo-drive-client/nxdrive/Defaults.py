@@ -4,12 +4,12 @@ Created on Mar 30, 2013
 @author: mconstantin
 '''
 # [cloud-portal-office]
-DEFAULT_CLOUDDESK_URL = r'https://devdm.sharpb2bcloud.com/app1'
-DEFAULT_ACCOUNT = "user1@dt1.com"
+DEFAULT_CLOUDDESK_URL = r'https://qadm.sharpb2bcloud.com/app1'
+DEFAULT_ACCOUNT = ''
 
 # [services]
-MAINTENANCE_SERVICE_URL = r'https://dev-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
-UPGRADE_SERVICE_URL = r'https://dev-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
+MAINTENANCE_SERVICE_URL = r'https://qa-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
+UPGRADE_SERVICE_URL = r'https://qa-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
 
 # [misc]
 NOTIFICATION_MESSAGE_DELAY = 3  # in seconds
