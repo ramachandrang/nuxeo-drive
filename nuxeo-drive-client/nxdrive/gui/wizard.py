@@ -316,7 +316,7 @@ class IntroPage(QWizardPage):
         try:
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
-            
+            self.auth_ok = False
             url = Constants.CLOUDDESK_URL
             username = self.txtUsername.text()
             password = self.txtPwd.text()
@@ -336,7 +336,6 @@ class IntroPage(QWizardPage):
         except Unauthorized:
             msg = self.tr('Invalid credentials.')
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
-            self.auth_ok = False
         except DeviceQuotaExceeded as e:
             controller = self.wizard().controller
             client = controller.remote_doc_client_factory(url, username, controller.device_id, password)
@@ -358,12 +357,10 @@ class IntroPage(QWizardPage):
                             }
             url = p1 + p2 + p3 + p4 + urllib.urlencode(query_params)
             self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
-            self.auth_ok = False
             msg = e.message % (e.max_devices, url)
         except RuntimeError as e:
             msg = str(e)
         except Exception as e:
-            self.auth_ok = False
             self.wizard().controller.invalidate_client_cache(Constants.CLOUDDESK_URL)
             self.wizard().controller.reset_proxy()
             # retry with proxy set to auto-detect
