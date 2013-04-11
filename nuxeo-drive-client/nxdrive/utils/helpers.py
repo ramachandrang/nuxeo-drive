@@ -94,6 +94,8 @@ def get_maintenance_message(status, schedule = None):
         detail = 'Due to maintenance.'
         data1 = data2 = None
     elif schedule is not None:
+        # DO NOT use the service name... it' the wrong string: "Cloud portal Service".
+        # use "Cloud Portal Office" instead
         service = schedule['Service']
         # get UTC times
         start_utc = datetime.strptime(schedule['FromDate'], '%Y-%m-%dT%H:%M:%SZ')
@@ -106,11 +108,13 @@ def get_maintenance_message(status, schedule = None):
         data1 = start_local = start_utc.astimezone(to_tz)
         data2 = end_local = end_utc.astimezone(to_tz)
         if status == 'maintenance':
-            msg = _("%s is currently offline.") % service
+#            msg = _("%s is currently offline.") % service
+            msg = _("%s is currently offline.") % Constants.SERVICE_NAME
             detail = _("Due to maintenance from %s to %s.") % \
                              (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         elif status == 'available':
-            msg = _("%s is scheduled for maintenance.") % service
+#            msg = _("%s is scheduled for maintenance.") % service
+            msg = _("%s is scheduled for maintenance.") % Constants.SERVICE_NAME
             detail = _("From %s to %s.") % \
                              (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         else:
@@ -121,7 +125,7 @@ def get_maintenance_message(status, schedule = None):
 
 def create_settings():
     QCoreApplication.setOrganizationDomain(Constants.COMPANY_NAME)
-    QCoreApplication.setApplicationName(Constants.SHORT_APP_NAME)
+    QCoreApplication.setApplicationName(Constants.APP_NAME)
     return QSettings()
 
 def create_config_file(config_file):    

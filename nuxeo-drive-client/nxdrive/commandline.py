@@ -385,7 +385,7 @@ class CliHandler(object):
             # this is useful for the edit / open link in the Nuxeo interface
             register_protocol_handlers(self.controller)
             # Ensure that ndrive is registered as a startup application
-            register_startup()
+            register_startup(True)
         try:
             return handler(options)
         except Exception, e:

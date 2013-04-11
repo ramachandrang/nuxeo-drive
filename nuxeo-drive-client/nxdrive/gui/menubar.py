@@ -342,23 +342,15 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def _authenticate(self):
         # Launch the GUI to create a binding
         from nxdrive.gui.authentication import prompt_authentication
-        server_binding = self.controller.get_server_binding(self.local_folder,
-                                                            raise_if_missing = False)
-        if server_binding is None:
-            if self.local_folder is None:
-                self.local_folder = DEFAULT_NX_DRIVE_FOLDER
-            success = prompt_authentication(self.controller, self.local_folder)
-        else:
-            success = prompt_authentication(self.controller, server_binding.local_folder,
-                                   url = server_binding.server_url,
-                                   username = server_binding.remote_user)
-
-        if success[0]:
-            if self.local_folder is None:
-                self.local_folder = server_binding.local_folder
-            self.server_binding = self.controller.get_server_binding(self.local_folder)
-
-        return success[0]
+        
+        username = self._getUserName()
+        is_user_readonly = self.server_binding is not None
+        result = prompt_authentication(self.controller, self.local_folder,
+                                   url = Constants.CLOUDDESK_URL,
+                                   username = username,
+                                   is_user_readonly = is_user_readonly)
+        self.server_binding = self.controller.get_server_binding(self.local_folder)
+        return result[0]
 
     def handle_recoverable_error(self, text, info, buttons):
         mbox = QMessageBox(QMessageBox.Critical, Constants.APP_NAME, text)
@@ -721,15 +713,15 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
 
     def notify_start_transfer(self):
-        if self.isStoppedOrQuitting():
+        if not self.isStoppedOrQuitting():
             self.communicator.icon.emit('enabled_start')
 
     def notify_stop_transfer(self):
-        if self.isStoppedOrQuitting():
+        if not self.isStoppedOrQuitting():
             self.communicator.icon.emit('enabled_stop')
 
     def notify_pause_transfer(self):
-        if self.isStoppedOrQuitting():
+        if not self.isStoppedOrQuitting():
             self.communicator.icon.emit('enabled_pause')
 
     def notify_local_folders(self, local_folders):
@@ -754,7 +746,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.update_running_icon()
 
     def notify_folders_changed(self):
-        if self.isStoppedOrQuitting():
+        if not self.isStoppedOrQuitting():
             self.communicator.folders.emit()
 
     def quit(self):
@@ -793,11 +785,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         session = self.controller.get_session()
         username = self._getUserName()
-        self.actionUsername.setText(username if username else self.tr('Not signed in'))
-        connected = len(self.binding_info.values()) > 0
+        connected = self._is_connected()
+        self.actionUsername.setText(username if connected else self.tr('Not signed in'))
         self.actionShowCloudDeskInfo.setEnabled(connected)
         # Notification (for maintenance info) menu is always available
-        self.actionNotification.setEnabled(len(self.binding_info.values()) > 0)
+        self.actionNotification.setEnabled(connected)
         maint_info = self._is_maintenance_info_available()
         icon = QIcon(Constants.APP_ICON_MENU_MAINT) if maint_info else QIcon()
         self.actionNotification.setIcon(icon)
@@ -871,7 +863,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.binding_info.clear()
         for sb in self.controller.list_server_bindings():
             # assume online until connecting to server proves otherwise
-            self.get_binding_info(sb.local_folder).online = True
+            self.get_binding_info(sb.local_folder).online = not sb.has_invalid_credentials()
 
 
     def setupProcessing(self):
@@ -944,18 +936,24 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
 
     def _doSync(self):
-        if len(self.controller.list_server_bindings()) == 0:
+        if not self._is_connected():
             # Launch the GUI to create a binding
             from nxdrive.gui.authentication import prompt_authentication
+            username = self._getUserName()
+            is_user_readonly = self.server_binding is not None
             result = prompt_authentication(self.controller, self.local_folder,
                                        url = Constants.CLOUDDESK_URL,
-                                       username = Constants.ACCOUNT)
+                                       username = username,
+                                       is_user_readonly = is_user_readonly)
             ok = result[0]
             if not ok:
                 return
             self.server_binding = self.controller.get_server_binding(self.local_folder)
         self.setupProcessing()
 
+    def _is_connected(self):
+        return self.server_binding is not None and not self.server_binding.has_invalid_credentials()
+    
     def started(self):
         self.actionCommand.setText(self.tr("Pause"))
         self.actionStatus.setText(self.tr("Syncing"))
