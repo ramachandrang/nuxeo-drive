@@ -37,6 +37,8 @@ try:
         return base64.standard_b64encode(encpwd), base64.standard_b64encode(pwdhash)
 
     def decrypt_password(encpwd, pwdhash = ''):
+        if encpwd is None: return encpwd
+        
         pwdhash = base64.standard_b64decode(pwdhash)
         if sys.platform == 'win32':
             desc = ''

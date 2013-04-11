@@ -47,6 +47,7 @@ class Dialog(QDialog):
         self.message_area.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
         self.message_area.setOpenExternalLinks(True)
         self.message_area.setWordWrap(True)
+        self.message_area.setMinimumHeight(40)
         mainLayout.addWidget(self.message_area)
         mainLayout.addWidget(buttonBox)
         self.setLayout(mainLayout)
@@ -98,7 +99,8 @@ class Dialog(QDialog):
 
 
 def prompt_authentication(controller, local_folder, url = None, username = None,
-                          is_url_readonly = False, parent = None, app = None, update = True):
+                          is_url_readonly = False, is_user_readonly = False, 
+                          parent = None, app = None, update = True):
     """Prompt a QT dialog to ask for user credentials for binding a server"""
     global is_dialog_open
 
@@ -126,6 +128,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
             'id': 'username',
             'label': 'Username:',
             'value': username,
+            'is_readonly': is_user_readonly,
         },
         {
             'id': 'password',

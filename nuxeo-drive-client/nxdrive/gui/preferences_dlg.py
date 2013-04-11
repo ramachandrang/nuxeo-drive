@@ -20,7 +20,7 @@ from nxdrive.model import ServerBinding, RecentFiles, LastKnownState, ServerEven
 from nxdrive.controller import default_nuxeo_drive_folder
 from nxdrive.logging_config import get_logger
 from nxdrive.utils import create_settings
-from nxdrive.utils import register_startup_darwin
+from nxdrive.utils import register_startup
 from nxdrive.utils import EventFilter
 from nxdrive.utils import win32utils
 from nxdrive.utils.helpers import find_exe_path
@@ -90,9 +90,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.previous_local_folder = self.local_folder
         self.local_folder_text_changed = False
         self.prev_local_folder = self.local_folder
-        self.reuse_folder = False
-        self.bknd_clicks = ClickDetector()
         self.server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
+        self.user = self.server_binding.remote_user if self.server_binding else Constants.ACCOUNT
+        self.bknd_clicks = ClickDetector()
         self.proxy = None
         self.rbProxy.setCheckable(True)
         self.rbDirect.setCheckable(True)
@@ -102,6 +102,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.btnBrowsefolder.clicked.connect(self.browseFolder)
         self.txtCloudfolder.editingFinished.connect(self.changeFolder)
         self.txtCloudfolder.textEdited.connect(self.folder_text_changed)
+        self.txtAccount.editingFinished.connect(self.changeAccount)
         self.btnSelect.clicked.connect(self.selectFolders)
         self.btnProxy.clicked.connect(self.configProxy)
         self.btnProxy2.clicked.connect(self.configProxy2)
@@ -167,8 +168,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.tabWidget.setTabIcon(3, QIcon(Constants.APP_ICON_TAB_ADVANCED))
 
     def _isConnected(self):
-        return (self.server_binding is not None and
-                (self.server_binding.remote_password is not None or self.server_binding.remote_token is not None))
+        return (self.server_binding is not None) and (not self.server_binding.has_invalid_credentials())
 
     def _getDisconnectText(self):
         return self.tr("Sign In...") if not self._isConnected() else self.tr("Sign Out")
@@ -193,21 +193,24 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.cbIconOverlays.setChecked(self.iconOverlays)
             self.cbNotifications.setChecked(self.notifications)
 #            self.cbEnablelog.setChecked(self.logEnabled)
-
-            if not self._isConnected():
-                # BEGIN remove site url
-#                self.txtUrl.setText(Constants.CLOUDDESK_URL)
-                # END remove site url
-                self.txtAccount.setText(Constants.ACCOUNT)
-                self.txtCloudfolder.setText(os.path.dirname(self.local_folder))
-
             self._updateBinding()
             super(PreferencesDlg, self).showEvent(evt)
 
+    def _updateBinding(self):
+        self.txtAccount.setText(self.user)
+        self.txtAccount.setToolTip(self.user)
+        self.txtAccount.setReadOnly(self.server_binding is not None)
+        self.txtAccount.setEnabled(True)
+        
+        self.txtCloudfolder.setText(os.path.dirname(self.local_folder))
+        self.txtCloudfolder.setEnabled(True)
+        self.txtCloudfolder.setToolTip(self.local_folder)
+        
+        self.btnDisconnect.setText(self._getDisconnectText())
+        self.btnSelect.setEnabled(self._isConnected())
+            
     def tab_changed(self, index):
         pass
-#        if index != -1:
-#            self.tabWidget.setTabIcon(index, QIcon(Constants.APP_ICON_ABOUT))
 
     def selectFolders(self):
         # this requires a server binding
@@ -260,6 +263,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.btnProxy.setEnabled(self.rbProxy.isChecked())
         self.btnProxy2.setEnabled(self.rbAutodetect.isChecked())
 
+    def changeAccount(self):
+        self.user = self.txtAccount.text()
+        
     def folder_text_changed(self, text):
         self.local_folder_text_changed = True
         
@@ -279,7 +285,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 self.local_folder_text_changed = False
                 return
          
-        if os.path.exists(folder):
+        if not self.reuse_folder() and os.path.exists(folder):
             error = QMessageBox(QMessageBox.Warning, self.tr("Path Error"),
                                                       self.tr("Folder %s already exists") % folder,
                                                       QMessageBox.Ok,
@@ -293,7 +299,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #        os.makedirs(folder)
         self.local_folder = folder
         self.local_folder_text_changed = False
-        self.reuse_folder = True
 
     def browseFolder(self):
         """enter or select a new path"""
@@ -318,47 +323,13 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self._connect()
         self._updateBinding()
 
-    def _updateBinding(self):
-        self.btnDisconnect.setText(self._getDisconnectText())
-        self.txtCloudfolder.setEnabled(True)
-        if (self._isConnected()):
-#            local_folder = self.txtCloudfolder.text()
-#            if local_folder == '': local_folder = None
-            self.txtAccount.setText(self.server_binding.remote_user)
-            self.txtAccount.setCursorPosition(0)
-            self.txtAccount.setToolTip(self.server_binding.remote_user)
-            # BEGIN remove site url
-#            self.txtUrl.setText(self.server_binding.server_url)
-#            self.txtUrl.setCursorPosition(0)
-#            self.txtUrl.setToolTip(self.server_binding.server_url)
-            # END remove site url
-            self.txtCloudfolder.setText(os.path.dirname(self.server_binding.local_folder))
-            self.txtCloudfolder.setCursorPosition(0)
-            self.txtCloudfolder.setToolTip(self.server_binding.local_folder)
-            self.txtAccount.setReadOnly(True)
-            self.txtAccount.deselect()
-            # BEGIN remove site url
-#            self.txtUrl.setReadOnly(True)
-            # END remove site url
-            self.btnSelect.setEnabled(True)
-        else:
-            self.txtAccount.setReadOnly(False)
-            # widget looks still read-only
-            self.txtAccount.setEnabled(True)
-            self.txtAccount.setSelection(0, len(self.txtAccount.text()))
-            # BEGIN remove site url
-#            self.txtUrl.setReadOnly(False)
-#            self.txtUrl.setEnabled(True)
-            # END remove site url
-            self.btnSelect.setEnabled(False)
-
     def _connect(self):
         # Launch the GUI to create a binding
         from nxdrive.gui.authentication import prompt_authentication
 
         parent_folder = self.txtCloudfolder.text()
         local_folder = os.path.join(parent_folder, Constants.DEFAULT_NXDRIVE_FOLDER)
-        if not self.reuse_folder and os.path.exists(local_folder):
+        if not self.reuse_folder() and os.path.exists(local_folder):
             msg = QMessageBox(QMessageBox.Warning, self.tr('Folder Exists'),
                               self.tr("The folder %s already exists.") % local_folder,
                               QMessageBox.Ok)
@@ -367,11 +338,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             self.tabWidget.setCurrentIndex(3)
             return
                 
-        self.reuse_folder = True
-        remote_user = self.txtAccount.text()
+        self.user = self.txtAccount.text()
+        readonly_user = self.server_binding is not None
         # BEGIN remove site url
 #        server_url = self.txtUrl.text()
-        server_url = Constants.CLOUDDESK_URL
+        server_url = self.server_binding.server_url if self.server_binding else Constants.CLOUDDESK_URL
         # BEGIN remove site url
         # validate at least the folder since it could have been entered directly
         if (not os.path.exists(local_folder)):
@@ -383,11 +354,17 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 return
             os.makedirs(local_folder)
 
-        result, self.values = prompt_authentication(self.controller, local_folder, url = server_url, username = remote_user, update = False)
+        result, self.values = prompt_authentication(self.controller, 
+                                                    local_folder, 
+                                                    url = server_url, 
+                                                    username = self.user, 
+                                                    is_user_readonly = readonly_user
+                                                    )
         if result:
+            self.user = self.values['username']
             self.frontend.server_binding = self.server_binding = ServerBinding(local_folder,
                                                                                 server_url,
-                                                                                self.values['username'],
+                                                                                self.user,
                                                                                 remote_password = self.values['password']
                                                                                 )
             self.frontend.local_folder = self.local_folder = local_folder
@@ -395,9 +372,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
     def _disconnect(self):
         self.previous_local_folder = self.local_folder
-        self.local_folder = None
         self.server_binding = None
-        self.reuse_folder = False
 
     def applyChanges(self):
         same_binding = False
@@ -548,47 +523,9 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         settings.setValue('preferences/icon-overlays', self.iconOverlays)
         settings.setValue('preferences/autostart', self.autostart)
         settings.setValue('preferences/log', self.logEnabled)
-
-        if sys.platform == 'win32':
-            startup_folder = os.path.expanduser('~/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup')
-            startup_folder = os.path.normpath(startup_folder)
-            shortcut_path = os.path.join(startup_folder, Constants.SHORT_APP_NAME + '.lnk')
-            if self.autostart:
-                target = find_exe_path()
-                args = ['gui', '--start']
-                if os.path.splitext(target)[1] == '.py':
-                    # FOR TESTING
-                    args.insert(0, target)
-                    target = sys.executable
-                win32utils.create_or_replace_shortcut(shortcut_path, target, ' '.join(args))
-            else:
-                try:
-                    os.unlink(shortcut_path)
-                except WindowsError as e:
-                    log.debug("cannot delete shortcut: %s", e)
-
-        elif sys.platform == 'darwin':
-#            plist_settings = QSettings(os.path.expanduser('~/Library/LaunchAgents/%s.%s.plist') % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME),
-#                                       QSettings.NativeFormat)
-#            if not plist_settings.contains('Label'):
-#                # create the plist
-#                plist_settings.setValue('Label', '%s.%s' % (Constants.COMPANY_NAME, Constants.SHORT_APP_NAME))
-#                path = '/Applications/%s.app/Contents/MacOS/%s' % (Constants.OSX_APP_NAME, Constants.OSX_APP_NAME)
-#                plist_settings.setValue('Program', path)
-#                plist_settings.setValue('ProgramArguments', [path, 'gui'])
-#
-#            # start when it loads the agent
-#            plist_settings.setValue('RunAtLoad', self.autostart)
-#            # restart if app stops with a non-normal exit status, i.e. non-zero (crash?)
-#            if self.autostart:
-#                plist_settings.setValue('KeepAlive', {'SuccessfulExit': False})
-#            else:
-#                plist_settings.remove('KeepAlive')
-            if self.autostart:
-                register_startup_darwin()
-
+        register_startup(self.autostart)
         settings.sync()
-
+        
         self.check_and_restart(self.result)
         self.done(QDialog.Accepted)
 
@@ -606,4 +543,13 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def toggle_debug_mode(self):
         nxdrive.DEBUG = not nxdrive.DEBUG
         
+    def reuse_folder(self):
+        if self.server_binding is None:
+            return False
+        # remove the trailing '/' before comparison
+        s1 = Constants.CLOUDDESK_URL
+        s1 = s1[:-1] if s1[-1] == '/' else s1
+        s2 = self.server_binding.server_url
+        s2 = s2[:-1] if s2[-1] == '/' else s2
+        return self.user == self.server_binding.remote_user and s1 == s2
         

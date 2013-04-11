@@ -428,6 +428,7 @@ class Controller(object):
     def bind_server(self, local_folder, server_url, username, password):
         """Bind a local folder to a remote nuxeo server"""
         session = self.get_session()
+
         local_folder = normalized_path(local_folder)
         if not os.path.exists(local_folder):
             os.makedirs(local_folder)
@@ -512,6 +513,8 @@ class Controller(object):
         local_folder = normalized_path(local_folder)
         binding = self.get_server_binding(local_folder, raise_if_missing = True,
                                           session = session)
+        if not binding: return
+        
         # Revoke token if necessary
         if binding.remote_token is not None:
             try:
@@ -523,41 +526,44 @@ class Controller(object):
                 log.info("Revoking token for '%s' with account '%s'",
                          binding.server_url, binding.remote_user)
                 nxclient.revoke_token()
-            except POSSIBLE_NETWORK_ERROR_TYPES:
-                log.warning("Could not connect to server '%s' to revoke token",
-                            binding.server_url)
+            except POSSIBLE_NETWORK_ERROR_TYPES as e:
+                log.warning("Could not connect to server '%s' to revoke token (%s)",
+                            binding.server_url, e)
             except Unauthorized:
                 # Token is already revoked
                 pass
 
         # Invalidate client cache
         self.invalidate_client_cache(binding.server_url)
-
-        # Delete binding info in local DB
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
-        session.delete(binding)
-        # delete all sync folders but do not clear sync roots on server
-        # other device(s) may be linked to the same server, using the same account
-        log.debug("Removing sync folders for %s", binding.local_folder)
-        sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == binding.local_folder).all()
-        for sf in sync_folders:
-            session.delete(sf)
-        # delete recent files
-        log.debug("Removing recent files for %s", binding.local_folder)
-        recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == binding.local_folder).all()
-        for f in recent_files:
-            session.delete(f)
-        # delete server events
+        
+        # NEW keep the binding but reset token and password
+        binding.reset()
+        
+#        # Delete binding info in local DB
+#        session.delete(binding)
+#        # delete all sync folders but do not clear sync roots on server
+#        # other device(s) may be linked to the same server, using the same account
+#        log.debug("Removing sync folders for %s", binding.local_folder)
+#        sync_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == binding.local_folder).all()
+#        for sf in sync_folders:
+#            session.delete(sf)
+#        # delete recent files
+#        log.debug("Removing recent files for %s", binding.local_folder)
+#        recent_files = session.query(RecentFiles).filter(RecentFiles.local_folder == binding.local_folder).all()
+#        for f in recent_files:
+#            session.delete(f)
+#        # delete server events
         log.debug("Removing server events for %s", binding.local_folder)
         server_events = session.query(ServerEvent).filter(ServerEvent.local_folder == binding.local_folder).all()
         for se in server_events:
             session.delete(se)
-        # delete sync states
-        log.debug("Removing last sync states for %s", binding.local_folder)
-        last_known_states = session.query(LastKnownState).filter(LastKnownState.local_folder == binding.local_folder).all()
-        for lks in last_known_states:
-            session.delete(lks)                
+#        # delete sync states
+#        log.debug("Removing last sync states for %s", binding.local_folder)
+#        last_known_states = session.query(LastKnownState).filter(LastKnownState.local_folder == binding.local_folder).all()
+#        for lks in last_known_states:
+#            session.delete(lks)                
         session.commit()
 
     def unbind_all(self):

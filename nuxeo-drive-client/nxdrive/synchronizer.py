@@ -1479,7 +1479,7 @@ class Synchronizer(object):
             self._checkpoint(server_binding, checkpoint, session = session)
 
             # check if any special folder has been deleted
-            self._controller.check_nonremovable_folders(server_binding)
+#            self._controller.check_nonremovable_folders(server_binding)
             # Scan local folders to detect changes
             # XXX: OPTIM: use file system monitoring instead
             self.scan_local(server_binding, session = session)
@@ -1868,28 +1868,29 @@ class Synchronizer(object):
                     if not self._handle_network_error(sb, e, session = session):
                         raise
 
-    def update_server_roots(self, server_binding, session, local_roots,
-            remote_roots, repository):
-        """Align the roots for a given server and repository"""
-        local_roots_by_id = dict((r.remote_root, r) for r in local_roots)
-        local_root_ids = set(local_roots_by_id.keys())
-
-        remote_roots_by_id = dict((r.uid, r) for r in remote_roots)
-        remote_root_ids = set(remote_roots_by_id.keys())
-
-        to_remove = local_root_ids - remote_root_ids
-        to_add = remote_root_ids - local_root_ids
-
-        for ref in to_remove:
-            self._local_unbind_root(local_roots_by_id[ref], session)
-
-        for ref in to_add:
-            # get a client with the right base folder
-            rc = self.get_remote_client(server_binding,
-                                        repository = repository,
-                                        base_folder = ref)
-            self._local_bind_root(server_binding, remote_roots_by_id[ref],
-                                  rc, session)
+    # NOT USED - synchronizer.set_roots is used instead
+#    def update_server_roots(self, server_binding, session, local_roots,
+#            remote_roots, repository):
+#        """Align the roots for a given server and repository"""
+#        local_roots_by_id = dict((r.remote_root, r) for r in local_roots)
+#        local_root_ids = set(local_roots_by_id.keys())
+#
+#        remote_roots_by_id = dict((r.uid, r) for r in remote_roots)
+#        remote_root_ids = set(remote_roots_by_id.keys())
+#
+#        to_remove = local_root_ids - remote_root_ids
+#        to_add = remote_root_ids - local_root_ids
+#
+#        for ref in to_remove:
+#            self._local_unbind_root(local_roots_by_id[ref], session)
+#
+#        for ref in to_add:
+#            # get a client with the right base folder
+#            rc = self.get_remote_client(server_binding,
+#                                        repository = repository,
+#                                        base_folder = ref)
+#            self._local_bind_root(server_binding, remote_roots_by_id[ref],
+#                                  rc, session)
 
     def notify_to_signin(self, server_binding = None, error=None):
         if self._frontend is None:
