@@ -1,0 +1,60 @@
+CPO Icon Overlay DLLs
+=====================
+
+
+Description
+-----------
+CPO Icon Overlay DLLs controls the windows explorer icon overlay of Cloud Desk files that are either synced, in progress, or conflicted. These DLLs are registered under HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\ in the windows registry. 
+
+Note: You must unregister/delete them from the registery if you plan to build and test newly built DLLs.
+
+
+Register DLL
+------------
+In order to register the DLL open command line and cd to the directory containing the DLLs. 
+Use the following command: regsvr32 CpoIconOverlaySynced.dll
+Do this for all DLLs and then restart explorer.
+
+
+Unregister DLL
+--------------
+### Via CMD Line
+In order to unregister the DLL open command line and cd to the directory containing the DLLs that were registered. 
+Use the following command: regsvr32 /u CpoIconOverlaySynced.dll
+Do this for all DLLs and then restart explorer.
+
+### Via Regedit
+Open regedit from start menu (Search full name regedit).
+Traverse the registery HKEY_LOCAL_MACHINE -> SOFTWARE -> Microsoft -> Windows -> CurrentVersion -> Explorer -> ShellIconOverlayIdentifiers
+Delete CpoIconOverlaySynced, CpoIconOverlayInProgress, CpoIconOverlayConflicted
+Restart explorer
+
+
+Restart Explorer
+----------------
+In CMD prompt use the following commands to kill and restart explorer.
+	taskkill /f /IM explorer.exe
+	explorer.exe
+
+
+Debug
+-----
+Open the necessary project (Synced, InProgress, or Conflict) in visual studio. Build for your architecture (32bit or 64bit). Visual studio will register the dll upon building with explorer. Now restart explorer and in Visual Studio with the built project still open go to Debug > Attach to Process > explorer. Set breakpoints where needed and invoke the DLL by going into the Cloud Portal folder with explorer. This will trigger any breakpoints to be hit.
+
+
+Build Scripts
+-------------
+Note: You must have Visual Studio installed. (Tested with VS2010)
+You may either build within Visual Studio or use each project's own build script which outputs the DLL to CpoIconOverlay\bin\
+If you would like to build all 3 projects at once use build-dlls.bat in the root CpoIconOverlay directory.
+
+
+Trouble Shooting
+----------------
+* During build, if you get a "cannot unlink file CpoIconOverlay.dll" you need to unregister and restart explorer and rebuild.
+* If you are on 64bit and build 32bit via Visual Studio (not build script) it will register the DLLs and cause problems with 32bit applications on 64bit. In order to fix, close all 32bit applications and delete the 32bit dll.
+
+
+Installation
+------------
+If you do not have visual studio installed on your PC you will be required to install the VC redistributable runtime package and follow the instructions for registration of DLL.
