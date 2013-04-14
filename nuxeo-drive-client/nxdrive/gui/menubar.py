@@ -255,6 +255,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # save current server binding
         local_folder = self._get_local_folder()
         self.server_binding = self.controller.get_server_binding(local_folder)
+
         # lock folders to prevent user deletion
         self.controller.lock_folder(local_folder)
             
@@ -343,8 +344,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         # Launch the GUI to create a binding
         from nxdrive.gui.authentication import prompt_authentication
         
-        username = self._getUserName()
-        is_user_readonly = self.server_binding is not None
+        username = self.controller.getUserName()
+        is_user_readonly = self.controller.is_user_readonly()
         result = prompt_authentication(self.controller, self.local_folder,
                                    url = Constants.CLOUDDESK_URL,
                                    username = username,
@@ -784,7 +785,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.actionUsedStorage.setIconVisibleInMenu(exceeded)
 
         session = self.controller.get_session()
-        username = self._getUserName()
+        username = self.controller.getUserName()
         connected = self._is_connected()
         self.actionUsername.setText(username if connected else self.tr('Not signed in'))
         self.actionShowCloudDeskInfo.setEnabled(connected)
@@ -939,8 +940,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         if not self._is_connected():
             # Launch the GUI to create a binding
             from nxdrive.gui.authentication import prompt_authentication
-            username = self._getUserName()
-            is_user_readonly = self.server_binding is not None
+            username = self.controller.getUserName()
+            is_user_readonly = self.controller.is_user_readonly()
             result = prompt_authentication(self.controller, self.local_folder,
                                        url = Constants.CLOUDDESK_URL,
                                        username = username,
@@ -1143,11 +1144,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def _handle_click_upgrade(self, info = None):
         self.show_upgrade_info()
-
-    def _getUserName(self):
-        server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
-        return server_binding.remote_user if not server_binding == None else Constants.ACCOUNT
-
+    
     def _createImageWithOverlay(self, baseImage, overlayImage):
         imageWithOverlay = QImage(baseImage.size(), QImage.Format_ARGB32_Premultiplied)
         painter = QPainter(imageWithOverlay)

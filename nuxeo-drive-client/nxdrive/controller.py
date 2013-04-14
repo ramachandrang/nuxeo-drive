@@ -586,6 +586,35 @@ class Controller(object):
         nxclient.revoke_token()
         log.debug("revoked the new token %s", token)
 
+    def _get_reusable_server_binding(self):
+        # if a record exists, use the username from that record
+        server_bindings = self.list_server_bindings()
+        if len(server_bindings) == 0:
+            server_binding = None
+        elif len(server_bindings) == 1:
+            server_binding = server_bindings[0]
+        else:
+            log.debug("More than one server binding found.")
+            for sb in server_bindings:
+                # pick the first binding with valid credentials!?
+                if not sb.has_invalid_credentials():
+                    server_binding = sb
+                    break
+            else:
+                log.debug("All bindings have invalid credentials.")
+                server_binding = None
+        return server_binding   
+        
+    def getUserName(self):
+        # if a record exists, use the username from that record
+#        server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
+        server_binding = self._get_reusable_server_binding()
+        return server_binding.remote_user if server_binding else Constants.ACCOUNT
+
+    def is_user_readonly(self):
+        server_binding = self._get_reusable_server_binding()
+        return server_binding is not None
+    
     def _update_hash(self, password):
         return md5.new(password).digest()
 

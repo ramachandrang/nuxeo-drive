@@ -187,7 +187,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
                 url = p1 + p2 + p3 + p4 + urllib.urlencode(query_params)
                 dialog.show_message(e.message % (e.max_devices, url))
             except Exception as e:
-                msg = _("Unable to connect to %s (%s)") % (url, e)
+                msg = _("Unable to connect to %s") % url
                 log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
                 # TODO: catch a new ServerUnreachable catching network issues
                 dialog.show_message(msg)
@@ -197,7 +197,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
             dialog.show_message(msg)
             return False
         except Exception as e:
-            msg = _("Unable to connect to %s (%s)") % (url, e)
+            msg = _("Unable to connect to %s") % url
             log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
             # TODO: catch a new ServerUnreachable catching network issues
             dialog.show_message(msg)
