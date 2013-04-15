@@ -10,6 +10,10 @@ import urllib2
 import socket
 import httplib
 import psutil
+from threading import Thread
+
+from PySide.QtCore import Signal
+from PySide.QtCore import Slot
 
 from sqlalchemy import not_, or_, and_
 from sqlalchemy import asc, desc
@@ -196,6 +200,9 @@ class Synchronizer(object):
     # Log sync error date and skip document pairs in error while syncing up
     # to a fixed cooldown period
     error_skip_period = 300  # 5 minutes
+    
+    # signal to indicate that folders have been retrieved
+    folders_ready = Signal(object)
 
 
     def __init__(self, controller):
@@ -204,6 +211,8 @@ class Synchronizer(object):
         self._sync_operation = None
         self.loop_count = 0
         self.quota_exceeded = False
+        # TODO async folder retrieval
+#        self.folders_ready.connect(self.set_default_roots)
 
     def register_frontend(self, frontend):
         self._frontend = frontend
@@ -1196,20 +1205,20 @@ class Synchronizer(object):
                     server_binding = self._controller.get_server_binding(local_folder)
                 
             self.get_folders(server_binding = server_binding, session = session)
-            count = session.query(SyncFolders).\
-                   filter(and_(SyncFolders.bind_state == True,
-                               SyncFolders.local_folder == server_binding.local_folder)).\
-                               count()
-            # top level folders would have been set as sync roots by wizard
-            if count == 0:
-                # user skipped the wizard
-                # set top-level folders as sync roots
-                self.check_toplevel_folders(server_binding = server_binding, session = session)
-                try:
-                    self.set_roots(server_binding = server_binding, session = session)
-                except Exception as e:
-                    log.error("Unable to set roots on '%s' for user '%s' (%s)",
-                                        server_binding.server_url, server_binding.remote_user, str(e))
+#            count = session.query(SyncFolders).\
+#                   filter(and_(SyncFolders.bind_state == True,
+#                               SyncFolders.local_folder == server_binding.local_folder)).\
+#                               count()
+#            # top level folders would have been set as sync roots by wizard
+#            if count == 0:
+#                # user skipped the wizard
+#                # set top-level folders as sync roots
+#                self.check_toplevel_folders(server_binding = server_binding, session = session)
+#                try:
+#                    self.set_roots(server_binding = server_binding, session = session)
+#                except Exception as e:
+#                    log.error("Unable to set roots on '%s' for user '%s' (%s)",
+#                                        server_binding.server_url, server_binding.remote_user, str(e))
         # TODO temporary fix - eat exception
         except Exception, e:
             log.debug("error retrieving folders: %s", str(e))
@@ -1711,6 +1720,34 @@ class Synchronizer(object):
             except KeyError:
                 pass
 
+    def _get_folders_and_sync_roots(self, controller, server_binding):
+        session = controller.get_session()
+        controller.synchronizer.get_folders(server_binding = server_binding, session = session)
+        controller.synchronizer.update_roots(server_binding = server_binding, session = session)
+        self.folders_ready.emit(server_binding)
+
+    def start_folders_thread(self, server_binding):
+        Thread(target = self._get_folders_and_sync_roots,
+                                  args = (self, server_binding,)).start()
+                                  
+    @Slot(ServerBinding)
+    def set_default_folders(self, server_binding):
+        session = self._controller.get_session()
+        count = session.query(SyncFolders).\
+               filter(and_(SyncFolders.bind_state == True,
+                           SyncFolders.local_folder == server_binding.local_folder)).\
+                           count()
+        # top level folders would have been set as sync roots by wizard
+        if count == 0:
+            # user skipped the wizard
+            # set top-level folders as sync roots
+            self.check_toplevel_folders(server_binding = server_binding, session = session)
+            try:
+                self.set_roots(server_binding = server_binding, session = session)
+            except Exception as e:
+                log.error("Unable to set roots on '%s' for user '%s' (%s)",
+                                    server_binding.server_url, server_binding.remote_user, str(e))
+                                      
     def check_toplevel_folders(self, server_binding = None, session = None):
         if session is None:
             session = self.wizard().session

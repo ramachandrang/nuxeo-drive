@@ -1217,15 +1217,6 @@ class Controller(object):
         older_versions = [version for version in versions if not _is_newer_version(version.data1)]
         if len(older_versions) > 0:
             map(session.delete, older_versions)
-
-    def _get_folders_and_sync_roots(self, controller, server_binding):
-        session = controller.get_session()
-        controller.synchronizer.get_folders(server_binding = server_binding, session = session)
-        controller.synchronizer.update_roots(server_binding = server_binding, session = session)
-
-    def start_folders_thread(self, server_binding):
-            Thread(target = self._get_folders_and_sync_roots,
-                                      args = (self, server_binding,)).start()
             
     def lock_folder(self, path):
         if not os.path.exists(path):
