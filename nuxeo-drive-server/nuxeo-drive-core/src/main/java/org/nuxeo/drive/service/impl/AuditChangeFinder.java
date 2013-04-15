@@ -23,9 +23,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.nuxeo.common.utils.StringUtils;
 import org.nuxeo.drive.adapter.FileSystemItem;
 import org.nuxeo.drive.service.FileSystemChangeFinder;
 import org.nuxeo.drive.service.NuxeoDriveEvents;
@@ -93,7 +93,7 @@ public class AuditChangeFinder implements FileSystemChangeFinder {
                 auditQuerySb.append("or ");
             }
             if (!lastActiveRootRefs.isEmpty()) {
-                // detect root unregistrition changes for the roots previously
+                // detect root un-registration changes for the roots previously
                 // seen by the current user
                 auditQuerySb.append("log.category = '");
                 auditQuerySb.append(NuxeoDriveEvents.EVENT_CATEGORY);

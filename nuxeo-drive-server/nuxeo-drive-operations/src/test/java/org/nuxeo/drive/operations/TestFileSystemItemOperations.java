@@ -24,6 +24,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.Serializable;
+import java.security.Principal;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -51,6 +52,7 @@ import org.nuxeo.ecm.core.api.ClientException;
 import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.IdRef;
+import org.nuxeo.ecm.core.api.NuxeoPrincipal;
 import org.nuxeo.ecm.core.api.PathRef;
 import org.nuxeo.ecm.core.api.security.ACE;
 import org.nuxeo.ecm.core.api.security.ACL;
@@ -61,6 +63,8 @@ import org.nuxeo.ecm.core.storage.sql.DatabaseMySQL;
 import org.nuxeo.ecm.core.test.annotations.Granularity;
 import org.nuxeo.ecm.core.test.annotations.RepositoryConfig;
 import org.nuxeo.ecm.directory.api.DirectoryService;
+import org.nuxeo.ecm.platform.usermanager.UserManager;
+import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.test.runner.Deploy;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
@@ -138,6 +142,8 @@ public class TestFileSystemItemOperations {
     @Before
     public void init() throws Exception {
 
+        TransactionHelper.startTransaction();
+        Principal administrator = session.getPrincipal();
         // Create 2 sync roots
         syncRoot1 = session.createDocument(session.createDocumentModel("/",
                 "folder1", "Folder"));
@@ -145,10 +151,10 @@ public class TestFileSystemItemOperations {
                 "folder2", "Folder"));
 
         // Register sync roots
-        nuxeoDriveManager.registerSynchronizationRoot("Administrator",
-                syncRoot1, session);
-        nuxeoDriveManager.registerSynchronizationRoot("Administrator",
-                syncRoot2, session);
+        nuxeoDriveManager.registerSynchronizationRoot(administrator, syncRoot1,
+                session);
+        nuxeoDriveManager.registerSynchronizationRoot(administrator, syncRoot2,
+                session);
 
         // Create 1 file in each sync root
         file1 = session.createDocumentModel("/folder1", "file1", "File");
@@ -185,6 +191,7 @@ public class TestFileSystemItemOperations {
         file4 = session.createDocument(file4);
 
         session.save();
+        TransactionHelper.commitOrRollbackTransaction();
 
         // Get an Automation client session
         clientSession = automationClient.getSession("Administrator",
@@ -546,12 +553,9 @@ public class TestFileSystemItemOperations {
         // FileSystemItemManager#getSession(String
         // repositoryName, Principal principal)
         TransactionHelper.startTransaction();
-        try {
-            assertFalse(nuxeoDriveManager.getSynchronizationRootReferences(
-                    session).contains(new IdRef(syncRoot2.getId())));
-        } finally {
-            TransactionHelper.commitOrRollbackTransaction();
-        }
+        assertFalse(nuxeoDriveManager.getSynchronizationRootReferences(session).contains(
+                new IdRef(syncRoot2.getId())));
+        TransactionHelper.commitOrRollbackTransaction();
 
         // ------------------------------------------------------
         // Delete top level folder: should be unsupported
@@ -712,9 +716,15 @@ public class TestFileSystemItemOperations {
         // --------------------------------------------------------
         // No REMOVE permission on the source backing doc => false
         // --------------------------------------------------------
-        createUser("joe", "joe");
+        Principal joe = createUser("joe", "joe");
         DocumentModel rootDoc = session.getRootDocument();
         setPermission(rootDoc, "joe", SecurityConstants.READ, true);
+
+        TransactionHelper.startTransaction();
+        nuxeoDriveManager.registerSynchronizationRoot(joe, syncRoot1, session);
+        nuxeoDriveManager.registerSynchronizationRoot(joe, syncRoot2, session);
+        TransactionHelper.commitOrRollbackTransaction();
+
         clientSession = automationClient.getSession("joe", "joe");
         canMoveFSItemJSON = (Blob) clientSession.newRequest(
                 NuxeoDriveCanMove.ID).set("srcId",
@@ -746,6 +756,10 @@ public class TestFileSystemItemOperations {
         // backing doc => true
         // ----------------------------------------------------------------------
         setPermission(syncRoot2, "joe", SecurityConstants.WRITE, true);
+        TransactionHelper.startTransaction();
+        nuxeoDriveManager.unregisterSynchronizationRoot(joe, syncRoot2, session);
+        TransactionHelper.commitOrRollbackTransaction();
+
         canMoveFSItemJSON = (Blob) clientSession.newRequest(
                 NuxeoDriveCanMove.ID).set("srcId",
                 DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + file1.getId()).set(
@@ -758,8 +772,10 @@ public class TestFileSystemItemOperations {
         // syncRoot2 is not registered as a sync root for joe
         assertEquals("false", canMoveFSItem);
 
-        nuxeoDriveManager.registerSynchronizationRoot("joe", syncRoot2, session);
-        session.save();
+        TransactionHelper.startTransaction();
+        nuxeoDriveManager.registerSynchronizationRoot(joe, syncRoot2, session);
+        TransactionHelper.commitOrRollbackTransaction();
+
         canMoveFSItemJSON = (Blob) clientSession.newRequest(
                 NuxeoDriveCanMove.ID).set("srcId",
                 DEFAULT_FILE_SYSTEM_ITEM_ID_PREFIX + file1.getId()).set(
@@ -863,18 +879,15 @@ public class TestFileSystemItemOperations {
                 NuxeoDriveGenerateConflictedItemName.ID).set("name",
                 "My file (with accents \u00e9).doc").execute();
         assertNotNull(jsonOut);
-        String newName = mapper.readValue(jsonOut.getStream(),
-                String.class);
+        String newName = mapper.readValue(jsonOut.getStream(), String.class);
         assertTrue(newName.startsWith("My file (with accents \u00e9) (Administrator - "));
         assertTrue(newName.endsWith(").doc"));
 
         // Try with a filename with filename extension
         jsonOut = (Blob) clientSession.newRequest(
-                NuxeoDriveGenerateConflictedItemName.ID).set("name",
-                "My file").execute();
+                NuxeoDriveGenerateConflictedItemName.ID).set("name", "My file").execute();
         assertNotNull(jsonOut);
-        newName = mapper.readValue(jsonOut.getStream(),
-                String.class);
+        newName = mapper.readValue(jsonOut.getStream(), String.class);
         assertTrue(newName.startsWith("My file (Administrator - "));
         assertTrue(newName.endsWith(")"));
 
@@ -886,8 +899,7 @@ public class TestFileSystemItemOperations {
                 NuxeoDriveGenerateConflictedItemName.ID).set("name",
                 "The Clashing File.xls").execute();
         assertNotNull(jsonOut);
-        newName = mapper.readValue(jsonOut.getStream(),
-                String.class);
+        newName = mapper.readValue(jsonOut.getStream(), String.class);
         assertTrue(newName.startsWith("The Clashing File (Joe Strummer - "));
         assertTrue(newName.endsWith(").xls"));
 
@@ -896,24 +908,25 @@ public class TestFileSystemItemOperations {
                 NuxeoDriveGenerateConflictedItemName.ID).set("name",
                 "The Clashing File.xls").set("timezone", "BST").execute();
         assertNotNull(jsonOut);
-        String bstName = mapper.readValue(jsonOut.getStream(),
-                String.class);
+        String bstName = mapper.readValue(jsonOut.getStream(), String.class);
         jsonOut = (Blob) clientSession.newRequest(
                 NuxeoDriveGenerateConflictedItemName.ID).set("name",
                 "The Clashing File.xls").set("timezone", "PST").execute();
         assertNotNull(jsonOut);
         String pstName = mapper.readValue(jsonOut.getStream(), String.class);
         assertFalse(String.format(
-                "Confliceted filenames should be different. Got '%s' twice.",
+                "Conflicted filenames should be different. Got '%s' twice.",
                 pstName), bstName.equals(pstName));
+
+        deleteUser("joe");
     }
 
-    protected void createUser(String userName, String password)
+    protected NuxeoPrincipal createUser(String userName, String password)
             throws ClientException {
-        createUser(userName, password, null, null);
+        return createUser(userName, password, null, null);
     }
 
-    protected void createUser(String userName, String password,
+    protected NuxeoPrincipal createUser(String userName, String password,
             String firstName, String lastName) throws ClientException {
         org.nuxeo.ecm.directory.Session userDir = directoryService.getDirectory(
                 "userDirectory").getSession();
@@ -927,6 +940,8 @@ public class TestFileSystemItemOperations {
         } finally {
             userDir.close();
         }
+        UserManager userManager = Framework.getLocalService(UserManager.class);
+        return userManager.getPrincipal(userName);
     }
 
     protected void deleteUser(String userName) throws ClientException {

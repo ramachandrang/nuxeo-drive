@@ -60,6 +60,9 @@ import org.nuxeo.ecm.core.api.security.ACE;
 import org.nuxeo.ecm.core.api.security.ACL;
 import org.nuxeo.ecm.core.api.security.ACP;
 import org.nuxeo.ecm.core.api.security.SecurityConstants;
+import org.nuxeo.ecm.core.storage.sql.DatabaseHelper;
+import org.nuxeo.ecm.core.storage.sql.DatabaseMySQL;
+import org.nuxeo.ecm.core.storage.sql.DatabaseSQLServer;
 import org.nuxeo.ecm.core.test.RepositorySettings;
 import org.nuxeo.ecm.core.test.annotations.Granularity;
 import org.nuxeo.ecm.core.test.annotations.RepositoryConfig;
@@ -69,6 +72,7 @@ import org.nuxeo.runtime.test.runner.Deploy;
 import org.nuxeo.runtime.test.runner.Features;
 import org.nuxeo.runtime.test.runner.FeaturesRunner;
 import org.nuxeo.runtime.test.runner.Jetty;
+import org.nuxeo.runtime.transaction.TransactionHelper;
 
 import com.google.inject.Inject;
 
@@ -173,6 +177,8 @@ public class TestPermissionHierarchy {
     @Before
     public void init() throws Exception {
 
+        TransactionHelper.startTransaction();
+
         // Create test users
         createUser("user1", "user1");
         createUser("user2", "user2");
@@ -233,10 +239,12 @@ public class TestPermissionHierarchy {
         setPermission(user2Folder3, "user1", SecurityConstants.READ_WRITE, true);
 
         // Register shared folders as synchronization roots for user1
-        nuxeoDriveManager.registerSynchronizationRoot("user1",
+        nuxeoDriveManager.registerSynchronizationRoot(session1.getPrincipal(),
                 session1.getDocument(user2Folder1.getRef()), session1);
-        nuxeoDriveManager.registerSynchronizationRoot("user1",
+        nuxeoDriveManager.registerSynchronizationRoot(session1.getPrincipal(),
                 session1.getDocument(user2Folder3.getRef()), session1);
+
+        TransactionHelper.commitOrRollbackTransaction();
 
         // Get an Automation client session for each user
         clientSession1 = automationClient.getSession("user1", "user1");
@@ -307,8 +315,10 @@ public class TestPermissionHierarchy {
          *
          * </pre>
          */
-        nuxeoDriveManager.registerSynchronizationRoot("user1", userWorkspace1,
-                session1);
+        TransactionHelper.startTransaction();
+        nuxeoDriveManager.registerSynchronizationRoot(session1.getPrincipal(),
+                userWorkspace1, session1);
+        TransactionHelper.commitOrRollbackTransaction();
 
         // ---------------------------------------------
         // Check top level folder children
@@ -497,8 +507,10 @@ public class TestPermissionHierarchy {
          *
          * </pre>
          */
-        nuxeoDriveManager.unregisterSynchronizationRoot("user1",
-                userWorkspace1, session1);
+        TransactionHelper.startTransaction();
+        nuxeoDriveManager.unregisterSynchronizationRoot(
+                session1.getPrincipal(), userWorkspace1, session1);
+        TransactionHelper.commitOrRollbackTransaction();
 
         // ---------------------------------------------
         // Check "My Docs"
@@ -556,10 +568,12 @@ public class TestPermissionHierarchy {
          *
          * </pre>
          */
-        nuxeoDriveManager.registerSynchronizationRoot("user1", user1Folder3,
-                session1);
-        nuxeoDriveManager.registerSynchronizationRoot("user1", user1Folder4,
-                session1);
+        TransactionHelper.startTransaction();
+        nuxeoDriveManager.registerSynchronizationRoot(session1.getPrincipal(),
+                user1Folder3, session1);
+        nuxeoDriveManager.registerSynchronizationRoot(session1.getPrincipal(),
+                user1Folder4, session1);
+        TransactionHelper.commitOrRollbackTransaction();
 
         // --------------------------------------------
         // Check user synchronization roots
@@ -616,8 +630,11 @@ public class TestPermissionHierarchy {
          *
          * </pre>
          */
-        nuxeoDriveManager.unregisterSynchronizationRoot("user1",
+        TransactionHelper.startTransaction();
+        nuxeoDriveManager.unregisterSynchronizationRoot(
+                session1.getPrincipal(),
                 session1.getDocument(user2Folder1.getRef()), session1);
+        TransactionHelper.commitOrRollbackTransaction();
 
         // ---------------------------------------------
         // Check shared synchronization roots
@@ -722,21 +739,36 @@ public class TestPermissionHierarchy {
 
     protected DocumentModel createFile(CoreSession session, String path,
             String name, String type, String fileName, String content)
-            throws ClientException {
+            throws ClientException, InterruptedException {
 
         DocumentModel file = session.createDocumentModel(path, name, type);
         org.nuxeo.ecm.core.api.Blob blob = new org.nuxeo.ecm.core.api.impl.blob.StringBlob(
                 content);
         blob.setFilename(fileName);
         file.setPropertyValue("file:content", (Serializable) blob);
-        return session.createDocument(file);
+        file = session.createDocument(file);
+        // If the test is run against MySQL or SQL Server, because of its
+        // milliseconds limitation, we need to wait for 1 second between each
+        // document creation to ensure correct ordering when fetching a folder's
+        // children, the default page provider query being ordered by ascendant
+        // creation date.
+        waitIfMySQLOrSQLServer();
+        return file;
     }
 
     protected DocumentModel createFolder(CoreSession session, String path,
-            String name, String type) throws ClientException {
+            String name, String type) throws ClientException,
+            InterruptedException {
 
         DocumentModel folder = session.createDocumentModel(path, name, type);
-        return session.createDocument(folder);
+        folder = session.createDocument(folder);
+        // If the test is run against MySQL or SQL Server, because of its
+        // milliseconds limitation, we need to wait for 1 second between each
+        // document creation to ensure correct ordering when fetching a folder's
+        // children, the default page provider query being ordered by ascendant
+        // creation date.
+        waitIfMySQLOrSQLServer();
+        return folder;
     }
 
     protected void createUser(String userName, String password)
@@ -785,6 +817,13 @@ public class TestPermissionHierarchy {
         }
         session.setACP(docRef, acp, true);
         session.save();
+    }
+
+    protected void waitIfMySQLOrSQLServer() throws InterruptedException {
+        if (DatabaseHelper.DATABASE instanceof DatabaseMySQL
+                || DatabaseHelper.DATABASE instanceof DatabaseSQLServer) {
+            Thread.sleep(1000);
+        }
     }
 
 }

@@ -35,9 +35,9 @@ public class DefaultSyncRootFolderItem extends DocumentBackedFolderItem
 
     private static final long serialVersionUID = 1L;
 
-    public DefaultSyncRootFolderItem(String factoryName, String parentId,
+    public DefaultSyncRootFolderItem(String factoryName, FolderItem parentItem,
             DocumentModel doc) throws ClientException {
-        super(factoryName, parentId, doc);
+        super(factoryName, parentItem, doc);
         // A sync root can be renamed if the current user has the
         // WriteProperties permission on it
         this.canRename = doc.getCoreSession().hasPermission(doc.getRef(),
@@ -56,7 +56,7 @@ public class DefaultSyncRootFolderItem extends DocumentBackedFolderItem
         CoreSession session = getSession();
         DocumentModel doc = getDocument(session);
         Framework.getLocalService(NuxeoDriveManager.class).unregisterSynchronizationRoot(
-                principal.getName(), doc, session);
+                principal, doc, session);
     }
 
     @Override

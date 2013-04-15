@@ -24,6 +24,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.Serializable;
+import java.security.Principal;
 import java.util.List;
 
 import org.junit.Before;
@@ -85,9 +86,10 @@ public class TestDefaultTopLevelFolderItemFactory {
                 "syncRoot1", "Folder"));
         syncRoot2 = session.createDocument(session.createDocumentModel("/",
                 "syncRoot2", "Folder"));
-        nuxeoDriveManager.registerSynchronizationRoot("Administrator",
+        Principal administrator = session.getPrincipal();
+        nuxeoDriveManager.registerSynchronizationRoot(administrator,
                 syncRoot1, session);
-        nuxeoDriveManager.registerSynchronizationRoot("Administrator",
+        nuxeoDriveManager.registerSynchronizationRoot(administrator,
                 syncRoot2, session);
 
         // Add a child file to syncRoot1
@@ -255,9 +257,6 @@ public class TestDefaultTopLevelFolderItemFactory {
         assertFalse(defaultTopLevelFolderItemFactory.isFileSystemItem(fakeDoc));
         // #getFileSystemItem(DocumentModel doc)
         assertNull(defaultTopLevelFolderItemFactory.getFileSystemItem(fakeDoc));
-        // #getFileSystemItem(DocumentModel doc, String parentId)
-        assertNull(defaultTopLevelFolderItemFactory.getFileSystemItem(fakeDoc,
-                "testParentId"));
         // #canHandleFileSystemItemId(String id)
         assertTrue(defaultTopLevelFolderItemFactory.canHandleFileSystemItemId("org.nuxeo.drive.service.impl.DefaultTopLevelFolderItemFactory#"));
         assertFalse(defaultTopLevelFolderItemFactory.canHandleFileSystemItemId("org.nuxeo.drive.service.impl.DefaultFileSystemItemFactory#"));

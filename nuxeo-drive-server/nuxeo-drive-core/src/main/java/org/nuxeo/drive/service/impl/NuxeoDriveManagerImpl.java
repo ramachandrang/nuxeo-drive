@@ -41,15 +41,14 @@ import org.nuxeo.ecm.core.api.CoreSession;
 import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.IterableQueryResult;
+import org.nuxeo.ecm.core.api.PathRef;
 import org.nuxeo.ecm.core.api.event.CoreEventConstants;
-import org.nuxeo.ecm.core.api.model.PropertyException;
 import org.nuxeo.ecm.core.api.repository.Repository;
 import org.nuxeo.ecm.core.api.repository.RepositoryManager;
 import org.nuxeo.ecm.core.event.Event;
 import org.nuxeo.ecm.core.event.EventService;
 import org.nuxeo.ecm.core.event.impl.DocumentEventContext;
 import org.nuxeo.ecm.core.query.sql.NXQL;
-import org.nuxeo.ecm.core.security.SecurityException;
 import org.nuxeo.ecm.platform.query.nxql.NXQLQueryBuilder;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.model.DefaultComponent;
@@ -89,12 +88,28 @@ public class NuxeoDriveManagerImpl extends DefaultComponent implements
     }
 
     @Override
-    public void registerSynchronizationRoot(String userName,
+    public void registerSynchronizationRoot(Principal principal,
             DocumentModel newRootContainer, CoreSession session)
-            throws PropertyException, ClientException, SecurityException {
+            throws ClientException {
+        // Unregister any sub-folder of the new root
+        Map<String, SynchronizationRoots> syncRoots = getSynchronizationRoots(principal);
+        SynchronizationRoots synchronizationRoots = syncRoots.get(session.getRepositoryName());
+        for (String existingRootPath : synchronizationRoots.paths) {
+            String prefixPath = newRootContainer.getPathAsString() + "/";
+            if (existingRootPath.startsWith(prefixPath)) {
+                // Unregister the nested root sub-folder first
+                PathRef ref = new PathRef(existingRootPath);
+                if (session.exists(ref)) {
+                    DocumentModel subFolder = session.getDocument(ref);
+                    unregisterSynchronizationRoot(principal, subFolder, session);
+                }
+            }
+        }
+
         if (!newRootContainer.hasFacet(NUXEO_DRIVE_FACET)) {
             newRootContainer.addFacet(NUXEO_DRIVE_FACET);
         }
+        String userName = principal.getName();
         fireEvent(newRootContainer, session,
                 NuxeoDriveEvents.ABOUT_TO_REGISTER_ROOT, userName);
         if (newRootContainer.isProxy() || newRootContainer.isVersion()) {
@@ -127,7 +142,7 @@ public class NuxeoDriveManagerImpl extends DefaultComponent implements
         }
         newRootContainer.setPropertyValue(DRIVE_SUBSCRIPTIONS_PROPERTY,
                 (Serializable) subscriptions);
-        session.saveDocument(newRootContainer);
+        newRootContainer = session.saveDocument(newRootContainer);
         session.save();
         clearCache();
         fireEvent(newRootContainer, session, NuxeoDriveEvents.ROOT_REGISTERED,
@@ -135,12 +150,13 @@ public class NuxeoDriveManagerImpl extends DefaultComponent implements
     }
 
     @Override
-    public void unregisterSynchronizationRoot(String userName,
+    public void unregisterSynchronizationRoot(Principal principal,
             DocumentModel rootContainer, CoreSession session)
-            throws PropertyException, ClientException {
+            throws ClientException {
         if (!rootContainer.hasFacet(NUXEO_DRIVE_FACET)) {
             rootContainer.addFacet(NUXEO_DRIVE_FACET);
         }
+        String userName = principal.getName();
         fireEvent(rootContainer, session,
                 NuxeoDriveEvents.ABOUT_TO_UNREGISTER_ROOT, userName);
         @SuppressWarnings("unchecked")
@@ -269,6 +285,7 @@ public class NuxeoDriveManagerImpl extends DefaultComponent implements
                 syncDate, hasTooManyChanges);
     }
 
+    @Override
     public Map<String, SynchronizationRoots> getSynchronizationRoots(
             Principal principal) throws ClientException {
         // cache uses soft keys hence physical equality: intern key before
@@ -290,6 +307,7 @@ public class NuxeoDriveManagerImpl extends DefaultComponent implements
         return syncRoots;
     }
 
+    @Override
     public boolean isSynchronizationRoot(Principal principal, DocumentModel doc)
             throws ClientException {
         String repoName = doc.getRepositoryName();
@@ -331,6 +349,7 @@ public class NuxeoDriveManagerImpl extends DefaultComponent implements
 
     // TODO: make changeFinder overridable with an extension point and
     // remove setter
+    @Override
     public void setChangeFinder(FileSystemChangeFinder changeFinder) {
         this.changeFinder = changeFinder;
     }

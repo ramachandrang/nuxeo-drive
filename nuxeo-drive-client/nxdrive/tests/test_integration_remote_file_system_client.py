@@ -6,11 +6,9 @@ import time
 
 class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
 
-
     def setUp(self):
         super(TestIntegrationRemoteFileSystemClient, self).setUp()
         # Bind the test workspace as sync root for user 1
-        ctl = self.controller_1
         remote_document_client = self.remote_document_client_1
         remote_fs_client = self.remote_file_system_client_1
         remote_document_client.register_as_root(self.workspace)
@@ -31,7 +29,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         fs_item_id = remote_client.make_file(self.workspace_id,
             'Document 1.txt', "Content of doc 1.")
         info = remote_client.get_info(fs_item_id)
-        self.assertIsNotNone(info)
+        self.assertTrue(info is not None)
         self.assertEquals(info.name, 'Document 1.txt')
         self.assertEquals(info.uid, fs_item_id)
         self.assertEquals(info.parent_uid,
@@ -49,23 +47,23 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         fs_item_id = remote_client.make_folder(self.workspace_id,
             'Folder 1')
         info = remote_client.get_info(fs_item_id)
-        self.assertIsNotNone(info)
+        self.assertTrue(info is not None)
         self.assertEquals(info.name, 'Folder 1')
         self.assertEquals(info.uid, fs_item_id)
         self.assertEquals(info.parent_uid,
             self.workspace_id)
         self.assertTrue(info.folderish)
-        self.assertIsNone(info.digest_algorithm)
-        self.assertIsNone(info.digest)
-        self.assertIsNone(info.download_url)
+        self.assertTrue(info.digest_algorithm is None)
+        self.assertTrue(info.digest is None)
+        self.assertTrue(info.download_url is None)
 
         # Check non existing file info
         fs_item_id = self.FS_ITEM_ID_PREFIX + 'fakeId'
         self.assertRaises(NotFound,
             remote_client.get_info, fs_item_id)
-        self.assertIsNone(
+        self.assertTrue(
             remote_client.get_info(fs_item_id,
-                raise_if_missing=False))
+                raise_if_missing=False) is None)
 
     def test_get_content(self):
         remote_client = self.remote_file_system_client_1
@@ -101,7 +99,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
 
         # Check workspace children
         workspace_children = remote_client.get_children_info(self.workspace_id)
-        self.assertIsNotNone(workspace_children)
+        self.assertTrue(workspace_children is not None)
         self.assertEquals(len(workspace_children), 3)
         self.assertEquals(workspace_children[0].uid, folder_1_id)
         self.assertEquals(workspace_children[0].name, 'Folder 1')
@@ -117,7 +115,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
 
         # Check folder_1 children
         folder_1_children = remote_client.get_children_info(folder_1_id)
-        self.assertIsNotNone(folder_1_children)
+        self.assertTrue(folder_1_children is not None)
         self.assertEquals(len(folder_1_children), 1)
         self.assertEquals(folder_1_children[0].uid, file_2_id)
         self.assertEquals(folder_1_children[0].name, 'File 2.txt')
@@ -127,14 +125,14 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
 
         fs_item_id = remote_client.make_folder(self.workspace_id,
             'My new folder')
-        self.assertIsNotNone(fs_item_id)
+        self.assertTrue(fs_item_id is not None)
         info = remote_client.get_info(fs_item_id)
-        self.assertIsNotNone(info)
+        self.assertTrue(info is not None)
         self.assertEquals(info.name, 'My new folder')
         self.assertTrue(info.folderish)
-        self.assertIsNone(info.digest_algorithm)
-        self.assertIsNone(info.digest)
-        self.assertIsNone(info.download_url)
+        self.assertTrue(info.digest_algorithm is None)
+        self.assertTrue(info.digest is None)
+        self.assertTrue(info.download_url is None)
 
     def test_make_file(self):
         remote_client = self.remote_file_system_client_1
@@ -142,9 +140,9 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         # Check File document creation
         fs_item_id = remote_client.make_file(self.workspace_id,
             'My new file.odt', "Content of my new file.")
-        self.assertIsNotNone(fs_item_id)
+        self.assertTrue(fs_item_id is not None)
         info = remote_client.get_info(fs_item_id)
-        self.assertIsNotNone(info)
+        self.assertTrue(info is not None)
         self.assertEquals(info.name, 'My new file.odt')
         self.assertFalse(info.folderish)
         digest_algorithm = info.digest_algorithm
@@ -155,9 +153,9 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         # Check Note document creation
         fs_item_id = remote_client.make_file(self.workspace_id,
             'My new note.txt', "Content of my new note.")
-        self.assertIsNotNone(fs_item_id)
+        self.assertTrue(fs_item_id is not None)
         info = remote_client.get_info(fs_item_id)
-        self.assertIsNotNone(info)
+        self.assertTrue(info is not None)
         self.assertEquals(info.name, 'My new note.txt')
         self.assertFalse(info.folderish)
         digest_algorithm = info.digest_algorithm
@@ -169,7 +167,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         remote_client = self.remote_file_system_client_1
 
         # Create content encoded in utf-8 and cp1252
-        unicode_content = u'\xe9' # e acute
+        unicode_content = u'\xe9'  # e acute
         utf8_encoded = unicode_content.encode('utf-8')
         utf8_digest = hashlib.md5(utf8_encoded).hexdigest()
         cp1252_encoded = unicode_content.encode('cp1252')
@@ -254,7 +252,7 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         fs_item_id = remote_client.make_file(self.workspace_id,
             'Document 1.txt', "Content of doc 1.")
         fs_item = remote_client.get_fs_item(fs_item_id)
-        self.assertIsNotNone(fs_item)
+        self.assertTrue(fs_item is not None)
         self.assertEquals(fs_item['name'], 'Document 1.txt')
         self.assertEquals(fs_item['id'], fs_item_id)
         self.assertFalse(fs_item['folder'])
@@ -263,14 +261,15 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         fs_item_id = remote_client.make_folder(self.workspace_id,
             'Folder 1')
         fs_item = remote_client.get_fs_item(fs_item_id)
-        self.assertIsNotNone(fs_item)
+        self.assertTrue(fs_item is not None)
         self.assertEquals(fs_item['name'], 'Folder 1')
         self.assertEquals(fs_item['id'], fs_item_id)
         self.assertTrue(fs_item['folder'])
 
         # Check non existing file system item
         fs_item_id = self.FS_ITEM_ID_PREFIX + 'fakeId'
-        self.assertIsNone(remote_client.get_fs_item(fs_item_id))
+        self.assertTrue(remote_client.get_fs_item(fs_item_id)
+                        is None)
 
     def test_get_top_level_children(self):
         remote_document_client = self.remote_document_client_1

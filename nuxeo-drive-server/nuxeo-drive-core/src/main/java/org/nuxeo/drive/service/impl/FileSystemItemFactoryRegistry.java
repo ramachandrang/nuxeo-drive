@@ -26,7 +26,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.nuxeo.ecm.core.api.ClientRuntimeException;
 import org.nuxeo.runtime.model.ContributionFragmentRegistry;
 
@@ -38,6 +41,8 @@ import org.nuxeo.runtime.model.ContributionFragmentRegistry;
  */
 public class FileSystemItemFactoryRegistry extends
         ContributionFragmentRegistry<FileSystemItemFactoryDescriptor> {
+
+    private static final Log log = LogFactory.getLog(FileSystemItemFactoryRegistry.class);
 
     protected final Map<String, FileSystemItemFactoryDescriptor> factoryDescriptors = new HashMap<String, FileSystemItemFactoryDescriptor>();
 
@@ -55,10 +60,15 @@ public class FileSystemItemFactoryRegistry extends
     public void contributionUpdated(String id,
             FileSystemItemFactoryDescriptor contrib,
             FileSystemItemFactoryDescriptor newOrigContrib) {
-        if (newOrigContrib.isEnabled()) {
-            // No merge
-            factoryDescriptors.put(id, newOrigContrib);
+        if (contrib.isEnabled()) {
+            log.trace(String.format(
+                    "Putting contribution %s with id %s in factory descriptors",
+                    contrib, id));
+            factoryDescriptors.put(id, contrib);
         } else {
+            log.trace(String.format(
+                    "Removing disabled contribution with id %s from factory descriptors",
+                    id));
             factoryDescriptors.remove(id);
         }
     }
@@ -66,12 +76,16 @@ public class FileSystemItemFactoryRegistry extends
     @Override
     public void contributionRemoved(String id,
             FileSystemItemFactoryDescriptor origContrib) {
+        log.trace(String.format(
+                "Removing contribution with id %s from factory descriptors", id));
         factoryDescriptors.remove(id);
     }
 
     @Override
     public FileSystemItemFactoryDescriptor clone(
             FileSystemItemFactoryDescriptor orig) {
+        log.trace(String.format("Cloning contribution with id %s",
+                orig.getName()));
         try {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(bos);
@@ -89,7 +103,38 @@ public class FileSystemItemFactoryRegistry extends
     @Override
     public void merge(FileSystemItemFactoryDescriptor src,
             FileSystemItemFactoryDescriptor dst) {
-        // Null merge
+        log.trace(String.format(
+                "Merging contribution with id %s to contribution with id %s",
+                src.getName(), dst.getName()));
+        // Enabled
+        if (src.isEnabled() != dst.isEnabled()) {
+            dst.setEnabled(src.isEnabled());
+        }
+        // Order
+        if (src.getOrder() != dst.getOrder()) {
+            dst.setOrder(src.getOrder());
+        }
+        // Doc type
+        if (!StringUtils.isEmpty(src.getDocType())
+                && !src.getDocType().equals(dst.getDocType())) {
+            dst.setDocType(src.getDocType());
+        }
+        // Facet
+        if (!StringUtils.isEmpty(src.getFacet())
+                && !src.getFacet().equals(dst.getFacet())) {
+            dst.setFacet(src.getFacet());
+        }
+        // Class
+        if (src.getFactoryClass() != null
+                && !src.getFactoryClass().equals(dst.getFactoryClass())) {
+            dst.setFactoryClass(src.getFactoryClass());
+        }
+        // Parameters
+        if (!MapUtils.isEmpty(src.getParameters())) {
+            for (String name : src.getParameters().keySet()) {
+                dst.setParameter(name, src.getparameter(name));
+            }
+        }
     }
 
     protected List<FileSystemItemFactoryWrapper> getOrderedFactories()

@@ -3,14 +3,15 @@ import time
 
 from nxdrive.tests.common import IntegrationTestCase
 from nxdrive.client import LocalClient
-from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import RemoteDocumentClient
+from nxdrive.model import LastKnownState
+from nxdrive.client.common import NotFound
 
 
-class TestIntegrationMoveAndRename(IntegrationTestCase):
+class TestIntegrationLocalMoveAndRename(IntegrationTestCase):
 
     def setUp(self):
-        super(TestIntegrationMoveAndRename, self).setUp()
+        super(TestIntegrationLocalMoveAndRename, self).setUp()
 
         self.sb_1 = self.controller_1.bind_server(
             self.local_nxdrive_folder_1,
@@ -146,7 +147,8 @@ class TestIntegrationMoveAndRename(IntegrationTestCase):
         original_file_1_uid = remote_client.get_info(
             u'/Original File 1.txt').uid
 
-        local_client.rename(u'/Original File 1.txt', u'Renamed File 1 \xe9.txt')
+        local_client.rename(u'/Original File 1.txt',
+                            u'Renamed File 1 \xe9.txt')
         local_client.move(u'/Renamed File 1 \xe9.txt', u'/Original Folder 1')
         self.assertFalse(local_client.exists(u'/Original File 1.txt'))
         self.assertTrue(local_client.exists(
@@ -330,6 +332,61 @@ class TestIntegrationMoveAndRename(IntegrationTestCase):
         folder_1_info = remote_client.get_info(folder_1_uid)
         self.assertEquals(folder_1_info.name, u"Original Folder 1")
         self.assertEquals(folder_1_info.parent_uid, self.workspace)
+
+    def test_local_rename_top_level_folder(self):
+        sb, ctl = self.sb_1, self.controller_1
+        local_client = LocalClient(self.local_test_folder_1)
+        session = ctl.get_session()
+
+        # Check top level folder
+        self.assertTrue(local_client.exists(u'/Nuxeo Drive'))
+        top_level_folder_info = local_client.get_info(u'/Nuxeo Drive')
+        self.assertEquals(top_level_folder_info.name, u'Nuxeo Drive')
+        self.assertEquals(top_level_folder_info.filepath,
+            os.path.join(self.local_test_folder_1, u'Nuxeo Drive'))
+        # Check top level folder state
+        top_level_folder_state = session.query(LastKnownState).filter_by(
+            local_name=u'Nuxeo Drive').one()
+        self.assertEquals(top_level_folder_state.local_path, '/')
+        self.assertEquals(top_level_folder_state.local_name, u'Nuxeo Drive')
+
+        # Rename top level folder
+        local_client.rename(u'/Nuxeo Drive', u'Nuxeo Drive renamed')
+        top_level_folder_info = local_client.get_info(u'/Nuxeo Drive renamed')
+        self.assertEquals(top_level_folder_info.name, u'Nuxeo Drive renamed')
+        self.assertEquals(top_level_folder_info.filepath,
+            os.path.join(self.local_test_folder_1, u'Nuxeo Drive renamed'))
+
+        self.assertEquals(ctl.synchronizer.update_synchronize_server(sb), 1)
+
+        # Check deleted server binding
+        self.assertRaises(RuntimeError,
+                          ctl.get_server_binding, self.local_nxdrive_folder_1,
+                          raise_if_missing=True)
+        # Check deleted pair state
+        self.assertEquals(len(session.query(LastKnownState).all()), 0)
+
+    def test_local_delete_top_level_folder(self):
+        sb, ctl = self.sb_1, self.controller_1
+        local_client = LocalClient(self.local_test_folder_1)
+        session = ctl.get_session()
+
+        # Check top level folder
+        self.assertTrue(local_client.exists(u'/Nuxeo Drive'))
+
+        # Delete top level folder
+        local_client.delete(u'/Nuxeo Drive')
+        self.assertRaises(NotFound,
+                          local_client.get_info, u'/Nuxeo Drive')
+
+        self.assertEquals(ctl.synchronizer.update_synchronize_server(sb), 1)
+
+        # Check deleted server binding
+        self.assertRaises(RuntimeError,
+                          ctl.get_server_binding, self.local_nxdrive_folder_1,
+                          raise_if_missing=True)
+        # Check deleted pair state
+        self.assertEquals(len(session.query(LastKnownState).all()), 0)
 
     # TODO: implement me once canDelete is checked in the synchronizer
     # def test_local_move_sync_root_folder(self):

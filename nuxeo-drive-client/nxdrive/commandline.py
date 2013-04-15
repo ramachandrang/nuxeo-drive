@@ -4,6 +4,7 @@ import sys
 import argparse
 from getpass import getpass
 import traceback
+import threading
 try:
     import ipdb
     debugger = ipdb
@@ -19,6 +20,7 @@ from nxdrive.logging_config import get_logger
 from nxdrive.protocol_handler import parse_protocol_url
 from nxdrive.protocol_handler import register_protocol_handlers
 from nxdrive.startup import register_startup
+from nxdrive import _version_
 
 
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
@@ -88,7 +90,10 @@ def make_cli_parser(add_subparsers=True):
         "--stop-on-error", default=True, action="store_true",
         help="Stop the process on first unexpected error."
         "Useful for developers and Continuous Integration.")
-
+    common_parser.add_argument(
+        "-v", "--version", action="version", version=_version_,
+        help="Print the current version of the Nuxeo Drive client."
+    )
     parser = argparse.ArgumentParser(
         parents=[common_parser],
         description="Command line interface for Nuxeo Drive operations.",
@@ -405,10 +410,13 @@ class CliHandler(object):
         # List the test modules explicitly as recursive discovery is broken
         # when the app is frozen.
         argv += [
+            "nxdrive.tests.test_integration_encoding",
             "nxdrive.tests.test_integration_local_client",
+            "nxdrive.tests.test_integration_local_move_and_rename",
             "nxdrive.tests.test_integration_remote_changes",
             "nxdrive.tests.test_integration_remote_document_client",
             "nxdrive.tests.test_integration_remote_file_system_client",
+            "nxdrive.tests.test_integration_remote_move_and_rename",
             "nxdrive.tests.test_integration_synchronization",
             "nxdrive.tests.test_integration_versioning",
             "nxdrive.tests.test_synchronizer",
@@ -416,7 +424,26 @@ class CliHandler(object):
         return 0 if nose.run(argv=argv) else 1
 
 
+def dumpstacks(signal, frame):
+    id2name = dict([(th.ident, th.name) for th in threading.enumerate()])
+    code = []
+    for thread_id, stack in sys._current_frames().items():
+        code.append("\n# Thread: %s(%d)" % (id2name.get(thread_id, ""),
+                                            thread_id))
+        for filename, lineno, name, line in traceback.extract_stack(stack):
+            code.append('File: "%s", line %d, in %s'
+                        % (filename, lineno, name))
+            if line:
+                code.append("  %s" % (line.strip()))
+    print "\n".join(code)
+
+
 def main(argv=None):
+    # Print thread dump when receiving SIGUSR1,
+    # except under Windows (no SIGUSR1)
+    if sys.platform != 'win32': 
+        import signal
+        signal.signal(signal.SIGUSR1, dumpstacks)
     if argv is None:
         argv = sys.argv
     return CliHandler().handle(argv)

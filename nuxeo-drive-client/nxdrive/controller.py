@@ -2,6 +2,7 @@
 
 import os
 import sys
+from urllib import quote
 from threading import local
 import subprocess
 from datetime import datetime
@@ -40,17 +41,17 @@ def default_nuxeo_drive_folder():
         # WARNING: it's important to check `Documents` first as under Windows 7
         # there also exists a `My Documents` folder invisible in the explorer and
         # cmd / powershell but visible from Python
-        documents = os.path.expanduser(r'~\Documents')
-        my_documents = os.path.expanduser(r'~\My Documents')
+        documents = os.path.expanduser(ur'~\Documents')
+        my_documents = os.path.expanduser(ur'~\My Documents')
         if os.path.exists(documents):
             # Regular location for documents under Windows 7 and up
-            return os.path.join(documents, 'Nuxeo Drive')
+            return os.path.join(documents, u'Nuxeo Drive')
         elif os.path.exists(my_documents):
             # Compat for Windows XP
-            return os.path.join(my_documents, 'Nuxeo Drive')
+            return os.path.join(my_documents, u'Nuxeo Drive')
 
     # Fallback to home folder otherwise
-    return os.path.join(os.path.expanduser('~'), 'Nuxeo Drive')
+    return os.path.join(os.path.expanduser(u'~'), u'Nuxeo Drive')
 
 
 class Controller(object):
@@ -208,7 +209,7 @@ class Controller(object):
         binding = self.get_server_binding(local_path, session=session,
             raise_if_missing=False)
         if binding is not None:
-            return binding, '/'
+            return binding, u'/'
 
         # Check for bindings that are prefix of local_path
         session = self.get_session()
@@ -224,7 +225,7 @@ class Controller(object):
                 local_path, matching_bindings))
         binding = matching_bindings[0]
         path = local_path[len(binding.local_folder):]
-        path = path.replace(os.path.sep, '/')
+        path = path.replace(os.path.sep, u'/')
         return binding, path
 
     def get_server_binding(self, local_folder, raise_if_missing=False,
@@ -254,6 +255,8 @@ class Controller(object):
         local_folder = normalized_path(local_folder)
         if not os.path.exists(local_folder):
             os.makedirs(local_folder)
+
+        self.register_folder_link(local_folder)
 
         # check the connection to the server by issuing an authentication
         # request
@@ -301,7 +304,7 @@ class Controller(object):
 
             # Creating the toplevel state for the server binding
             local_client = LocalClient(server_binding.local_folder)
-            local_info = local_client.get_info('/')
+            local_info = local_client.get_info(u'/')
 
             remote_client = self.get_remote_fs_client(server_binding)
             remote_info = remote_client.get_filesystem_root_info()
@@ -473,7 +476,7 @@ class Controller(object):
             timeout=self.timeout)
 
     def get_remote_client(self, server_binding, repository='default',
-                          base_folder='/'):
+                          base_folder=u'/'):
         # Backward compat
         return self.get_remote_doc_client(server_binding,
             repository=repository, base_folder=base_folder)
@@ -548,6 +551,43 @@ class Controller(object):
         """Ensure that user provided url always has a trailing '/'"""
         if url is None or not url:
             raise ValueError("Invalid url: %r" % url)
-        if not url.endswith('/'):
-            return url + '/'
+        if not url.endswith(u'/'):
+            return url + u'/'
         return url
+
+    def register_folder_link(self, folder_path):
+        if sys.platform == 'darwin':
+            self.register_folder_link_darwin(folder_path)
+        # TODO: implement Windows and Linux support here
+
+    def register_folder_link_darwin(self, folder_path):
+        try:
+           from LaunchServices import LSSharedFileListCreate
+           from LaunchServices import kLSSharedFileListFavoriteItems
+           from LaunchServices import LSSharedFileListInsertItemURL
+           from LaunchServices import kLSSharedFileListItemBeforeFirst
+           from LaunchServices import CFURLCreateWithString
+        except ImportError:
+            log.warning("PyObjC package is not installed:"
+                        " skipping favorite link creation")
+            return
+        folder_path = normalized_path(folder_path)
+        folder_name = os.path.basename(folder_path)
+
+        lst = LSSharedFileListCreate(None, kLSSharedFileListFavoriteItems, None)
+        if lst is None:
+            log.warning("Could not fetch the Finder favorite list.")
+            return
+
+        url = CFURLCreateWithString(None, "file://" + quote(folder_path), None)
+        if url is None:
+            log.warning("Could not generate valid favorite URL for: %s",
+                folder_path)
+            return
+
+        # Register the folder as favorite if not already there
+        item = LSSharedFileListInsertItemURL(
+            lst, kLSSharedFileListItemBeforeFirst, folder_name, None, url,
+            {}, [])
+        if item is not None:
+            log.debug("Registered new favorite in Finder for: %s", folder_path)
