@@ -8,13 +8,14 @@ from PySide.QtGui import QDialog, QImage, QPushButton, QLabel, QMovie
 from PySide.QtCore import QTimer, Qt, QRectF, QPointF
 
 from nxdrive.logging_config import get_logger
+from nxdrive import Constants
 
 log = get_logger(__name__)
 
 
 class ProgressDialog(QDialog):
-    WINDOW_WIDTH = 120
-    WINDOW_HEIGHT = 110
+    WINDOW_WIDTH = 200
+    WINDOW_HEIGHT = 150
     OK_AND_RESTART = 1
     OK_AND_NO_RESTART = 2
     CANCELLED = 3
@@ -23,10 +24,12 @@ class ProgressDialog(QDialog):
                            }
     
     def __init__(self, frontend, parent=None, cancel=True):
-        super(ProgressDialog, self).__init__(parent=parent, f=Qt.FramelessWindowHint)
+        super(ProgressDialog, self).__init__(parent=parent)
         
         self.frontend = frontend
         self.setFixedSize(ProgressDialog.WINDOW_WIDTH, ProgressDialog.WINDOW_HEIGHT)
+        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint)
+        self.setWindowTitle('Sync Status')
         self.btn = QPushButton('Cancel', self)
         sizeBtn = self.btn.size()
         self.btn.setEnabled(cancel)
