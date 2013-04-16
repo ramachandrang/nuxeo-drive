@@ -84,7 +84,11 @@ def default_nuxeo_drive_folder():
 #            return os.path.join(my_documents, Constants.DEFAULT_NXDRIVE_FOLDER)
 
     # Fallback to home folder otherwiseConstants.DEFAULT_NXDRIVE_FOLDER)
-    return os.path.join(os.path.expanduser('~'), Constants.DEFAULT_NXDRIVE_FOLDER)
+    # NOTE: on Windows, '~' is expanded with 'Users' in lowercase, which causes issues later on
+    home = os.path.expanduser('~')
+    if sys.platform == 'win32':
+        home = home[:3] + home[3].upper() + home[4:]
+    return os.path.join(home, Constants.DEFAULT_NXDRIVE_FOLDER)
 
 
 class Event(object):
@@ -201,7 +205,7 @@ class Controller(object):
         # metadata sqlite database.
         self._engine, self._session_maker = init_db(
             self.config_folder, echo = echo, poolclass = poolclass)
-        
+
         config_file = Constants.CONFIG_FILE
         config_file = os.path.join(normalized_path(config_folder), config_file)
         if os.path.exists(config_file):
@@ -270,7 +274,7 @@ class Controller(object):
         else:
             log.info("Failed to get process id, app will not quit.")
 
-    def _children_states(self, folder_path, session=None):
+    def _children_states(self, folder_path, session = None):
         """List the status of the children of a folder
 
         The state of the folder is a summary of their descendant rather
@@ -296,9 +300,9 @@ class Controller(object):
 
         states = self._pair_states_recursive(session, folder_state)
         return states, path
-        
-    def children_states_as_files(self, folder_path, session=None):
-        states, path = self._children_states(folder_path, session=session)
+
+    def children_states_as_files(self, folder_path, session = None):
+        states, path = self._children_states(folder_path, session = session)
         if not path or not states:
             return states
         else:
@@ -306,19 +310,19 @@ class Controller(object):
                     for s, pair_state in states
                     if s.local_parent_path == path]
 
-    def children_states_as_paths(self, folder_path, session=None):
-        states, path = self._children_states(folder_path, session=session)
+    def children_states_as_paths(self, folder_path, session = None):
+        states, path = self._children_states(folder_path, session = session)
         if not path or not states:
             return states
         else:
             return [(s.local_path, pair_state)
                     for s, pair_state in states
                     if s.local_parent_path == path]
-            
-    def children_states(self, folder_path, session=None):
+
+    def children_states(self, folder_path, session = None):
         """For backward compatibility"""
-        return self.chidren_states_as_files(folder_path, session=session)
-    
+        return self.chidren_states_as_files(folder_path, session = session)
+
     def _pair_states_recursive(self, session, doc_pair):
         """Recursive call to collect pair state under a given location."""
         if not doc_pair.folderish:
@@ -398,7 +402,7 @@ class Controller(object):
             session = self.get_session()
         try:
             if local_folder is None:
-                # TODO change the function first() to one() 
+                # TODO change the function first() to one()
                 # Should be only one binding with token and or password
                 server_binding = session.query(ServerBinding).filter(ServerBinding._remote_password != None).\
                                                               filter(ServerBinding.remote_token != None).\
@@ -494,14 +498,14 @@ class Controller(object):
                                    local_state = 'synchronized',
                                    remote_info = remote_info,
                                    remote_state = 'synchronized')
-            session.add(state)                          
-            session.commit()      
+            session.add(state)
+            session.commit()
             return server_binding
         except Exception as e:
             log.debug("Failed to bind server: %s", str(e))
             session.rollback()
             raise
-                    
+
         session.commit()
         return server_binding
 
@@ -514,7 +518,7 @@ class Controller(object):
         binding = self.get_server_binding(local_folder, raise_if_missing = True,
                                           session = session)
         if not binding: return
-        
+
         # Revoke token if necessary
         if binding.remote_token is not None:
             try:
@@ -537,10 +541,10 @@ class Controller(object):
         self.invalidate_client_cache(binding.server_url)
         log.info("Unbinding '%s' from '%s' with account '%s'",
                  local_folder, binding.server_url, binding.remote_user)
-        
+
         # NEW keep the binding but reset token and password
         binding.reset()
-        
+
 #        # Delete binding info in local DB
 #        session.delete(binding)
 #        # delete all sync folders but do not clear sync roots on server
@@ -563,7 +567,7 @@ class Controller(object):
 #        log.debug("Removing last sync states for %s", binding.local_folder)
 #        last_known_states = session.query(LastKnownState).filter(LastKnownState.local_folder == binding.local_folder).all()
 #        for lks in last_known_states:
-#            session.delete(lks)                
+#            session.delete(lks)
         session.commit()
 
     def unbind_all(self):
@@ -794,8 +798,8 @@ class Controller(object):
                 return None
 
         return self.mydocs_folder
-    
-    def get_root_folder_synced(self, server_binding, session=None):
+
+    def get_root_folder_synced(self, server_binding, session = None):
         if session is None:
             session = self.get_session()
         try:
@@ -809,9 +813,9 @@ class Controller(object):
         except MultipleResultsFound:
             log.debug("multiple My Docs folders found error!")
             return None
-        
-        
-    def get_mydocs_folder_synced(self, server_binding, session=None):
+
+
+    def get_mydocs_folder_synced(self, server_binding, session = None):
         if session is None:
             session = self.get_session()
         try:
@@ -825,8 +829,8 @@ class Controller(object):
         except MultipleResultsFound:
             log.debug("multiple My Docs folders found error!")
             return None
-        
-    def get_guest_folder_synced(self, server_binding, session=None):
+
+    def get_guest_folder_synced(self, server_binding, session = None):
         if session is None:
             session = self.get_session()
         try:
@@ -839,9 +843,9 @@ class Controller(object):
             return None
         except MultipleResultsFound:
             log.debug("multiple My Docs folders found error!")
-            return None        
-            
-    def get_otherdocs_folder_synced(self, server_binding, session=None):
+            return None
+
+    def get_otherdocs_folder_synced(self, server_binding, session = None):
         if session is None:
             session = self.get_session()
         try:
@@ -966,7 +970,7 @@ class Controller(object):
             storage_key = (sb.server_url, sb.remote_user)
             self.storage[storage_key] = None
 
-    def update_storage_used(self, server_binding=None, session=None):
+    def update_storage_used(self, server_binding = None, session = None):
         if session is None:
             session = self.get_session()
         if server_binding:
@@ -1006,7 +1010,7 @@ class Controller(object):
             if total == 0:
                 return None, False
             else:
-                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used, used / total, total),\
+                return '{:.2f}GB ({:.2%}) of {:.2f}GB'.format(used, used / total, total), \
                         used >= total
         except KeyError:
             return None, False
@@ -1035,11 +1039,11 @@ class Controller(object):
                 urllib2.urlopen(url, None, 10)
             except:
                 log.trace("terminating the http thread with an error.")
-                
+
     def status_thread_cleanup(self):
         self.status_thread = None
         self.http_server = None
-                        
+
     def sync_status_app(self, state, folder, transition):
         import json
         from cgi import escape
@@ -1049,7 +1053,7 @@ class Controller(object):
                 transition.lower() not in ("yes", "true", "t", "1", "no", "false", "f", "0"):
             cherrypy.response.status = '400 Bad Request'
             return None
-        
+
         # Always escape user input to avoid script injection
         state = escape(state)
         folder = escape(folder)
@@ -1068,39 +1072,39 @@ class Controller(object):
         #                        }
         #            ]
         # }
-            
+
         json_struct = { 'list': {}}
         folder_list = []
-        
+
         session = self.get_session()
         # force a local scan
         try:
             folder_struct = {}
             folder_struct['name'] = folder
             if state == 'synchronized':
-                states = self.children_states_as_files(folder, session=session)
+                states = self.children_states_as_files(folder, session = session)
                 files = [f for f, status in states if status == state]
             elif state == 'progress' and not transition:
-                self.synchronizer.scan_local(folder, session=session)
-                states = self.children_states_as_files(folder, session=session)
+                self.synchronizer.scan_local(folder, session = session)
+                states = self.children_states_as_files(folder, session = session)
                 files = [f for f, status in states if status in PROGRESS_STATES]
             elif state == 'progress' and transition:
-                states = self.children_states_as_paths(folder, session=session)
+                states = self.children_states_as_paths(folder, session = session)
                 files = [f for f, status in states if status in PROGRESS_STATES]
                 files = self.get_next_synced_files(files)
             elif state == 'conflicted' and not transition:
-                states = self.children_states_as_files(folder, session=session)
+                states = self.children_states_as_files(folder, session = session)
                 files = [f for f, status in states if status in CONFLICTED_STATES]
             elif state == 'conflicted' and transition:
-                states = self.children_states_as_paths(folder, session=session)
+                states = self.children_states_as_paths(folder, session = session)
                 files = [f for f, status in states if status in CONFLICTED_STATES]
                 files = self.get_next_synced_files(files)
             else:
                 files = []
-                
+
             folder_struct['files'] = files
             folder_list.append({'folder': folder_struct})
-                
+
             json_struct['list'] = folder_list
             cherrypy.response.status = '200 OK'
             return json_struct
@@ -1108,13 +1112,13 @@ class Controller(object):
             session.rollback()
             raise
 
-    def get_next_synced_files(self, paths, session=None):
-        """Called from the http thread to return file(s) which transitioned from 
+    def get_next_synced_files(self, paths, session = None):
+        """Called from the http thread to return file(s) which transitioned from
         'in progress' or 'conflicted' state to 'synchronized' state."""
 
         if len(paths) == 0:
             return paths
-        
+
         if session is None:
             session = self.get_session()
         self.sync_condition.acquire()
@@ -1126,14 +1130,14 @@ class Controller(object):
                                 filter(LastKnownState.local_path.in_(paths)).all()
         self.sync_condition.release()
         files = [state.local_name for state in synced]
-        return files               
+        return files
 
     def reset_proxy(self):
         BaseAutomationClient.set_proxy()
 
     def setProxy(self):
         BaseAutomationClient.set_proxy(ProxyInfo.get_proxy())
-        
+
     def proxy_changed(self):
         return BaseAutomationClient.get_proxy() != ProxyInfo.get_proxy()
 
@@ -1197,7 +1201,7 @@ class Controller(object):
     def start_folders_thread(self, server_binding):
             Thread(target = self._get_folders_and_sync_roots,
                                       args = (self, server_binding,)).start()
-            
+
     def lock_folder(self, path):
         if not os.path.exists(path):
             return
@@ -1211,7 +1215,7 @@ class Controller(object):
                 log.debug('error locking path %s: %s', path, e)
         elif sys.platform == 'win32':
             pass
-            
+
     def unlock_folder(self, path):
         if not os.path.exists(path):
             return
@@ -1225,15 +1229,15 @@ class Controller(object):
                 log.debug('error unlocking path %s: %s', path, e)
         elif sys.platform == 'win32':
             pass
-        
-    def check_nonremovable_folders(self, server_binding, session=None):
+
+    def check_nonremovable_folders(self, server_binding, session = None):
         if session is None:
             session = self.get_session()
-        folders = (self.get_root_folder_synced(server_binding, session=session),
-                   self.get_mydocs_folder_synced(server_binding, session=session),
-                   self.get_guest_folder_synced(server_binding, session=session),
-                   self.get_otherdocs_folder_synced(server_binding, session=session),)
-        
+        folders = (self.get_root_folder_synced(server_binding, session = session),
+                   self.get_mydocs_folder_synced(server_binding, session = session),
+                   self.get_guest_folder_synced(server_binding, session = session),
+                   self.get_otherdocs_folder_synced(server_binding, session = session),)
+
         for fld in folders:
             if fld:
                 local_client = fld.get_local_client()
@@ -1243,7 +1247,7 @@ class Controller(object):
                     if fld.pair_state == 'locally_deleted':
                         # change it back to synchronized
                         fld.update_state('synchronized', 'synchronized')
-                        
+
         if len(session.dirty):
             # Make refreshed state immediately available to other processes
             session.commit()
@@ -1251,11 +1255,10 @@ class Controller(object):
     def init_fswatcher(self):
         config_file = Constants.CONFIG_FILE
         config_file = os.path.join(normalized_path(self.config_folder), config_file)
-        self.fs_watcher = QtCore.QFileSystemWatcher([config_file,])
+        self.fs_watcher = QtCore.QFileSystemWatcher([config_file, ])
         self.fs_watcher.fileChanged.connect(self.file_changed)
-        
+
     @QtCore.Slot(str)
     def file_changed(self, path):
         # reload properties that may change at runtime
         reload_config_file(path)
-        
