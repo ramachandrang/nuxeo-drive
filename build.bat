@@ -6,8 +6,10 @@ set INSTALL_DIR=Cloud Portal Office Desktop
 set SETUP_SCRIPT=CPODesktop-setup-script.iss
 set SETUP_SCRIPT2=InfoAfterInstall.txt
 set INNO_COMPILER=c:\Program Files (x86)\Inno Setup 5\iscc
+set DLL_DIR=CpoIconOverlay
+set DLL_BUILD_SCRIPT=build-dlls.bat
 set CPO_EXE=CpoDesktop.exe
-set VERSION=0.1.12.1
+set VERSION=0.2.0
 
 pushd
 
@@ -31,8 +33,16 @@ echo copy redist packages...
 echo f | xcopy cpo_x86Setup.exe /S /Y %BUILD_DIR%\RedistPackages\32bit\
 echo f | xcopy cpo_x64Setup.exe /S /Y %BUILD_DIR%\RedistPackages\64bit\
 
+echo build DLLs...
+pushd
+call "%DLL_DIR%\%DLL_BUILD_SCRIPT%"
+
 echo copy DLLs...
-xcopy /R /Y /S /I "%GITREPO%\nuxeo-drive-client\nxdrive\data\bin" "%BUILD_DIR%\Dll"
+# this source location is no longer used since DLLs are being built
+# xcopy /R /Y /S /I "%GITREPO%\nuxeo-drive-client\nxdrive\data\bin" "%BUILD_DIR%\Dll"
+xcopy /R /Y /S /I "%DLL_DIR%\bin\Win32\*.dll" "%BUILD_DIR%\Dll\32bit"
+xcopy /R /Y /S /I "%DLL_DIR%\bin\x64\*.dll" "%BUILD_DIR%\Dll\64bit"
+
 xcopy /R /Y /S /I "%GITREPO%\PreReqDll" "%BUILD_DIR%\PreReqDll"
 
 echo copy setup script...
