@@ -91,6 +91,20 @@ void UrlReader::longPull(TCHAR * filePath){
 	struct paramStruct ps;
  	_tcscpy(ps.filePath, filePath);
 	TCHAR * temp = getFileFolder(filePath);
+
+	TCHAR parentFolder[MAX_PATH];
+	_tcscpy(parentFolder, temp);
+	TCHAR findChar = '/';
+	TCHAR replaceChar = '\\';
+	int i = 0;
+	while(parentFolder[i] != '\0'){
+		if((int)parentFolder[i] == (int)findChar){
+			parentFolder[i] = replaceChar;
+		}
+		i++;
+	}
+	//refresh parent folder icon
+	SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSH, parentFolder, NULL);
 	_tcscpy(ps.folderPath, temp);
 	delete temp;
 	temp = NULL;

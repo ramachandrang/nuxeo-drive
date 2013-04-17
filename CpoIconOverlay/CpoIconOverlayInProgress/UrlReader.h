@@ -15,8 +15,6 @@
 
 typedef std::map<std::wstring, bool> syncMap;
 
-
-
 class UrlReader
 {
 private:
