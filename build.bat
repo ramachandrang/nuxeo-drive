@@ -38,8 +38,9 @@ pushd
 call "%DLL_DIR%\%DLL_BUILD_SCRIPT%"
 
 echo copy DLLs...
-# this source location is no longer used since DLLs are being built
-# xcopy /R /Y /S /I "%GITREPO%\nuxeo-drive-client\nxdrive\data\bin" "%BUILD_DIR%\Dll"
+REM  this source location is no longer used since DLLs are being built
+REM  xcopy /R /Y /S /I "%GITREPO%\nuxeo-drive-client\nxdrive\data\bin" "%BUILD_DIR%\Dll"
+
 xcopy /R /Y /S /I "%DLL_DIR%\bin\Win32\*.dll" "%BUILD_DIR%\Dll\32bit"
 xcopy /R /Y /S /I "%DLL_DIR%\bin\x64\*.dll" "%BUILD_DIR%\Dll\64bit"
 

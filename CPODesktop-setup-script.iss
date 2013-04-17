@@ -86,6 +86,8 @@ Filename: "{app}\BatchFiles\RegisterSynchDLL.bat"; Parameters:"""{app}""" ; Desc
 Filename: "{app}\CpoDesktop.exe"; Description: "{cm:LaunchProgram,Cloud Portal Office Desktop}"; Flags: nowait postinstall skipifsilent 
 
 [UninstallRun]
+Filename: "{app}\CpoDesktop.exe"; Parameters:"unbind-server " ; Flags: waituntilterminated runhidden 64bit; Check: Is64BitInstallMode
+Filename: "{app}\CpoDesktop.exe"; Parameters:"unbind-server " ; Flags: waituntilterminated runhidden; Check: not Is64BitInstallMode
 Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}""" ; Flags: nowait runhidden 64bit; Check: Is64BitInstallMode
 Filename: "{app}\BatchFiles\UnregisterSynchDLL.bat"; Parameters:"""{app}""" ; Flags: nowait runhidden ; Check: not Is64BitInstallMode
 
