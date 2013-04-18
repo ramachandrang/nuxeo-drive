@@ -177,9 +177,6 @@ class CpoWizard(QWizard):
 
         return local_folder
 
-    def notify_folders_changed(self):
-        self.communicator.folders.emit()
-
     def notify_local_folders(self, local_folders):
         pass
 
@@ -271,7 +268,7 @@ class IntroPage(QWizardPage):
         self.lblMessage = QLabel()
         self.lblMessage.setObjectName('message')
         self.lblMessage.setWordWrap(True)
-        self.lblMessage.setStyleSheet("QLabel { font-size: 10px }")
+        self.lblMessage.setStyleSheet("QLabel { font-size: 12px }")
         self.lblMessage.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
         self.lblMessage.setOpenExternalLinks(True)
         self.lblMessage.setVisible(False)
@@ -365,13 +362,13 @@ class IntroPage(QWizardPage):
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
             msg = self.tr("Connected")
-            self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: green }")
+            self.lblMessage.setStyleSheet("QLabel { font-size: 12px; color: green }")
             self.auth_ok = True
             self.btnProxy.setVisible(False)
             self.completeChanged.emit()
         except Unauthorized:
             msg = self.tr('Invalid credentials.')
-            self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
+            self.lblMessage.setStyleSheet("QLabel { font-size: 12px; color: red }")
         except DeviceQuotaExceeded as e:
             controller = self.wizard().controller
             client = controller.remote_doc_client_factory(url, username, controller.device_id, password)
@@ -392,7 +389,7 @@ class IntroPage(QWizardPage):
                             'Submit': 'Log in'
                             }
             url = p1 + p2 + p3 + p4 + urllib.urlencode(query_params)
-            self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
+            self.lblMessage.setStyleSheet("QLabel { font-size: 12px; color: red }")
             msg = e.message % (e.max_devices, url)
         except RuntimeError as e:
             msg = str(e)
@@ -411,7 +408,7 @@ class IntroPage(QWizardPage):
                 msg = self.tr("Unable to connect to %s. If a proxy server is required, please configure it here by selecting the Proxy... button") % \
                         Constants.CLOUDDESK_URL
 
-                self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: gray }")
+                self.lblMessage.setStyleSheet("QLabel { font-size: 12px; color: gray }")
                 self.btnProxy.setVisible(True)
             else:
                 if str(e):
@@ -419,7 +416,7 @@ class IntroPage(QWizardPage):
                 else:
                     detail = ''
                 msg = self.tr('Unable to connect to %s%s') % (Constants.CLOUDDESK_URL, detail)
-                self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
+                self.lblMessage.setStyleSheet("QLabel { font-size: 12px; color: red }")
         finally:
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
@@ -442,7 +439,9 @@ class IntroPage(QWizardPage):
         result = self.login()
         if result:
             self.setCommitPage(True)
-        return result        
+        return result    
+        return True    
+        
 
 class InstallOptionsPage(QWizardPage):
     def __init__(self, parent = None):
@@ -458,14 +457,12 @@ class InstallOptionsPage(QWizardPage):
 #        self.lblImgTypical.setPixmap(QPixmap(Constants.APP_ICON_WIZARD_RB))
         self.lblTypical = QLabel(self.tr('Typical'))
         self.lblTypical2 = QLabel(self.tr('(recommended)'))
-        self.lblTypical2.setStyleSheet('QLabel { font-size: 10px; color: gray }')
+        self.lblTypical2.setStyleSheet('QLabel { font-size: 12px; color: gray }')
         self.lblTypical.setStyleSheet('QLabel { font-weight: bold }')
         self.lblTypicalDetail = QLabel(self.tr('Automatically setup %s with default settings.') % Constants.APP_NAME)
-#        rect = self.lblTypicalDetail.geometry()
-#        rect.setWidth(250)
-#        self.lblTypicalDetail.setGeometry(rect)
-        self.lblTypicalDetail.setStyleSheet('QLabel { font-size: 10px }')
-        self.lblTypicalDetail.setWordWrap(False)
+        self.lblTypicalDetail.setMinimumWidth(450)
+        self.lblTypicalDetail.setStyleSheet('QLabel { font-size: 12px }')
+        self.lblTypicalDetail.setWordWrap(True)
         innerinnerHLayout = QHBoxLayout()
         innerinnerHLayout.addWidget(self.lblTypical)
         innerinnerHLayout.addWidget(self.lblTypical2)
@@ -484,13 +481,11 @@ class InstallOptionsPage(QWizardPage):
 #        self.lblImgAdvanced.setPixmap(QPixmap(Constants.APP_ICON_WIZARD_RB))
         self.lblAdvanced = QLabel(self.tr('Advanced'))
         self.lblAdvanced.setStyleSheet('QLabel { font-weight: bold }')
-        self.lblAdvancedDetail = QLabel(self.tr('Customize your %s setup, including %s <br/>folder location and which folders to synch.') % 
+        self.lblAdvancedDetail = QLabel(self.tr('Customize your %s setup, including %s folder location and which folders to synch.') % 
                                         (Constants.PRODUCT_NAME, Constants.APP_NAME))
-        self.lblAdvancedDetail.setStyleSheet('QLabel { font-size: 10px }')
-#        rect = self.lblAdvancedDetail.geometry()
-#        rect.setWidth(400)
-#        self.lblAdvancedDetail.setGeometry(rect)
-        self.lblAdvancedDetail.setWordWrap(False)
+        self.lblAdvancedDetail.setStyleSheet('QLabel { font-size: 12px }')
+        self.lblAdvancedDetail.setMinimumWidth(450)
+        self.lblAdvancedDetail.setWordWrap(True)
         innerVLayout2 = QVBoxLayout()
         innerVLayout2.addWidget(self.lblAdvanced)
         innerVLayout2.addWidget(self.lblAdvancedDetail)
@@ -550,8 +545,6 @@ class InstallOptionsPage(QWizardPage):
             self.wizard().keep_location = True
             if (not os.path.exists(folder)):
                 os.makedirs(folder)
-                if self.wizard().local_folder is not None:
-                    os.unlink(self.wizard().local_folder)
 
             # if no root binding  exists, bind everything
             session = self.wizard().session
@@ -700,7 +693,11 @@ class AdvancedPage(QWizardPage):
         self.setTitle(self.tr('Advanced Setup'))
         # force logo display on win32
 #        self.setSubTitle(' ')
-        folderGroup = QGroupBox(self.tr('Select Location'))
+        # Cannot change the stylesheet for the QGroupBox (or QGroupBox::title)
+#        self.folderGroup = QGroupBox(self.tr('Select Location'))
+        self.folderGroup = QGroupBox()
+        # use a label instead
+        self.lblFolderGroup = QLabel(self.tr('Select Location'))
         innerVLayout1 = QVBoxLayout()
         innerVLayout1.setObjectName('innerVLayout1')
         # fake label for default radiobutton
@@ -719,9 +716,12 @@ class AdvancedPage(QWizardPage):
         innerVLayout1.addWidget(self.rdLocationSelect)
         innerVLayout1.addLayout(innerHLayout1)
         innerVLayout1.setAlignment(Qt.AlignLeft)
-        folderGroup.setLayout(innerVLayout1)
-
-        syncGroup = QGroupBox(self.tr('Select Folders to Sync'))
+        self.folderGroup.setLayout(innerVLayout1)
+        # Cannot change the stylesheet for the QGroupBox (or QGroupBox::title)
+#        self.syncGroup = QGroupBox(self.tr('Select Folders to Sync'))
+        self.syncGroup = QGroupBox()
+        # use a label instead
+        self.lblSyncGroup = QLabel(self.tr('Select Folders to Sync'))
         innerVLayout2 = QVBoxLayout()
         innerVLayout2.setObjectName('innerVLayout2')
         self.rdSyncDefault = QRadioButton(self.tr('All folders'))
@@ -736,18 +736,20 @@ class AdvancedPage(QWizardPage):
         innerVLayout2.addWidget(self.rdSyncSelect)
         innerVLayout2.addLayout(innerHLayout2)
         innerVLayout2.setAlignment(Qt.AlignLeft)
-        syncGroup.setLayout(innerVLayout2)
+        self.syncGroup.setLayout(innerVLayout2)
 
         self.lblMessage = QLabel()
         vLayout = QVBoxLayout()
         vLayout.setObjectName('vLayout')
-        vLayout.addWidget(folderGroup)
-        vLayout.addWidget(syncGroup)
+        vLayout.addWidget(self.lblFolderGroup)
+        vLayout.addWidget(self.folderGroup)
+        vLayout.addWidget(self.lblSyncGroup)
+        vLayout.addWidget(self.syncGroup)
         vLayout.addWidget(self.lblMessage)
         vLayout.addStretch(1)
-
-        self.setStyleSheet('QGroupBox { font-weight: bold }')
-        self.setStyleSheet('QRadioButton { font-size: 10px }')
+        # Cannot change the stylesheet for the QGroupBox (or QGroupBox::title)
+        self.setStyleSheet('QGroupBox { font-weight: bold; font-size: 12px }')
+        self.setStyleSheet('QRadioButton { font-size: 12px }')
         self.setLayout(vLayout)
 
         self.rdLocationSelect.toggled.connect(self.location_select_toggled)
@@ -868,7 +870,7 @@ class AdvancedPage(QWizardPage):
         except Exception as e:
             msg = self.tr('Unable to update folders from %s (%s)') % (Constants.CLOUDDESK_URL, e)
             self.lblMessage.setText(msg)
-            self.lblMessage.setStyleSheet("QLabel { font-size: 10px; color: red }")
+            self.lblMessage.setStyleSheet("QLabel { font-size: 12px; color: red }")
 
         finally:
             app.restoreOverrideCursor()
@@ -883,14 +885,16 @@ class FinalPage(QWizardPage):
         self.lblDetail = QLabel(self.tr("<span style='font-size: 12px'>%s has finished installation and is ready to go.</span>") % 
                                 Constants.APP_NAME)
         self.lblDetail.setWordWrap(True)
-        self.lblImg = QLabel()
-        self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_FINAL))
+        # Remove image on last page (#2073)
+#        self.lblImg = QLabel()
+#        self.lblImg.setPixmap(QPixmap(Constants.APP_IMG_WIZARD_FINAL))
         self.rdLaunch = QCheckBox(self.tr("Launch %s") % Constants.APP_NAME)
         self.rdLaunch.setCheckState(Qt.Checked)
 
         vLayout = QVBoxLayout()
         vLayout.addWidget(self.lblDetail)
-        vLayout.addWidget(self.lblImg)
+        # Remove image on last page (#2073)
+#        vLayout.addWidget(self.lblImg)
         vLayout.addWidget(self.rdLaunch)
         vLayout.addStretch(1)
         self.setLayout(vLayout)

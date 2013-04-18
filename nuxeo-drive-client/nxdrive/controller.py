@@ -586,7 +586,7 @@ class Controller(object):
         nxclient.revoke_token()
         log.debug("revoked the new token %s", token)
 
-    def _get_reusable_server_binding(self):
+    def get_reusable_server_binding(self):
         # if a record exists, use the username from that record
         server_bindings = self.list_server_bindings()
         if len(server_bindings) == 0:
@@ -608,11 +608,11 @@ class Controller(object):
     def getUserName(self):
         # if a record exists, use the username from that record
 #        server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
-        server_binding = self._get_reusable_server_binding()
+        server_binding = self.get_reusable_server_binding()
         return server_binding.remote_user if server_binding else Constants.ACCOUNT
 
     def is_user_readonly(self):
-        server_binding = self._get_reusable_server_binding()
+        server_binding = self.get_reusable_server_binding()
         return server_binding is not None
     
     def _update_hash(self, password):
@@ -998,35 +998,34 @@ class Controller(object):
     def update_storage_used(self, server_binding=None, session=None):
         if session is None:
             session = self.get_session()
+        if not server_binding:
+            server_binding = self.get_reusable_server_binding()
         if server_binding:
-            server_bindings = [server_binding]
-        else:
-            server_bindings = session.query(ServerBinding).all()
-        for sb in server_bindings:
-            remote_client = self.get_remote_client(sb)
+            remote_client = self.get_remote_client(server_binding)
             if remote_client is not None:
                 try:
-                    sb.used_storage, sb.total_storage = remote_client.get_storage_used()
-                    log.debug("used storage=%s, total storage=%s", str(sb.used_storage), str(sb.total_storage))
+                    server_binding.used_storage, server_binding.total_storage = remote_client.get_storage_used()
+                    session.commit()
+                    log.debug("used storage=%s, total storage=%s", 
+                              str(server_binding.used_storage), str(server_binding.total_storage))
                 except ValueError:
                     # operation not implemented
-                    log.debug("failed to retrieve storage for url: %s, user: %s", sb.server_url, sb.remote_user)
+                    log.debug("failed to retrieve storage for url: %s, user: %s", 
+                              server_binding.server_url, server_binding.remote_user)
 
     def update_server_storage_used(self, url, user, session = None):
         if session is None:
             session = self.get_session()
-        for sb in session.query(ServerBinding).all():
-            if url.startswith(sb.server_url) and user == sb.remote_user:
-                remote_client = self.get_remote_client(sb)
-                if remote_client is not None:
-                    try:
-                        sb.used_storage, sb.total_storage = remote_client.get_storage_used()
-                        return sb.used_storage, sb.total_storage
-                    except ValueError:
-                        # operation not implemented
-                        pass
-                break
-
+        sb = self.get_reusable_server_binding()
+        if sb and url.startswith(sb.server_url) and user == sb.remote_user:
+            remote_client = self.get_remote_client(sb)
+            if remote_client is not None:
+                try:
+                    sb.used_storage, sb.total_storage = remote_client.get_storage_used()
+                    return sb.used_storage, sb.total_storage
+                except ValueError:
+                    # operation not implemented
+                    pass
         return (0, 0)
 
     def get_storage(self, server_binding):

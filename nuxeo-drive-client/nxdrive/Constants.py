@@ -35,7 +35,7 @@ DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 CONFIG_FILE = 'nxdrive.cfg'
 
 # TODO replace with CloudDesk url and admin(?) account
-CLOUDDESK_URL = u'https://qadm.sharpb2bcloud.com/app1'
+CLOUDDESK_URL = r'https://qadm.sharpb2bcloud.com/app1'
 ACCOUNT = ''
 # CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
 SERVICE_NAME = 'Cloud Portal Office'

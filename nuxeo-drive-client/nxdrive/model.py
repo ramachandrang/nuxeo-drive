@@ -198,8 +198,8 @@ class ServerBinding(Base):
         return (isinstance(other, ServerBinding) and
                 self.local_folder == other.local_folder and
                 self.server_url == other.server_url and
-                self.remote_user == other.remote_user and
-                self.remote_token == other.remote_token)
+                self.remote_user == other.remote_user)
+#                and self.remote_token == other.remote_token)
 
     def __ne__(self, other):
         return not self.__eq__(other)

@@ -27,25 +27,28 @@ class ModelUpdater(QObject):
         self.server_binding = server_binding
         self.controller = controller
 
-def get_model(session, frontend):
+def get_model(session, folder_dlg):
     model = QStandardItemModel()
     rootItem = model.invisibleRootItem()
 
     try:
-        server_binding = frontend.server_binding
-        controller = frontend.controller
+        server_binding = folder_dlg.frontend.server_binding
+        controller = folder_dlg.frontend.controller
         if server_binding is None:
             log.debug('invalid get_model() arguments: server_binding')
             return None
         if controller is None:
             log.debug('invalid get_model() arguments: controller')
             return None
-        controller.synchronizer.get_folders(server_binding = server_binding, session = session)
-        controller.synchronizer.update_roots(server_binding = server_binding, session = session)
-
-        sync_folder = session.query(SyncFolders).filter(SyncFolders.remote_parent == None).\
-                                                filter(SyncFolders.local_folder == server_binding.local_folder).\
-                                                one()
+        
+        controller.synchronizer.get_folders(server_binding, update_roots=True, session=session,
+                         completion_notifier=folder_dlg.notify_folders_retrieved)
+        
+        sync_folder = session.query(SyncFolders).\
+                        filter(SyncFolders.remote_parent == None).\
+                        filter(SyncFolders.local_folder == server_binding.local_folder).\
+                        one()
+                        
         item = QStandardItem(sync_folder.remote_name)
         item.setCheckable(False)
         item.setEnabled(False)
@@ -138,7 +141,6 @@ def update_model(session, parent, local_folder):
         # otherwise process its children
         for i in range(parent.rowCount()):
             update_model(session, parent.child(i), local_folder)
-
 
 def no_bindings(session):
     count = session.query(SyncFolders).\

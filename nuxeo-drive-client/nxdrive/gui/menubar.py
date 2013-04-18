@@ -300,6 +300,10 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 self.notifications = True
         else:
             self.notifications = settings.value('preferences/notifications', True)
+            
+        if self.server_binding:     
+            self.controller.synchronizer.get_folders(self.server_binding, update_roots=True, 
+                             completion_notifier=self.controller.synchronizer.notify_folders_retrieved)
 
 
     def enable_trace(self, state):
@@ -745,10 +749,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                       u", ".join(local_folders))
             self.communicator.menu.emit()
             self.update_running_icon()
-
-    def notify_folders_changed(self):
-        if not self.isStoppedOrQuitting():
-            self.communicator.folders.emit()
 
     def quit(self):
         if self.worker is not None and self.worker.isAlive():

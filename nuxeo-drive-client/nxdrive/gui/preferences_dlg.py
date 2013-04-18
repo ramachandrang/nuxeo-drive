@@ -547,7 +547,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         # This will prevent folder reuse on first sign in.
         # Afterwards, username will not change (unless db is deleted).
         # url though may still change if modified in the config file (and app is restarted)
-        server_binding = self.controller._get_reusable_server_binding()
+        server_binding = self.controller.get_reusable_server_binding()
         if server_binding is None:
             return False
         # remove the trailing '/' before comparison
