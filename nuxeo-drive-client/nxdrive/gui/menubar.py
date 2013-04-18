@@ -1089,20 +1089,21 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox.setStandardButtons(QMessageBox.Ok)
         msgbox.setDefaultButton(QMessageBox.Ok)
         
-        start_utc = datetime.strptime(server_maint_event.data1 , '%Y-%m-%d %H:%M:%S')
-        end_utc = datetime.strptime(server_maint_event.data2 , '%Y-%m-%d %H:%M:%S')
-        
-        from_tz = tz.tzutc()
-        to_tz = tz.tzlocal()
-        #convert local time for message
-        start_utc = start_utc.replace(tzinfo = from_tz)
-        end_utc = end_utc.replace(tzinfo = from_tz)
-        start_local = start_utc.astimezone(to_tz)
-        end_local = end_utc.astimezone(to_tz)
 
         main, detail = msg.split('\n')
         #reassign current local for detail
-        detail = _("From %s to %s.") % (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
+        if server_maint_event is not None:
+            start_utc = datetime.strptime(server_maint_event.data1 , '%Y-%m-%d %H:%M:%S')
+            end_utc = datetime.strptime(server_maint_event.data2 , '%Y-%m-%d %H:%M:%S')
+            
+            from_tz = tz.tzutc()
+            to_tz = tz.tzlocal()
+            #convert local time for message
+            start_utc = start_utc.replace(tzinfo = from_tz)
+            end_utc = end_utc.replace(tzinfo = from_tz)
+            start_local = start_utc.astimezone(to_tz)
+            end_local = end_utc.astimezone(to_tz)
+            detail = _("From %s to %s.") % (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         msgbox.setInformativeText(main)
         msgbox.setDetailedText(detail)
         msgbox.setIcon(icon)
