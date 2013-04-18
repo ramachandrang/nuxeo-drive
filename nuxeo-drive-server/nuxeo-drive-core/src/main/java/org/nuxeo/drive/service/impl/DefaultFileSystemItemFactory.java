@@ -24,9 +24,11 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.nuxeo.drive.adapter.FileSystemItem;
+import org.nuxeo.drive.adapter.FolderItem;
 import org.nuxeo.drive.adapter.impl.DocumentBackedFileItem;
 import org.nuxeo.drive.adapter.impl.DocumentBackedFolderItem;
 import org.nuxeo.drive.service.FileSystemItemFactory;
+import org.nuxeo.drive.service.NuxeoDriveManager;
 import org.nuxeo.drive.service.VersioningFileSystemItemFactory;
 import org.nuxeo.ecm.core.api.Blob;
 import org.nuxeo.ecm.core.api.ClientException;
@@ -34,6 +36,7 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.LifeCycleConstants;
 import org.nuxeo.ecm.core.api.VersioningOption;
 import org.nuxeo.ecm.core.api.blobholder.BlobHolder;
+import org.nuxeo.runtime.api.Framework;
 
 /**
  * Default implementation of a {@link FileSystemItemFactory}. It is
@@ -121,24 +124,36 @@ public class DefaultFileSystemItemFactory extends AbstractFileSystemItemFactory
                     doc.getId()));
             return false;
         }
+        // Check not a synchronization root registered for the current user
+        NuxeoDriveManager nuxeoDriveManager = Framework.getLocalService(NuxeoDriveManager.class);
+        Principal principal = doc.getCoreSession().getPrincipal();
+        boolean isSyncRoot = nuxeoDriveManager.isSynchronizationRoot(principal,
+                doc);
+        if (isSyncRoot) {
+            log.debug(String.format(
+                    "Document %s is a registered synchronization root for user %s, it cannot be adapted as a DefaultFileSystemItem.",
+                    doc.getId(), principal.getName()));
+            return false;
+        }
         return true;
     }
 
     @Override
     protected FileSystemItem adaptDocument(DocumentModel doc,
-            boolean forceParentId, String parentId) throws ClientException {
+            boolean forceParentItem, FolderItem parentItem)
+            throws ClientException {
         // Doc is either Folderish
         if (doc.isFolder()) {
-            if (forceParentId) {
-                return new DocumentBackedFolderItem(name, parentId, doc);
+            if (forceParentItem) {
+                return new DocumentBackedFolderItem(name, parentItem, doc);
             } else {
                 return new DocumentBackedFolderItem(name, doc);
             }
         }
         // or a BlobHolder with a blob
         else {
-            if (forceParentId) {
-                return new DocumentBackedFileItem(this, parentId, doc);
+            if (forceParentItem) {
+                return new DocumentBackedFileItem(this, parentItem, doc);
             } else {
                 return new DocumentBackedFileItem(this, doc);
             }

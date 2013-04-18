@@ -3,6 +3,9 @@
 from __future__ import division
 
 import sys
+import os
+from urllib import quote
+from threading import local
 import os.path
 import urllib2
 import urlparse
@@ -18,6 +21,7 @@ from threading import Condition
 import logging
 
 from PySide import QtCore
+from cookielib import CookieJar
 
 import nxdrive
 from nxdrive.client import LocalClient
@@ -167,7 +171,6 @@ class Controller(object):
     remote_doc_client_factory = RemoteDocumentClient
 
     # Used for FS synchronization operations
-    remote_fs_client_factory = RemoteFileSystemClient
     remote_maint_service_client_factory = RemoteMaintServiceClient
     remote_upgrade_service_client_factory = RemoteUpgradeServiceClient
     __instance = None
@@ -224,6 +227,10 @@ class Controller(object):
         Controller.__instance = self
         self.sync_condition = Condition()
 
+        # Make all the automation client related to this controller
+        # share cookies using threadsafe jar
+        self.cookie_jar = CookieJar()
+
     def get_session(self):
         """Reuse the thread local session for this controller
 
@@ -274,7 +281,7 @@ class Controller(object):
         else:
             log.info("Failed to get process id, app will not quit.")
 
-    def _children_states(self, folder_path, session=None):
+    def _children_states(self, folder_path):
         """List the status of the children of a folder
 
         The state of the folder is a summary of their descendant rather
@@ -282,8 +289,7 @@ class Controller(object):
         use for the end user.
 
         """
-        if session is None:
-            session = self.get_session()
+        session = self.get_session()
         # Find the server binding for this absolute path
         try:
             binding, path = self._binding_path(folder_path, session = session)
@@ -299,10 +305,10 @@ class Controller(object):
             return [], path
 
         states = self._pair_states_recursive(session, folder_state)
-        return states, path
+		return states, path
         
-    def children_states_as_files(self, folder_path, session=None):
-        states, path = self._children_states(folder_path, session=session)
+    def children_states_as_files(self, folder_path):
+        states, path = self._children_states(folder_path)
         if not path or not states:
             return states
         else:
@@ -310,8 +316,8 @@ class Controller(object):
                     for s, pair_state in states
                     if s.local_parent_path == path]
 
-    def children_states_as_paths(self, folder_path, session = None):
-        states, path = self._children_states(folder_path, session = session)
+    def children_states_as_paths(self, folder_path):
+        states, path = self._children_states(folder_path)
         if not path or not states:
             return states
         else:
@@ -319,9 +325,9 @@ class Controller(object):
                     for s, pair_state in states
                     if s.local_parent_path == path]
             
-    def children_states(self, folder_path, session=None):
+    def children_states(self, folder_path):
         """For backward compatibility"""
-        return self.chidren_states_as_files(folder_path, session = session)
+        return self.chidren_states_as_files(folder_path)
 
     def _pair_states_recursive(self, session, doc_pair):
         """Recursive call to collect pair state under a given location."""
@@ -370,7 +376,7 @@ class Controller(object):
         binding = self.get_server_binding(local_path, session = session,
             raise_if_missing = False)
         if binding is not None:
-            return binding, '/'
+            return binding, u'/'
 
         # Check for bindings that are prefix of local_path
         session = self.get_session()
@@ -391,7 +397,7 @@ class Controller(object):
                 local_path, matching_bindings))
         binding = matching_bindings[0]
         path = local_path[len(binding.local_folder):]
-        path = path.replace(os.path.sep, '/')
+        path = path.replace(os.path.sep, u'/')
         return binding, path
 
     def get_server_binding(self, local_folder = None, raise_if_missing = False,
@@ -436,6 +442,8 @@ class Controller(object):
         local_folder = normalized_path(local_folder)
         if not os.path.exists(local_folder):
             os.makedirs(local_folder)
+
+        self.register_folder_link(local_folder)
 
         # check the connection to the server by issuing an authentication
         # request
@@ -488,7 +496,7 @@ class Controller(object):
 
             # Creating the toplevel state for the server binding
             local_client = LocalClient(server_binding.local_folder)
-            local_info = local_client.get_info('/')
+            local_info = local_client.get_info(u'/')
 
             remote_client = self.get_remote_fs_client(server_binding)
             remote_info = remote_client.get_filesystem_root_info()
@@ -746,16 +754,16 @@ class Controller(object):
         return session.query(LastKnownState).filter(
             *predicates
         ).order_by(
-            # Ensure that newly created local folders will be synchronized
-            # before their children
-            asc(LastKnownState.local_path),
-
             # Ensure that newly created remote folders will be synchronized
             # before their children while keeping a fixed named based
             # deterministic ordering to make the tests readable
             asc(LastKnownState.remote_parent_path),
             asc(LastKnownState.remote_name),
-            asc(LastKnownState.remote_ref)
+            asc(LastKnownState.remote_ref),
+
+            # Ensure that newly created local folders will be synchronized
+            # before their children
+            asc(LastKnownState.local_path)
         ).limit(limit).all()
 
     def next_pending(self, local_folder = None, session = None):
@@ -779,11 +787,13 @@ class Controller(object):
         if remote_client is None:
             remote_client = self.remote_fs_client_factory(
                 sb.server_url, sb.remote_user, self.device_id,
-                token = sb.remote_token, password = sb.remote_password,
-                timeout = self.timeout)
+                token=sb.remote_token, password=sb.remote_password,
+                timeout=self.timeout, cookie_jar=self.cookie_jar)
             cache[cache_key] = remote_client
         # Make it possible to have the remote client simulate any kind of
-        # failure
+        # failure: this is useful for ensuring that cookies used for load
+        # balancer affinity (e.g. AWSELB) are shared by all the automation
+        # clients managed by a given controller
         remote_client.make_raise(self._remote_error)
         return remote_client
 
@@ -793,12 +803,12 @@ class Controller(object):
 
         return self.remote_doc_client_factory(
             sb.server_url, sb.remote_user, self.device_id,
-            token = sb.remote_token, password = sb.remote_password,
-            repository = repository, base_folder = base_folder,
-            timeout = self.timeout)
+            token=sb.remote_token, password=sb.remote_password,
+            repository=repository, base_folder=base_folder,
+            timeout=self.timeout, cookie_jar=self.cookie_jar)
 
-    def get_remote_client(self, server_binding, repository = 'default',
-                          base_folder = None):
+    def get_remote_client(self, server_binding, repository='default',
+                          base_folder=u'/'):
         # Backward compat
         return self.get_remote_doc_client(server_binding,
             repository = repository, base_folder = base_folder)
@@ -987,9 +997,9 @@ class Controller(object):
     def _normalize_url(self, url):
         """Ensure that user provided url always has a trailing '/'"""
         if url is None or not url:
-            raise ValueError(_("Invalid url: %r") % url)
-        if not url.endswith('/'):
-            return url + '/'
+            raise ValueError("Invalid url: %r" % url)
+        if not url.endswith(u'/'):
+            return url + u'/'
         return url
 
     def _init_storage(self):
@@ -1281,3 +1291,39 @@ class Controller(object):
     def file_changed(self, path):
         # reload properties that may change at runtime
         reload_config_file(path)
+    def register_folder_link(self, folder_path):
+        if sys.platform == 'darwin':
+            self.register_folder_link_darwin(folder_path)
+        # TODO: implement Windows and Linux support here
+
+    def register_folder_link_darwin(self, folder_path):
+        try:
+           from LaunchServices import LSSharedFileListCreate
+           from LaunchServices import kLSSharedFileListFavoriteItems
+           from LaunchServices import LSSharedFileListInsertItemURL
+           from LaunchServices import kLSSharedFileListItemBeforeFirst
+           from LaunchServices import CFURLCreateWithString
+        except ImportError:
+            log.warning("PyObjC package is not installed:"
+                        " skipping favorite link creation")
+            return
+        folder_path = normalized_path(folder_path)
+        folder_name = os.path.basename(folder_path)
+
+        lst = LSSharedFileListCreate(None, kLSSharedFileListFavoriteItems, None)
+        if lst is None:
+            log.warning("Could not fetch the Finder favorite list.")
+            return
+
+        url = CFURLCreateWithString(None, "file://" + quote(folder_path), None)
+        if url is None:
+            log.warning("Could not generate valid favorite URL for: %s",
+                folder_path)
+            return
+
+        # Register the folder as favorite if not already there
+        item = LSSharedFileListInsertItemURL(
+            lst, kLSSharedFileListItemBeforeFirst, folder_name, None, url,
+            {}, [])
+        if item is not None:
+            log.debug("Registered new favorite in Finder for: %s", folder_path)

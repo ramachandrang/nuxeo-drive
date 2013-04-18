@@ -301,11 +301,6 @@ class SyncFolders(Base):
     check_state = Column(Boolean)  # indicates whether the checkbox in the selection UI us checked (True)
     bind_state = Column(Boolean)  # indicates whether it is a registered sync root (True)
     local_folder = Column(String, ForeignKey('server_bindings.local_folder', onupdate = "cascade", ondelete = "cascade"))
-# TO BE DELETED
-#    checked = relationship('RootBinding', uselist = False, backref = 'folder')
-
-#    server_binding = relationship(
-#                    'ServerBinding', backref=backref("folders", cascade="all, delete-orphan"))
     server_binding = relationship('ServerBinding')
     children = relationship("SyncFolders")
 
@@ -383,11 +378,19 @@ class LastKnownState(Base):
     remote_state = Column(String)
     pair_state = Column(String, index = True)
 
-    # Track move operations to avoid loosing history
+    # TODO: remove since unused, but might brake
+    # previous Nuxeo Drive client installations
+    # Track move operations to avoid losing history
     locally_moved_from = Column(String)
     locally_moved_to = Column(String)
     remotely_moved_from = Column(String)
     remotely_moved_to = Column(String)
+
+    # Flags for remote write operations
+    remote_can_rename = Column(Integer)
+    remote_can_delete = Column(Integer)
+    remote_can_update = Column(Integer)
+    remote_can_create_child = Column(Integer)
 
     # Log date of sync errors to be able to skip documents in error for some
     # time
@@ -441,10 +444,11 @@ class LastKnownState(Base):
         return RemoteFileSystemClient(sb.server_url, sb.remote_user,
              sb.remote_password)
 
-    def refresh_local(self, client = None):
+    def refresh_local(self, client=None, local_path=None):
         """Update the state from the local filesystem info."""
         client = client if client is not None else self.get_local_client()
-        local_info = client.get_info(self.local_path, raise_if_missing = False)
+        local_path = local_path if local_path is not None else self.local_path
+        local_info = client.get_info(local_path, raise_if_missing=False)
         self.update_local(local_info)
         return local_info
 
@@ -459,9 +463,10 @@ class LastKnownState(Base):
 
         local_state = None
 
-        if self.local_path is None:
-            # This state only has a remote info and this is the first time
-            # we update the local info from the file system
+        if self.local_path is None or self.local_path != local_info.path:
+            # Either this state only has a remote info and this is the
+            # first time we update the local info from the file system,
+            # or it is a renaming
             self.local_path = local_info.path
             if self.local_path != '/':
                 self.local_name = os.path.basename(local_info.path)
@@ -473,10 +478,6 @@ class LastKnownState(Base):
             else:
                 self.local_name = os.path.basename(self.local_folder)
                 self.local_parent_path = None
-
-        if self.local_path != local_info.path:
-            raise ValueError("State %r cannot be mapped to '%s%s'" % (
-                self, self.local_folder, local_info.path))
 
         # Shall we recompute the digest from the current file?
         update_digest = self.local_digest == None
@@ -510,14 +511,14 @@ class LastKnownState(Base):
         # detect such kind of conflicts instead?
         self.update_state(local_state = local_state)
 
-    def refresh_remote(self, client = None, fetch_parent_uid = True):
+    def refresh_remote(self, client=None):
         """Update the state from the remote server info.
 
         Can reuse an existing client to spare some redundant client init HTTP
         request.
         """
         client = client if client is not None else self.get_remote_client()
-        remote_info = client.get_info(self.remote_ref, fetch_parent_uid = fetch_parent_uid, raise_if_missing = False)
+        remote_info = client.get_info(self.remote_ref, raise_if_missing=False)
         self.update_remote(remote_info)
         return remote_info
 
@@ -542,7 +543,9 @@ class LastKnownState(Base):
         # Use last known modification time to detect updates
         if self.last_remote_updated is None:
             self.last_remote_updated = remote_info.last_modification_time
-        elif remote_info.last_modification_time > self.last_remote_updated:
+        elif (remote_info.last_modification_time > self.last_remote_updated
+            or self.remote_parent_ref != remote_info.parent_uid):
+            # Remote update and/or rename and/or move
             self.last_remote_updated = remote_info.last_modification_time
             remote_state = 'modified'
 
@@ -551,8 +554,28 @@ class LastKnownState(Base):
         self.folderish = remote_info.folderish
         self.remote_name = remote_info.name
         suffix_len = len(remote_info.uid) + 1
+        self.remote_parent_ref = remote_info.parent_uid
         self.remote_parent_path = remote_info.path[:-suffix_len]
-        self.update_state(remote_state = remote_state)
+        self.update_state(remote_state=remote_state)
+        self.remote_can_rename = remote_info.can_rename
+        self.remote_can_delete = remote_info.can_delete
+        self.remote_can_update = remote_info.can_update
+        self.remote_can_create_child = remote_info.can_create_child
+
+    def reset_local(self):
+        self.local_digest = None
+        self.local_name = None
+        self.local_parent_path = None
+        self.local_path = None
+        self.local_state = 'unknown'
+
+    def reset_remote(self):
+        self.remote_digest = None
+        self.remote_name = None
+        self.remote_parent_path = None
+        self.remote_parent_ref = None
+        self.remote_ref = None
+        self.local_state = 'unknown'
 
     def get_local_abspath(self):
         relative_path = self.local_path[1:].replace('/', os.path.sep)

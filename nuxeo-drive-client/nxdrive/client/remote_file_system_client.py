@@ -62,7 +62,7 @@ class RemoteFileSystemClient(BaseAutomationClient):
         return self._file_to_info(fs_item)
 
     def get_filesystem_root_info(self):
-        toplevel_folder = self.execute("NuxeoDrive.GetTopLevelFolder");
+        toplevel_folder = self.execute("NuxeoDrive.GetTopLevelFolder")
         return self._file_to_info(toplevel_folder)
 
     def get_content(self, fs_item_id, file_out = None):
@@ -71,7 +71,6 @@ class RemoteFileSystemClient(BaseAutomationClient):
         Raises NotFound if file system item with id fs_item_id
         cannot be found
         """
-
         fs_item_info = self.get_info(fs_item_id)
         download_url = self.server_url + fs_item_info.download_url
         return self._do_get(download_url, file_out = file_out)
@@ -94,7 +93,7 @@ class RemoteFileSystemClient(BaseAutomationClient):
         if name is None:
             name = self.get_info(fs_item_id).name
         fs_item = self.execute_with_blob('NuxeoDrive.UpdateFile',
-            content, name, id = fs_item_id)
+            content, name, id=fs_item_id)
         return fs_item['id']
 
     def delete(self, fs_item_id):

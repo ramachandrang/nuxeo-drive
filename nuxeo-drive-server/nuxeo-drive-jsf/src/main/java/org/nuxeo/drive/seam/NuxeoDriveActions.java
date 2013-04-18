@@ -18,6 +18,7 @@
 package org.nuxeo.drive.seam;
 
 import java.io.Serializable;
+import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -37,6 +38,7 @@ import org.jboss.seam.annotations.Scope;
 import org.jboss.seam.contexts.Context;
 import org.jboss.seam.contexts.Contexts;
 import org.nuxeo.drive.adapter.FileSystemItem;
+import org.nuxeo.drive.hierarchy.userworkspace.adapter.UserWorkspaceHelper;
 import org.nuxeo.drive.service.FileSystemItemAdapterService;
 import org.nuxeo.drive.service.NuxeoDriveManager;
 import org.nuxeo.ecm.core.api.ClientException;
@@ -189,8 +191,9 @@ public class NuxeoDriveActions implements Serializable {
         return currentDocRef.equals(currentSyncRoot.getRef());
     }
 
-    @Factory(value = "canUnSynchronizeContainer", scope = ScopeType.EVENT)
-    public boolean getCanUnSynchronizeContainer() throws ClientException {
+    @Factory(value = "canNavigateToCurrentSynchronizationRoot", scope = ScopeType.EVENT)
+    public boolean getCanNavigateToCurrentSynchronizationRoot()
+            throws ClientException {
         if (navigationContext == null) {
             return false;
         }
@@ -203,12 +206,22 @@ public class NuxeoDriveActions implements Serializable {
         return !currentDocRef.equals(currentSyncRoot.getRef());
     }
 
+    @Factory(value = "currentDocumentUserWorkspace", scope = ScopeType.PAGE)
+    public boolean isCurrentDocumentUserWorkspace() throws ClientException {
+        if (navigationContext == null) {
+            return false;
+        }
+        DocumentModel currentDocument = navigationContext.getCurrentDocument();
+        return UserWorkspaceHelper.isUserWorkspace(currentDocument);
+    }
+
     public String synchronizeCurrentDocument() throws ClientException,
             SecurityException {
         NuxeoDriveManager driveManager = Framework.getLocalService(NuxeoDriveManager.class);
-        String userName = documentManager.getPrincipal().getName();
+        Principal principal = documentManager.getPrincipal();
+        String userName = principal.getName();
         DocumentModel newSyncRoot = navigationContext.getCurrentDocument();
-        driveManager.registerSynchronizationRoot(userName, newSyncRoot,
+        driveManager.registerSynchronizationRoot(principal, newSyncRoot,
                 documentManager);
         TokenAuthenticationService tokenService = Framework.getLocalService(TokenAuthenticationService.class);
         boolean hasOneNuxeoDriveToken = false;
@@ -229,9 +242,9 @@ public class NuxeoDriveActions implements Serializable {
 
     public void unsynchronizeCurrentDocument() throws ClientException {
         NuxeoDriveManager driveManager = Framework.getLocalService(NuxeoDriveManager.class);
-        String userName = documentManager.getPrincipal().getName();
+        Principal principal = documentManager.getPrincipal();
         DocumentModel syncRoot = navigationContext.getCurrentDocument();
-        driveManager.unregisterSynchronizationRoot(userName, syncRoot,
+        driveManager.unregisterSynchronizationRoot(principal, syncRoot,
                 documentManager);
     }
 
@@ -256,8 +269,8 @@ public class NuxeoDriveActions implements Serializable {
     public void unsynchronizeRoot(DocumentModel syncRoot)
             throws ClientException {
         NuxeoDriveManager driveManager = Framework.getLocalService(NuxeoDriveManager.class);
-        String userName = documentManager.getPrincipal().getName();
-        driveManager.unregisterSynchronizationRoot(userName, syncRoot,
+        Principal principal = documentManager.getPrincipal();
+        driveManager.unregisterSynchronizationRoot(principal, syncRoot,
                 documentManager);
     }
 
@@ -275,4 +288,5 @@ public class NuxeoDriveActions implements Serializable {
         }
         return packages;
     }
+
 }

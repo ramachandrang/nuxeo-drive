@@ -4,6 +4,13 @@ import sys
 import argparse
 from getpass import getpass
 import traceback
+import threading
+try:
+    import ipdb
+    debugger = ipdb
+except ImportError:
+    import pdb
+    debugger = pdb
 
 from nxdrive.controller import Controller
 from nxdrive.daemon import daemonize
@@ -17,12 +24,6 @@ from nxdrive import Constants
 from nxdrive.controller import default_nuxeo_drive_folder
 from sqlalchemy.pool import SingletonThreadPool
 
-try:
-    import ipdb
-    debugger = ipdb
-except ImportError:
-    import pdb
-    debugger = pdb
 
 if sys.platform == 'win32':
     import win32api
@@ -32,7 +33,7 @@ settings = create_settings()
 
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_DELAY = 5.0
-USAGE = """ndrive [command]
+USAGE = """cpodesktop [command]
 
 If no command is provided, the graphical application is started along with a
 synchronization process.
@@ -48,7 +49,6 @@ Possible commands:
 - unbind-root
 - gui
 - wizard
-- com
 
 To get options for a specific command:
 
@@ -113,11 +113,10 @@ def make_cli_parser(add_subparsers = True):
         "--stop-on-error", default = True, action = "store_true",
         help = _("Stop the process on first unexpected error."
         "Useful for developers and Continuous Integration.")
-    )
-
     common_parser.add_argument(
-        '--start', '-s', action = 'store_true', help = _('start synchronization as soon as the gui starts.'))
-
+        "-v", "--version", action="version", version=__version__,
+        help="Print the current version of the Nuxeo Drive client."
+    )
     parser = argparse.ArgumentParser(
         parents = [common_parser],
         description = _("Command line interface for %s operations.") % Constants.APP_NAME,
@@ -399,10 +398,6 @@ class CliHandler(object):
     def launch(self, options = None):
         """Launch the QT app in the main thread and sync in another thread."""
 
-        if options.version:
-            from nxdrive._version import __version__
-            return __version__
-        
         # check is in wizard mode
         wizard_mode = settings.value('wizard', 'true')
         if sys.platform == 'win32':
@@ -448,8 +443,8 @@ class CliHandler(object):
         return 0
 
     def console(self, options):
-        fault_tolerant = not getattr(options, 'stop_on_error', True)
-        self.controller.synchronizer.loop(delay = getattr(options, 'delay', DEFAULT_DELAY))
+        self.controller.synchronizer.loop(
+            delay=getattr(options, 'delay', DEFAULT_DELAY))
         return 0
 
     def stop(self, options = None):
@@ -525,10 +520,13 @@ class CliHandler(object):
         # List the test modules explicitly as recursive discovery is broken
         # when the app is frozen.
         argv += [
+            "nxdrive.tests.test_integration_encoding",
             "nxdrive.tests.test_integration_local_client",
+            "nxdrive.tests.test_integration_local_move_and_rename",
             "nxdrive.tests.test_integration_remote_changes",
             "nxdrive.tests.test_integration_remote_document_client",
             "nxdrive.tests.test_integration_remote_file_system_client",
+            "nxdrive.tests.test_integration_remote_move_and_rename",
             "nxdrive.tests.test_integration_synchronization",
             "nxdrive.tests.test_integration_versioning",
             "nxdrive.tests.test_synchronizer",
@@ -564,7 +562,26 @@ def unregister_icon_ovelay_handler():
         pass
 
 
-def main(argv = None):
+def dumpstacks(signal, frame):
+    id2name = dict([(th.ident, th.name) for th in threading.enumerate()])
+    code = []
+    for thread_id, stack in sys._current_frames().items():
+        code.append("\n# Thread: %s(%d)" % (id2name.get(thread_id, ""),
+                                            thread_id))
+        for filename, lineno, name, line in traceback.extract_stack(stack):
+            code.append('File: "%s", line %d, in %s'
+                        % (filename, lineno, name))
+            if line:
+                code.append("  %s" % (line.strip()))
+    print "\n".join(code)
+
+
+def main(argv=None):
+    # Print thread dump when receiving SIGUSR1,
+    # except under Windows (no SIGUSR1)
+    if sys.platform != 'win32': 
+        import signal
+        signal.signal(signal.SIGUSR1, dumpstacks)
     if argv is None:
         argv = sys.argv
     return CliHandler().handle(argv)

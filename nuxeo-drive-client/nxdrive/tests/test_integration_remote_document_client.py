@@ -1,9 +1,9 @@
-from unittest import SkipTest
 from time import sleep
 from nxdrive.client import NuxeoClient
 from nxdrive.client import Unauthorized
 from nxdrive.client import NotFound
 from nxdrive.tests.common import IntegrationTestCase
+from nose import SkipTest
 
 
 def wait_for_deletion(client, doc, retries_left=10, delay=0.300,
@@ -85,7 +85,6 @@ class TestIntegrationRemoteDocumentClient(IntegrationTestCase):
         remote_client4.revoke_token()
         self.assertRaises(IOError, remote_client4.get_roots)
 
-
     def test_make_documents(self):
         remote_client = self.remote_document_client_1
         doc_1 = remote_client.make_file(self.workspace, 'Document 1.txt')
@@ -100,7 +99,8 @@ class TestIntegrationRemoteDocumentClient(IntegrationTestCase):
         doc_2 = remote_client.make_file(self.workspace, 'Document 2.txt',
                                   content=self.SOME_TEXT_CONTENT)
         self.assertTrue(remote_client.exists(doc_2))
-        self.assertEquals(remote_client.get_content(doc_2), self.SOME_TEXT_CONTENT)
+        self.assertEquals(remote_client.get_content(doc_2),
+                          self.SOME_TEXT_CONTENT)
         doc_2_info = remote_client.get_info(doc_2)
         self.assertEquals(doc_2_info.name, 'Document 2.txt')
         self.assertEquals(doc_2_info.uid, doc_2)
@@ -113,14 +113,16 @@ class TestIntegrationRemoteDocumentClient(IntegrationTestCase):
         self.assertRaises(NotFound, remote_client.get_info, doc_2)
 
         # the document has been put in the trash by default
-        self.assertTrue(remote_client.exists(doc_2, use_trash=False) is not None)
+        self.assertTrue(remote_client.exists(doc_2, use_trash=False)
+                        is not None)
 
-        # the document is now physically deleted (by calling delete a second time:
-        # the 'delete' transition will no longer be available hence physical
-        # deletion is used as a fallback)
-        remote_client.delete(doc_2)
+        # the document is now physically deleted (by calling delete
+        # a second time: the 'delete' transition will no longer be available
+        # hence physical deletion is used as a fallback)
+        remote_client.delete(doc_2, use_trash=False)
         self.assertFalse(remote_client.exists(doc_2, use_trash=False))
-        self.assertRaises(NotFound, remote_client.get_info, doc_2, use_trash=False)
+        self.assertRaises(NotFound, remote_client.get_info, doc_2,
+                          use_trash=False)
 
         # Test folder deletion (with trash)
         folder_1 = remote_client.make_folder(self.workspace, 'A new folder')
@@ -158,13 +160,15 @@ class TestIntegrationRemoteDocumentClient(IntegrationTestCase):
         remote_client = self.remote_document_client_1
         # create another folder with the same title
         title_with_accents = u"\xc7a c'est l'\xe9t\xe9 !"
-        folder_1 = remote_client.make_folder(self.workspace, title_with_accents)
+        folder_1 = remote_client.make_folder(self.workspace,
+                                             title_with_accents)
         folder_1_info = remote_client.get_info(folder_1)
         self.assertEquals(folder_1_info.name, title_with_accents)
 
         # create another folder with the same title
         title_with_accents = u"\xc7a c'est l'\xe9t\xe9 !"
-        folder_2 = remote_client.make_folder(self.workspace, title_with_accents)
+        folder_2 = remote_client.make_folder(self.workspace,
+                                             title_with_accents)
         folder_2_info = remote_client.get_info(folder_2)
         self.assertEquals(folder_2_info.name, title_with_accents)
         self.assertNotEquals(folder_1, folder_2)
@@ -263,3 +267,32 @@ class TestIntegrationRemoteDocumentClient(IntegrationTestCase):
         remote_client.delete(folder_3, use_trash=False)
         remote_client.unregister_as_root(folder_2)
         self.assertEquals(remote_client.get_roots(), [])
+
+    def test_unregister_nested_roots(self):
+        # Check that registering a parent folder of an existing root
+        # automatically unregister sub folders to avoid synchronization
+        # inconsistencies
+        remote_client = self.remote_document_client_1
+        # Check that the list of repositories can be introspected
+        self.assertEquals(remote_client.get_repository_names(), ['default'])
+
+        # By default no root is synchronized
+        self.assertEquals(remote_client.get_roots(), [])
+        folder = remote_client.make_folder(self.workspace, 'Folder')
+        sub_folder_1 = remote_client.make_folder(folder, 'Sub Folder 1')
+        sub_folder_2 = remote_client.make_folder(folder, 'Sub Folder 2')
+
+        # Register the sub folders as roots
+        remote_client.register_as_root(sub_folder_1)
+        remote_client.register_as_root(sub_folder_2)
+        self.assertEquals(len(remote_client.get_roots()), 2)
+
+        # Register the parent folder as root
+        remote_client.register_as_root(folder)
+        roots = remote_client.get_roots()
+        self.assertEquals(len(roots), 1)
+        self.assertEquals(roots[0].uid, folder)
+
+        # Unregister the parent folder
+        remote_client.unregister_as_root(folder)
+        self.assertEquals(len(remote_client.get_roots()), 0)

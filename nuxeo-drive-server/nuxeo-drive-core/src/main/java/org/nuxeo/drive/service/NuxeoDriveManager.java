@@ -35,23 +35,23 @@ import org.nuxeo.ecm.core.security.SecurityException;
 public interface NuxeoDriveManager {
 
     /**
-     * @param userName the id of the Nuxeo Drive user
+     * @param principal the Nuxeo Drive user
      * @param newRootContainer the folderish document to be used as
      *            synchronization root: must be bound to an active session
      * @throws ClientException
      * @throws SecurityException if the user does not have write permissions to
      *             the container.
      */
-    public void registerSynchronizationRoot(String userName,
+    public void registerSynchronizationRoot(Principal principal,
             DocumentModel newRootContainer, CoreSession session)
-            throws ClientException, SecurityException;
+            throws ClientException;
 
     /**
-     * @param userName the id of the Nuxeo Drive user
+     * @param principal the Nuxeo Drive user
      * @param rootContainer the folderish document that should no longer be used
      *            as a synchronization root
      */
-    public void unregisterSynchronizationRoot(String userName,
+    public void unregisterSynchronizationRoot(Principal principal,
             DocumentModel rootContainer, CoreSession session)
             throws ClientException;
 
@@ -141,5 +141,15 @@ public interface NuxeoDriveManager {
      * TODO: make it overridable with an extension point and remove setter.
      */
     public void setChangeFinder(FileSystemChangeFinder changeFinder);
+
+
+    /**
+     * Invalidate the synchronization roots cache for a given user so as to
+     * query the repository next time {@code getSynchronizationRoots} is called.
+     *
+     * @param userName the principal name of the user to invalidate the cache
+     *            for.
+     */
+    void invalidateSynchronizationRootsCache(String userName);
 
 }

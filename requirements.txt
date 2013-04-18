@@ -1,6 +1,6 @@
 SQLAlchemy >= 0.7.9
 psutil
-nose
+nose >= 1.2.1
 coverage
 cx-Freeze
 argparse

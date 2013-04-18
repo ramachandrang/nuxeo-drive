@@ -41,24 +41,24 @@ import fnmatch
 import subprocess
 
 
-DEFAULT_MARKETPLACE = os.path.join(
-    "packaging", "nuxeo-drive-marketplace", "target")
+MARKETPLACE_FOLDER = "mp-download.tmp"
 DEFAULT_ARCHIVE_PREFIX = "nuxeo-distribution-tomcat-"
-NUXEO_FOLDER='nuxeo-tomcat'
-MARKET_PLACE_PREFIX = "nuxeo-drive-marketplace"
+NUXEO_FOLDER = 'nuxeo-tomcat'
+MARKET_PLACE_PREFIX = "marketplace-"
 
 DEFAULT_MSI_FOLDER = os.path.join(r"dist")
-DEFAULT_LESSMSI_URL="http://lessmsi.googlecode.com/files/lessmsi-v1.0.8.zip"
-LESSMSI_FOLDER='lessmsi'
-EXTRACTED_MSI_FOLDER='nxdrive_msi'
+DEFAULT_LESSMSI_URL = "http://lessmsi.googlecode.com/files/lessmsi-v1.0.8.zip"
+LESSMSI_FOLDER = 'lessmsi'
+EXTRACTED_MSI_FOLDER = 'nxdrive_msi'
 
 LINKS_PATTERN = r'\bhref="([^"]+)"'
 
 MSI_PATTERN = r"nuxeo-drive-\d\.\d\..*?\.msi"
 DMG_PATTERN = r"Nuxeo%20Drive\.dmg"
+DEFAULT_ARCHIVE_PATTERN = DEFAULT_ARCHIVE_PREFIX + r"\d\.\d.*?-nuxeo-cap\.zip"
+MARKETPLACE_PATTERN = MARKET_PLACE_PREFIX + r"\d\.\d.*?\.zip"
 
-WAR_FOLDER = os.path.join(
-    "nuxeo-drive-server", "nuxeo-drive-jsf", "src", "main",
+WAR_FOLDER = os.path.join("src", "main",
     "resources", "web", "nuxeo.war", "nuxeo-drive")
 
 
@@ -71,39 +71,54 @@ def pflush(message):
 def execute(cmd, exit_on_failure=True):
     pflush("> " + cmd)
     code = os.system(cmd)
+    if hasattr(os, 'WEXITSTATUS'):
+        # Find the exit code in from the POSIX status that also include
+        # the kill signal if any (only under POSIX)
+        code = os.WEXITSTATUS(code)
     if code != 0 and exit_on_failure:
         pflush("Command %s returned with code %d" % (cmd, code))
         sys.exit(code)
 
 
 def parse_args(args=None):
-    parser = argparse.ArgumentParser(
+    main_parser = argparse.ArgumentParser(
         description="Integration tests coordinator")
-    subparsers = parser.add_subparsers(title="Commands")
+    subparsers = main_parser.add_subparsers(title="Commands")
 
-    # Fetch packaging dependencies from other Jenkins jobs
-    fetch_parser = subparsers.add_parser(
-        'fetch', help="Fetch packages from Jenkins pages")
-    fetch_parser.set_defaults(command='fetch')
+    # Fetch binary dependencies from related Jenkins jobs
+    parser = subparsers.add_parser(
+        'fetch-binaries', help="Fetch binary packages from Jenkins pages")
+    parser.set_defaults(command='fetch-binaries')
+    parser.add_argument('--msi-url')
+    parser.add_argument('--dmg-url')
+    parser.add_argument('--base-folder')
 
-    fetch_parser.add_argument('--msi-url')
-    fetch_parser.add_argument('--dmg-url')
+    # Fetch Nuxeo distribution from given URL
+    parser = subparsers.add_parser(
+        'fetch-distrib', help="Fetch Nuxeo distribution from given URL")
+    parser.set_defaults(command='fetch-distrib')
+    parser.add_argument('--url')
+
+    # Fetch marketplace package dependency from related Jenkins job
+    parser = subparsers.add_parser(
+        'fetch-mp', help="Fetch marketplace package from Jenkins pages")
+    parser.set_defaults(command='fetch-mp')
+    parser.add_argument('--url')
 
     # Integration test launcher
-    test_parser = subparsers.add_parser(
+    parser = subparsers.add_parser(
         'test', help="Launch the integration tests")
-    test_parser.set_defaults(command='test')
+    parser.set_defaults(command='test')
+    parser.add_argument("--msi-folder", default=DEFAULT_MSI_FOLDER)
+    parser.add_argument("--lessmsi-url", default=DEFAULT_LESSMSI_URL)
 
-    test_parser.add_argument("--msi-folder", default=DEFAULT_MSI_FOLDER)
-    test_parser.add_argument("--lessmsi-url", default=DEFAULT_LESSMSI_URL)
-
-    return parser.parse_args(args)
+    return main_parser.parse_args(args)
 
 
 def download(url, filename):
     if not os.path.exists(filename):
         pflush("Downloading %s to %s" % (url, filename))
-        headers = {'User-Agent' : 'nxdrive test script'}
+        headers = {'User-Agent': 'nxdrive test script'}
         req = urllib2.Request(url, None, headers)
         reader = urllib2.urlopen(req)
         with open(filename, 'wb') as f:
@@ -195,7 +210,7 @@ def setup_nuxeo():
         pflush("Waiting for any killed process to actually stop")
         time.sleep(1.0)
 
-    filepath = find_latest(DEFAULT_MARKETPLACE, prefix=DEFAULT_ARCHIVE_PREFIX,
+    filepath = find_latest(MARKETPLACE_FOLDER, prefix=DEFAULT_ARCHIVE_PREFIX,
                           suffix=".zip")
     unzip(filepath, target='unzip.tmp')
     nuxeo_folder_name = os.listdir('unzip.tmp')[0]
@@ -232,7 +247,8 @@ def setup_nuxeo():
         for line in netstat_out.split('\r\n'):
             if ':8080 ' in line:
                 pid = line.rsplit(' ', 1)[1]
-                execute('kill -f %s' % pid, exit_on_failure=False)
+                if pid != '0':
+                    execute('kill -f %s' % pid, exit_on_failure=False)
 
     pflush("Renaming %s to %s" % (nuxeo_folder_path, NUXEO_FOLDER))
     os.rename(nuxeo_folder_path, NUXEO_FOLDER)
@@ -243,7 +259,7 @@ def setup_nuxeo():
         execute("chmod +x " + nuxeoctl)
 
     pflush("Installing the nuxeo drive marketplace package")
-    package = find_latest(DEFAULT_MARKETPLACE, prefix=MARKET_PLACE_PREFIX,
+    package = find_latest(MARKETPLACE_FOLDER, prefix=MARKET_PLACE_PREFIX,
                           suffix=".zip")
     execute(nuxeoctl + " mp-install --accept=true --nodeps " + package)
 
@@ -251,7 +267,8 @@ def setup_nuxeo():
     execute(nuxeoctl + " --gui false start")
 
     # Register a callback to stop the nuxeo server
-    atexit.register(execute, nuxeoctl + " --gui false stop")
+    atexit.register(execute, nuxeoctl + " --gui false stop",
+                    exit_on_failure=False)
 
 
 def extract_msi(lessmsi_url, msi_folder):
@@ -277,6 +294,7 @@ def set_environment():
     os.environ['NXDRIVE_TEST_USER'] = "Administrator"
     os.environ['NXDRIVE_TEST_PASSWORD'] = "Administrator"
 
+
 def clean_pyc():
     for root, dirnames, filenames in os.walk('nuxeo-drive-client'):
         if '.git' in dirnames:
@@ -285,6 +303,7 @@ def clean_pyc():
             file_path = os.path.join(root, filename)
             print('Removing .pyc file: %s' % file_path)
             os.unlink(file_path)
+
 
 def run_tests_from_msi():
     ndrive = os.path.join(EXTRACTED_MSI_FOLDER, 'SourceDir', 'ndrive.exe')
@@ -296,9 +315,21 @@ def run_tests_from_source():
 
 
 def download_package(url, pattern, target_folder):
-    url, filename = find_package_url(url, pattern)
+    if pattern is None:
+        filename = url.rsplit("/", 1)[1]
+    else:
+        url, filename = find_package_url(url, pattern)
     filepath = os.path.join(target_folder, urllib2.unquote(filename))
     download(url, filepath)
+
+
+def clean_download_dir(dir, pattern):
+    if os.path.exists(dir):
+        for f in os.listdir(dir):
+            if re.search(pattern, f):
+                os.remove(os.path.join(dir, f))
+    else:
+        os.makedirs(dir)
 
 
 if __name__ == "__main__":
@@ -313,11 +344,24 @@ if __name__ == "__main__":
             run_tests_from_msi()
         else:
             run_tests_from_source()
-    elif options.command == 'fetch':
-        if os.path.exists(WAR_FOLDER):
-            shutil.rmtree(WAR_FOLDER)
-        os.makedirs(WAR_FOLDER)
+    elif options.command == 'fetch-binaries':
+        target_folder = os.path.join(options.base_folder, WAR_FOLDER)
+        if os.path.exists(target_folder):
+            shutil.rmtree(target_folder)
+        os.makedirs(target_folder)
         if options.msi_url is not None:
-            download_package(options.msi_url, MSI_PATTERN, WAR_FOLDER)
+            download_package(options.msi_url, MSI_PATTERN, target_folder)
         if options.dmg_url is not None:
-            download_package(options.dmg_url, DMG_PATTERN, WAR_FOLDER)
+            download_package(options.dmg_url, DMG_PATTERN, target_folder)
+    elif options.command == 'fetch-distrib':
+        clean_download_dir(MARKETPLACE_FOLDER, DEFAULT_ARCHIVE_PATTERN)
+        if options.url is not None:
+            # Download Nuxeo Tomcat distribution
+            download_package(options.url, DEFAULT_ARCHIVE_PATTERN,
+                             MARKETPLACE_FOLDER)
+    elif options.command == 'fetch-mp':
+        clean_download_dir(MARKETPLACE_FOLDER, MARKETPLACE_PATTERN)
+        if options.url is not None:
+            # Download Nuxeo Drive marketplace package
+            download_package(options.url, MARKETPLACE_PATTERN,
+                             MARKETPLACE_FOLDER)

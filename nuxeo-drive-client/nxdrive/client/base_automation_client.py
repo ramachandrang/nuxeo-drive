@@ -303,13 +303,11 @@ class BaseAutomationClient(object):
             # skip for service w/o authentication (like the external maintenance and upgrade services)
             self._update_auth(password = password, token = token)
 
-        handlers = []
-        proxy_support = None
-        if USE_SINGLE_COOKIEJAR:
-            cookie_processor = urllib2.HTTPCookieProcessor(BaseAutomationClient.cookiejar)
-        else:
-            self.cookiejar = CookieJar()
-            cookie_processor = urllib2.HTTPCookieProcessor(self.cookiejar)
+        self.cookie_jar = cookie_jar
+        cookie_processor = urllib2.HTTPCookieProcessor(
+            cookiejar=cookie_jar)
+        self.opener = urllib2.build_opener(cookie_processor)
+        self.automation_url = server_url + 'site/automation/'
 
         # NOTE 'proxy' classproperty does not work here (sample works!)
         # replace 'proxy' with 'get_proxy' and 'set_proxy' class methods
@@ -496,9 +494,10 @@ class BaseAutomationClient(object):
             json_struct['input'] = input
 
         data = json.dumps(json_struct)
-
+        cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
         url = self.automation_url + command
-        log.trace("Calling '%s' with json payload: %r", url, data)
+        log.trace("Calling '%s' with cookies %r and json payload: %r",
+            url, cookies,  data)
         base_error_message = (
             _("Failed to connect to %s Content Automation on server %r"
             " with user %r")
@@ -566,16 +565,20 @@ class BaseAutomationClient(object):
 
         info = resp.info()
         s = resp.read()
+        cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
         # --- BEGIN DEBUG ----
         self.log_response(resp, s)
         # ---- END DEBUG -----
         content_type = info.get('content-type', '')
         if content_type.startswith("application/json"):
-            log.trace("Response for '%s' with json payload: %r", url, s)
+            log.trace(
+                "Response for '%s' with cookies %r and json payload: %r",
+                url, cookies, s)
             return json.loads(s) if s else None
         else:
-            log.trace("Response for '%s' with content-type: %r", url,
-                      content_type)
+            log.trace(
+                "Response for '%s' with cookies %r  and with content-type: %r",
+                url, cookies, content_type)
             return s
 
     def execute_with_blob(self, command, blob_content, filename, **params):
@@ -603,6 +606,7 @@ class BaseAutomationClient(object):
 
         # Quote UTF-8 filenames eventhough JAX-RS does not seem to be able
         # to retrieve them as per: https://tools.ietf.org/html/rfc5987
+        filename = safe_filename(filename)
         quoted_filename = urllib.quote(filename.encode('utf-8'))
         content_disposition = ("attachment; filename*=UTF-8''%s"
                                 % quoted_filename)
@@ -642,11 +646,14 @@ class BaseAutomationClient(object):
             boundary,
         )
         url = self.automation_url.encode('ascii') + command
+        cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
+        log.trace("Calling '%s' with cookies %r for file '%s'",
+            url, cookies, filename)
         base_error_message = (
             "Failed to connect to %s Content Automation on server %r"
             " with user %r"
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
-        log.trace("Calling '%s' for file '%s'", url, filename)
+		cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
         req = urllib2.Request(url, data, headers)
         if USE_SINGLE_COOKIEJAR:
             BaseAutomationClient.cookiejar.add_cookie_header(req)
@@ -711,12 +718,14 @@ class BaseAutomationClient(object):
         self.log_response(resp, s)
         # ---- END DEBUG -----
         content_type = info.get('content-type', '')
+        cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
         if content_type.startswith("application/json"):
-            log.trace("Response for '%s' with json payload: %r", url, s)
+            log.trace("Response for '%s' with cookies %r and json payload: %r",
+                url, cookies, s)
             return json.loads(s) if s else None
         else:
-            log.trace("Response for '%s' with content-type: %r", url,
-                      content_type)
+            log.trace("Response for '%s' with cookies %r and content-type: %r",
+                url, cookies, content_type)
             return s
 
     def is_addon_installed(self):
@@ -753,8 +762,11 @@ class BaseAutomationClient(object):
             self._add_redirect_handler()
         else:
             prev_opener = None
+
+		cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
         try:
-            log.trace("Calling '%s' with headers: %r", url, headers)
+            log.trace("Calling '%s' with headers: %r and cookies %r",
+                url, headers, cookies)
             req = urllib2.Request(url, headers = headers)
             if USE_SINGLE_COOKIEJAR:
                 BaseAutomationClient.cookiejar.add_cookie_header(req)
@@ -797,6 +809,8 @@ class BaseAutomationClient(object):
             if prev_opener is not None:
                 self.opener = prev_opener
 
+        cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
+        log.trace("Got token '%s' with cookies %r", token, cookies)
         # Use the (potentially re-newed) token from now on
         if not revoke:
             self._update_auth(token = token)
@@ -840,6 +854,8 @@ class BaseAutomationClient(object):
 
         """
         return {
+            'X-User-Id': self.user_id,
+            'X-Device-Id': self.device_id,
             'X-Application-Name': self.application_name,
             self.auth[0]: self.auth[1],
         }

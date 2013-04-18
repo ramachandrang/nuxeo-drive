@@ -24,7 +24,7 @@ Server-side marketplace package
 -------------------------------
 
 Fetch the latest development version of the marketplace package
-`nuxeo-drive-marketplace-5.7-SNAPSHOT.zip <http://qa.nuxeo.org/jenkins/job/IT-nuxeo-drive-master-marketplace/lastSuccessfulBuild/artifact/packaging/nuxeo-drive-marketplace/target/nuxeo-drive-marketplace-5.7-SNAPSHOT.zip>`_
+`marketplace-1.1-SNAPSHOT.zip <http://qa.nuxeo.org/jenkins/job/addons_nuxeo-drive-master-marketplace/lastSuccessfulBuild/artifact/marketplace/target/marketplace-1.1-SNAPSHOT.zip>`_
 from the Continuous Integration server.
 
 The marketplace package can be installed using the Admin Center /
@@ -33,9 +33,14 @@ Update Center / Local Packages interface of a Nuxeo server.
 Alternatively, from the command line::
 
   $NUXEO_HOME/bin/nuxeoctl stop
-  $NUXEO_HOME/bin/nuxeoctl mp-install --nodeps nuxeo-drive-marketplace-<version>.zip
+  $NUXEO_HOME/bin/nuxeoctl mp-install --nodeps marketplace-<version>.zip
   $NUXEO_HOME/bin/nuxeoctl start
 
+Note that the following system parameter needs to be passed to the JVM options::
+
+  -Dmail.mime.decodeparameters=true
+
+If you are working with Nuxeo 5.7 or higher, it is set by default in the ``nuxeo.conf`` file, else you will need to add it.
 
 Windows Desktop Client
 ----------------------
@@ -204,11 +209,9 @@ Server side Java components
 
 To build the project and run the tests, use maven::
 
-  mvn -Ppackaging install
+  mvn install
 
-The resulting marketplace package can be found in::
-
-  packaging/nuxeo-drive-marketplace/target/nuxeo-drive-marketplace-<version>.zip
+To build the marketplace package see the related `Github repository <https://github.com/nuxeo/marketplace-drive>`_.
 
 
 Nuxeo Drive Client under Linux & MacOSX
@@ -229,6 +232,16 @@ To run the tests, install and start a nuxeo server locally, then::
   nosetests nuxeo-drive-client/nxdrive
 
 .. _pip: http://www.pip-installer.org/
+
+Under OS X you can also optionally install ``PyObjC`` to get the
+``LaunchServices`` API for registering the Nuxeo Drive folder in the OS X
+Finder favorite list (a.k.a. "Places")::
+
+  pip install PyObjC
+
+WARNING: this will download many large dependencies and sometimes the remote
+server will timeout on some of them: you might need to re-run this command
+several times to get it all installed.
 
 Then install QT and PySide for graphical user interface (see below).
 

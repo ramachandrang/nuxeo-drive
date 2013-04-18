@@ -22,10 +22,10 @@ import java.util.Map;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.nuxeo.common.utils.Path;
 import org.nuxeo.drive.adapter.FileSystemItem;
 import org.nuxeo.drive.adapter.FolderItem;
 import org.nuxeo.drive.hierarchy.permission.adapter.UserSyncRootParentFolderItem;
+import org.nuxeo.drive.hierarchy.userworkspace.adapter.UserWorkspaceHelper;
 import org.nuxeo.drive.service.FileSystemItemFactory;
 import org.nuxeo.drive.service.FileSystemItemManager;
 import org.nuxeo.drive.service.VirtualFolderItemFactory;
@@ -71,10 +71,7 @@ public class UserSyncRootParentFactory extends AbstractFileSystemItemFactory
     public boolean isFileSystemItem(DocumentModel doc, boolean includeDeleted)
             throws ClientException {
         // Check user workspace
-        Path path = doc.getPath();
-        int pathLength = path.segmentCount();
-        boolean isUserWorkspace = pathLength > 1
-                && "UserWorkspaces".equals(path.segment(pathLength - 2));
+        boolean isUserWorkspace = UserWorkspaceHelper.isUserWorkspace(doc);
         if (!isUserWorkspace) {
             log.trace(String.format(
                     "Document %s is not a user workspace, it cannot be adapted as a FileSystemItem.",
@@ -94,20 +91,21 @@ public class UserSyncRootParentFactory extends AbstractFileSystemItemFactory
 
     @Override
     protected FileSystemItem adaptDocument(DocumentModel doc,
-            boolean forceParentId, String parentId) throws ClientException {
-        return new UserSyncRootParentFolderItem(getName(), doc, parentId,
+            boolean forceParentItem, FolderItem parentItem)
+            throws ClientException {
+        return new UserSyncRootParentFolderItem(getName(), doc, parentItem,
                 folderName);
     }
 
     /*------------------- FileSystemItemFactory ------------------- */
     /**
-     * Force parent id using {@link #getTopLevelFolderItemId(Principal)}.
+     * Force parent item using {@link #getTopLevelFolderItem(Principal)}.
      */
     @Override
     public FileSystemItem getFileSystemItem(DocumentModel doc,
             boolean includeDeleted) throws ClientException {
         Principal principal = doc.getCoreSession().getPrincipal();
-        return getFileSystemItem(doc, getTopLevelFolderItemId(principal),
+        return getFileSystemItem(doc, getTopLevelFolderItem(principal),
                 includeDeleted);
     }
 
@@ -130,15 +128,18 @@ public class UserSyncRootParentFactory extends AbstractFileSystemItemFactory
     }
 
     /*------------------- Protected ------------------- */
-    protected String getTopLevelFolderItemId(Principal principal)
+    protected FolderItem getTopLevelFolderItem(Principal principal)
             throws ClientException {
         FolderItem topLevelFolder = getFileSystemItemManager().getTopLevelFolder(
                 principal);
         if (topLevelFolder == null) {
             throw new ClientException(
-                    "Found no top level folder item. Please check your contribution to the following extension point: <extension target=\"org.nuxeo.drive.service.FileSystemItemAdapterService\" point=\"topLevelFolderItemFactory\">.");
+                    "Found no top level folder item. Please check your "
+                            + "contribution to the following extension point:"
+                            + " <extension target=\"org.nuxeo.drive.service.FileSystemItemAdapterService\""
+                            + " point=\"topLevelFolderItemFactory\">.");
         }
-        return topLevelFolder.getId();
+        return topLevelFolder;
     }
 
     protected DocumentModel getUserPersonalWorkspace(Principal principal)
