@@ -1062,6 +1062,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         pass
 
     def show_maintenance_info(self):
+        from dateutil import tz
         msg = self.tr('Maintenance is not available.\n')
         icon = QMessageBox.Information
         if self.binding_info is not None:
@@ -1070,7 +1071,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 server_maint_event = session.query(ServerEvent).\
                                 filter(ServerEvent.local_folder == self.local_folder).\
                                 filter(ServerEvent.message_type == 'maintenance').\
-                                order_by(desc(ServerEvent.utc_time)).first()
+                                order_by(desc(ServerEvent.utc_time)).first()                                              
                 if server_maint_event is not None:
                     msg = server_maint_event.message
                     if self.server_binding.maintenance:
@@ -1088,7 +1089,21 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox.setText(self.tr("Maintenance information"))
         msgbox.setStandardButtons(QMessageBox.Ok)
         msgbox.setDefaultButton(QMessageBox.Ok)
+        
+        start_utc = datetime.strptime(server_maint_event.data1 , '%Y-%m-%d %H:%M:%S')
+        end_utc = datetime.strptime(server_maint_event.data2 , '%Y-%m-%d %H:%M:%S')
+        
+        from_tz = tz.tzutc()
+        to_tz = tz.tzlocal()
+        #convert local time for message
+        start_utc = start_utc.replace(tzinfo = from_tz)
+        end_utc = end_utc.replace(tzinfo = from_tz)
+        start_local = start_utc.astimezone(to_tz)
+        end_local = end_utc.astimezone(to_tz)
+
         main, detail = msg.split('\n')
+        #reassign current local for detail
+        detail = _("From %s to %s.") % (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         msgbox.setInformativeText(main)
         msgbox.setDetailedText(detail)
         msgbox.setIcon(icon)

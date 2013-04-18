@@ -103,10 +103,14 @@ def get_maintenance_message(status, schedule = None):
         # convert to local times
         from_tz = tz.tzutc()
         to_tz = tz.tzlocal()
+        #grab utc times for database
+        data1 = start_utc
+        data2 = end_utc
+        #convert local time for message
         start_utc = start_utc.replace(tzinfo = from_tz)
         end_utc = end_utc.replace(tzinfo = from_tz)
-        data1 = start_local = start_utc.astimezone(to_tz)
-        data2 = end_local = end_utc.astimezone(to_tz)
+        start_local = start_utc.astimezone(to_tz)
+        end_local = end_utc.astimezone(to_tz)
         if status == 'maintenance':
 #            msg = _("%s is currently offline.") % service
             msg = _("%s is currently offline.") % Constants.SERVICE_NAME
