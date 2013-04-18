@@ -195,6 +195,22 @@ class Synchronizer(object):
         if not keep_root:
             session.delete(doc_pair)
 
+    def _mark_descendant_states_remotely_created(self, session, doc_pair,
+        keep_root=None):
+        """Mark the descendant states as remotely created"""
+        # mark local descendant states first
+        if doc_pair.local_path is not None:
+            local_children = session.query(LastKnownState).filter_by(
+                local_folder=doc_pair.local_folder,
+                local_parent_path=doc_pair.local_path).all()
+            for child in local_children:
+                self._mark_descendant_states_remotely_created(session, child)
+
+        # mark parent folder state in the end
+        if not keep_root:
+            doc_pair.reset_local()
+            doc_pair.update_state('unknown', 'created')
+
     def _local_rename_with_descendant_states(self, session, client, doc_pair,
         previous_local_path, updated_path):
         """Update the metadata of the descendants of a renamed doc"""
@@ -645,7 +661,7 @@ class Synchronizer(object):
     def _synchronize_locally_created(self, doc_pair, session,
         local_client, remote_client, local_info, remote_info):
         if self._detect_resolve_local_move(doc_pair, session,
-            local_client, remote_client, local_info, remote_info):
+            local_client, remote_client, local_info):
             return
         name = os.path.basename(doc_pair.local_path)
         # Find the parent pair to find the ref of the remote folder to
@@ -684,7 +700,8 @@ class Synchronizer(object):
             if doc_pair.folderish:
                 doc_pair.remote_can_create_child = False
             # XXX: in the future we might want to introduce a new
-            # 'notsynchronizable'pair state to display a special icon in the UI
+            # 'notsynchronizable' pair state to display a special icon
+            # in the UI
             doc_pair.update_state('synchronized', 'synchronized')
 
     def _synchronize_remotely_created(self, doc_pair, session,
@@ -713,6 +730,9 @@ class Synchronizer(object):
             log.debug("Creating local folder '%s' in '%s'", name,
                       parent_pair.get_local_abspath())
             path = local_client.make_folder(local_parent_path, name)
+            log.debug('Remote recursive scan of the content of %s', name)
+            self._scan_remote_recursive(session, remote_client, doc_pair,
+                                        remote_info, force_recursion=False)
         else:
             log.debug("Creating local file '%s' in '%s'", name,
                       parent_pair.get_local_abspath())
@@ -725,13 +745,24 @@ class Synchronizer(object):
     def _synchronize_locally_deleted(self, doc_pair, session,
         local_client, remote_client, local_info, remote_info):
         if self._detect_resolve_local_move(doc_pair, session,
-            local_client, remote_client, local_info, remote_info):
+            local_client, remote_client, local_info):
             return
         if doc_pair.remote_ref is not None:
-            log.debug("Deleting or unregistering remote document '%s' (%s)",
-                      doc_pair.remote_name, doc_pair.remote_ref)
-            remote_client.delete(doc_pair.remote_ref)
-        self._delete_with_descendant_states(session, doc_pair)
+            if remote_info.can_delete:
+                log.debug("Deleting or unregistering remote document"
+                          " '%s' (%s)",
+                          doc_pair.remote_name, doc_pair.remote_ref)
+                remote_client.delete(doc_pair.remote_ref)
+                self._delete_with_descendant_states(session, doc_pair,
+                    keep_root=not remote_info.can_delete)
+            else:
+                log.debug("Marking %s as remotely created since remote"
+                          " document '%s' (%s) can not be deleted: either"
+                          " it is readonly or it is a virtual folder that"
+                          " doesn't exist in the server hierarchy",
+                          doc_pair, doc_pair.remote_name, doc_pair.remote_ref)
+                self._mark_descendant_states_remotely_created(session,
+                    doc_pair)
 
     def _synchronize_remotely_deleted(self, doc_pair, session,
         local_client, remote_client, local_info, remote_info):
@@ -787,7 +818,7 @@ class Synchronizer(object):
                 local_client, remote_client, local_info, remote_info)
 
     def _detect_local_move_or_rename(self, doc_pair, session,
-        local_client, local_info, remote_info):
+        local_client, local_info):
         """Find local move or renaming events by introspecting the states
 
         In case of detection return (source_doc_pair, target_doc_pair).
@@ -859,7 +890,7 @@ class Synchronizer(object):
         return source_doc_pair, target_doc_pair
 
     def _detect_resolve_local_move(self, doc_pair, session,
-        local_client, remote_client, local_info, remote_info):
+        local_client, remote_client, local_info):
         """Handle local move / renaming if doc_pair is detected as involved
 
         Detection is based on digest for files and content for folders.
@@ -872,8 +903,7 @@ class Synchronizer(object):
         # Detection step
 
         source_doc_pair, target_doc_pair = self._detect_local_move_or_rename(
-            doc_pair, session, local_client, local_info,
-            remote_info)
+            doc_pair, session, local_client, local_info)
 
         if source_doc_pair is None or target_doc_pair is None:
             # No candidate found
@@ -884,8 +914,10 @@ class Synchronizer(object):
         moved_or_renamed = False
         remote_ref = source_doc_pair.remote_ref
 
+        remote_info = remote_client.get_info(remote_ref,
+                                             raise_if_missing=False)
         # check that the target still exists
-        if not remote_client.exists(remote_ref):
+        if remote_info is None:
             # Nothing to do: the regular deleted / created handling will
             # work in this case.
             return False
@@ -928,7 +960,14 @@ class Synchronizer(object):
             new_name = target_doc_pair.local_name
             log.debug("Detected and resolving local rename event on %s to %s",
                       source_doc_pair, new_name)
-            remote_info = remote_client.rename(remote_ref, new_name)
+            if remote_info.can_rename:
+                remote_info = remote_client.rename(remote_ref, new_name)
+            else:
+                log.debug("Marking %s as synchronized since remote document"
+                          " can not be renamed: either it is readonly or it is"
+                          " a virtual folder that doesn't exist"
+                          " in the server hierarchy",
+                          target_doc_pair)
             target_doc_pair.update_remote(remote_info)
 
         if moved_or_renamed:
