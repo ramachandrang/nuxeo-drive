@@ -1,0 +1,1 @@
+Note: In order to display synced/synching icon overlays on individual files and folders within Windows Explorer, restarting the computer may be needed.
