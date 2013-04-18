@@ -35,7 +35,7 @@ DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
 CONFIG_FILE = 'nxdrive.cfg'
 
 # TODO replace with CloudDesk url and admin(?) account
-CLOUDDESK_URL = u'https://qadm.sharpb2bcloud.com/app1'
+CLOUDDESK_URL = r'https://qadm.sharpb2bcloud.com/app1'
 ACCOUNT = ''
 # CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
 SERVICE_NAME = 'Cloud Portal Office'
@@ -43,10 +43,10 @@ SERVICE_NAME = 'Cloud Portal Office'
 if USE_LOCAL_SERVICE:
     MAINTENANCE_SERVICE_URL = u'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
     UPGRADE_SERVICE_URL = u'http://hbdisdlw7.enet.sharplabs.com/Maintenance/SoftwareUpdates.svc/json/'
-    #UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
+    # UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
 else:
-    MAINTENANCE_SERVICE_URL = u'https://dev-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
-    UPGRADE_SERVICE_URL = u'https://dev-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
+    MAINTENANCE_SERVICE_URL = u'https://qa-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
+    UPGRADE_SERVICE_URL = u'https://qa-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
 
 INTERNAL_HTTP_PORT = 63111
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'

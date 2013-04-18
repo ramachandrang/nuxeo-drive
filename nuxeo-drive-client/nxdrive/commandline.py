@@ -101,7 +101,7 @@ def make_cli_parser(add_subparsers = True):
     )
     common_parser.add_argument(
         "--debug", default = False, action = "store_true",
-        help = _("Fire a debugger (ipdb or pdb) one uncaught error.")
+        help = _("Fire a debugger (ipdb or pdb) on uncaught error.")
     )
     common_parser.add_argument(
         "--delay", default = DEFAULT_DELAY, type = float,

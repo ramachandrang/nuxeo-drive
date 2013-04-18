@@ -274,7 +274,7 @@ class Controller(object):
         else:
             log.info("Failed to get process id, app will not quit.")
 
-    def _children_states(self, folder_path, session = None):
+    def _children_states(self, folder_path, session=None):
         """List the status of the children of a folder
 
         The state of the folder is a summary of their descendant rather
@@ -300,9 +300,9 @@ class Controller(object):
 
         states = self._pair_states_recursive(session, folder_state)
         return states, path
-
-    def children_states_as_files(self, folder_path, session = None):
-        states, path = self._children_states(folder_path, session = session)
+        
+    def children_states_as_files(self, folder_path, session=None):
+        states, path = self._children_states(folder_path, session=session)
         if not path or not states:
             return states
         else:
@@ -318,8 +318,8 @@ class Controller(object):
             return [(s.local_path, pair_state)
                     for s, pair_state in states
                     if s.local_parent_path == path]
-
-    def children_states(self, folder_path, session = None):
+            
+    def children_states(self, folder_path, session=None):
         """For backward compatibility"""
         return self.chidren_states_as_files(folder_path, session = session)
 
@@ -590,6 +590,35 @@ class Controller(object):
         nxclient.revoke_token()
         log.debug("revoked the new token %s", token)
 
+    def get_reusable_server_binding(self):
+        # if a record exists, use the username from that record
+        server_bindings = self.list_server_bindings()
+        if len(server_bindings) == 0:
+            server_binding = None
+        elif len(server_bindings) == 1:
+            server_binding = server_bindings[0]
+        else:
+            log.debug("More than one server binding found.")
+            for sb in server_bindings:
+                # pick the first binding with valid credentials!?
+                if not sb.has_invalid_credentials():
+                    server_binding = sb
+                    break
+            else:
+                log.debug("All bindings have invalid credentials.")
+                server_binding = None
+        return server_binding   
+        
+    def getUserName(self):
+        # if a record exists, use the username from that record
+#        server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
+        server_binding = self.get_reusable_server_binding()
+        return server_binding.remote_user if server_binding else Constants.ACCOUNT
+
+    def is_user_readonly(self):
+        server_binding = self.get_reusable_server_binding()
+        return server_binding is not None
+    
     def _update_hash(self, password):
         return md5.new(password).digest()
 
@@ -973,35 +1002,34 @@ class Controller(object):
     def update_storage_used(self, server_binding = None, session = None):
         if session is None:
             session = self.get_session()
+        if not server_binding:
+            server_binding = self.get_reusable_server_binding()
         if server_binding:
-            server_bindings = [server_binding]
-        else:
-            server_bindings = session.query(ServerBinding).all()
-        for sb in server_bindings:
-            remote_client = self.get_remote_client(sb)
+            remote_client = self.get_remote_client(server_binding)
             if remote_client is not None:
                 try:
-                    sb.used_storage, sb.total_storage = remote_client.get_storage_used()
-                    log.debug("used storage=%s, total storage=%s", str(sb.used_storage), str(sb.total_storage))
+                    server_binding.used_storage, server_binding.total_storage = remote_client.get_storage_used()
+                    session.commit()
+                    log.debug("used storage=%s, total storage=%s", 
+                              str(server_binding.used_storage), str(server_binding.total_storage))
                 except ValueError:
                     # operation not implemented
-                    log.debug("failed to retrieve storage for url: %s, user: %s", sb.server_url, sb.remote_user)
+                    log.debug("failed to retrieve storage for url: %s, user: %s", 
+                              server_binding.server_url, server_binding.remote_user)
 
     def update_server_storage_used(self, url, user, session = None):
         if session is None:
             session = self.get_session()
-        for sb in session.query(ServerBinding).all():
-            if url.startswith(sb.server_url) and user == sb.remote_user:
-                remote_client = self.get_remote_client(sb)
-                if remote_client is not None:
-                    try:
-                        sb.used_storage, sb.total_storage = remote_client.get_storage_used()
-                        return sb.used_storage, sb.total_storage
-                    except ValueError:
-                        # operation not implemented
-                        pass
-                break
-
+        sb = self.get_reusable_server_binding()
+        if sb and url.startswith(sb.server_url) and user == sb.remote_user:
+            remote_client = self.get_remote_client(sb)
+            if remote_client is not None:
+                try:
+                    sb.used_storage, sb.total_storage = remote_client.get_storage_used()
+                    return sb.used_storage, sb.total_storage
+                except ValueError:
+                    # operation not implemented
+                    pass
         return (0, 0)
 
     def get_storage(self, server_binding):
@@ -1192,15 +1220,6 @@ class Controller(object):
         older_versions = [version for version in versions if not _is_newer_version(version.data1)]
         if len(older_versions) > 0:
             map(session.delete, older_versions)
-
-    def _get_folders_and_sync_roots(self, controller, server_binding):
-        session = controller.get_session()
-        controller.synchronizer.get_folders(server_binding = server_binding, session = session)
-        controller.synchronizer.update_roots(server_binding = server_binding, session = session)
-
-    def start_folders_thread(self, server_binding):
-            Thread(target = self._get_folders_and_sync_roots,
-                                      args = (self, server_binding,)).start()
 
     def lock_folder(self, path):
         if not os.path.exists(path):

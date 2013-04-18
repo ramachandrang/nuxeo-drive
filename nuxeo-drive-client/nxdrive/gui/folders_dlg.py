@@ -20,6 +20,7 @@ log = get_logger(__name__)
 
 class Communicator(QObject):
     ancestorChanged = Signal(QStandardItem)
+    folders = Signal(str)
 
 
 class SyncFoldersDlg(QDialog, Ui_Dialog):
@@ -35,9 +36,17 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         self.frontend = frontend
         self.controller = self.frontend.controller
         self.server_binding = self.frontend.server_binding
+        # connect the click event
+        self.treeView.clicked[QModelIndex].connect(self.item_clicked)
+        # connect event to set the ancestors accordingly
+        # TO DO this crashes the Python interpreter!!!
+        self.communicator = Communicator()
+        self.communicator.ancestorChanged.connect(self.set_ascendant_state)
+        # Note: connect this signal before running thread(s)
+        frontend.communicator.folders.connect(self.folders_changed)
 
         try:
-            self.model = get_model(frontend.controller.get_session(), self.frontend)
+            self.model = get_model(frontend.controller.get_session(), self)
             if self.model is None:
                 log.debug('cannot retrieve model.')
                 return
@@ -50,24 +59,17 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
             # hide header and all columns but first one
             self.treeView.setHeaderHidden(True)
             self.treeView.resizeColumnToContents(0)
-
-            # connect the click event
-            self.treeView.clicked[QModelIndex].connect(self.item_clicked)
-            # connect event to set the ancestors accordingly
-            # TO DO this crashes the Python interpreter!!!
-            self.communicator = Communicator()
-            self.communicator.ancestorChanged.connect(self.set_ascendant_state)
-            frontend.communicator.folders.connect(self.folders_changed)
         except Exception as ex:
             label = self.lblHelp
             label.setText("<font size='4' color='red'><bold>%s</bold></font>" % str(ex))
             label.setAlignment(Qt.AlignHCenter)
             self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
 
-    def folders_changed(self):
+    @Slot(str)
+    def folders_changed(self, local_folder):
         session = self.frontend.controller.get_session()
         root = self.model.invisibleRootItem().child(0)
-        update_model(session, root, self.server_binding.local_folder)
+        update_model(session, root, local_folder)
 
     def set_checked_state(self, parent):
         """Initialize the state of all checkboxes based on the model."""
@@ -244,3 +246,9 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         except Exception, e:
             log.debug('failed to update folder state: %s', e)
 
+
+    def notify_folders_retrieved(self, local_folder):
+        # Slot is not called!!
+        self.communicator.folders.emit(local_folder)
+        # call the function directly
+        self.folders_changed(local_folder)

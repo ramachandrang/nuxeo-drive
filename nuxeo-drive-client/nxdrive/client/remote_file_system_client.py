@@ -11,7 +11,7 @@ from nxdrive.client.common import BUFFER_SIZE
 from nxdrive.client.base_automation_client import Unauthorized
 from nxdrive.client.base_automation_client import raise_403_error
 from nxdrive.client.base_automation_client import BaseAutomationClient
-
+from nxdrive import USE_SINGLE_COOKIEJAR
 
 log = get_logger(__name__)
 
@@ -168,7 +168,17 @@ class RemoteFileSystemClient(BaseAutomationClient):
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers = headers)
+            if USE_SINGLE_COOKIEJAR:
+                BaseAutomationClient.cookiejar.add_cookie_header(req)
+            else:
+                self.cookiejar.add_cookie_header(req)
+            # --- BEGIN DEBUG ----
+            self.log_request(req)
+            # --- END DEBUG ----
             response = self.opener.open(req, timeout = self.blob_timeout)
+            # --- BEGIN DEBUG ----
+            self.log_response(response)
+            # --- END DEBUG ----
             if hasattr(file_out, "write"):
                 while True:
                     buffer_ = response.read(BUFFER_SIZE)

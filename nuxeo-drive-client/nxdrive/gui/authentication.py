@@ -80,13 +80,14 @@ class Dialog(QDialog):
         self.authentication_group_box.setLayout(layout)
 
     def clear_message(self, *args, **kwargs):
-        self.message_area.setText(None)
+        self.message_area.clear()
 
     def show_message(self, message):
         self.message_area.setText(message)
 
     def accept(self):
         if self.callback is not None:
+            self.clear_message()
             self.values = dict((id_, w.text())
                                for id_, w in self.fields.items())
             if not self.callback(self.values, self):
@@ -187,7 +188,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
                 url = p1 + p2 + p3 + p4 + urllib.urlencode(query_params)
                 dialog.show_message(e.message % (e.max_devices, url))
             except Exception as e:
-                msg = _("Unable to connect to %s (%s)") % (url, e)
+                msg = _("Unable to connect to %s") % url
                 log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
                 # TODO: catch a new ServerUnreachable catching network issues
                 dialog.show_message(msg)
@@ -197,7 +198,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
             dialog.show_message(msg)
             return False
         except Exception as e:
-            msg = _("Unable to connect to %s (%s)") % (url, e)
+            msg = _("Unable to connect to %s") % url
             log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
             # TODO: catch a new ServerUnreachable catching network issues
             dialog.show_message(msg)

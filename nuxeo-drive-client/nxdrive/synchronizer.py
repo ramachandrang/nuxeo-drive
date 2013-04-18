@@ -10,6 +10,11 @@ import urllib2
 import socket
 import httplib
 import psutil
+from threading import Thread
+
+from PySide.QtCore import Signal
+from PySide.QtCore import Slot
+from PySide.QtCore import QObject
 
 from sqlalchemy import not_, or_, and_
 from sqlalchemy import asc, desc
@@ -174,7 +179,11 @@ def dicts(t):
     else:
         return str(t)
 
-
+class AsyncCommunicator(QObject):
+    # signal to indicate that folders have been retrieved
+    folders_ready = Signal(ServerBinding)
+    
+    
 class Synchronizer(object):
     """Handle synchronization operations between the client FS and Nuxeo"""
 
@@ -197,13 +206,14 @@ class Synchronizer(object):
     # to a fixed cooldown period
     error_skip_period = 300  # 5 minutes
 
-
     def __init__(self, controller):
         self._controller = controller
         self._frontend = None
         self._sync_operation = None
         self.loop_count = 0
         self.quota_exceeded = False
+        self.communicator = AsyncCommunicator()
+        self.communicator.folders_ready.connect(self.set_default_roots)
 
     def register_frontend(self, frontend):
         self._frontend = frontend
@@ -549,31 +559,29 @@ class Synchronizer(object):
 
         log.debug('start updating roots.')
         session = self.get_session() if session is None else session
-        if server_binding is not None:
-            server_bindings = [server_binding]
-        else:
-            server_bindings = session.query(ServerBinding).all()
+        if not server_binding:
+            server_binding = self.get_reusable_server_binding()
 
-        for sb in server_bindings:
-            nxclient = self.get_remote_client(sb)
+        if server_binding:
+            nxclient = self.get_remote_client(server_binding)
             if repository is not None:
                 repositories = [repository]
             else:
                 repositories = nxclient.get_repository_names()
             for repo in repositories:
-                nxclient = self.get_remote_client(sb, repository = repo)
+                nxclient = self.get_remote_client(server_binding, repository = repo)
                 remote_roots = nxclient.get_roots()
                 remote_roots_ids = [rr.uid for rr in remote_roots]
-                for folder in session.query(SyncFolders).filter(SyncFolders.local_folder == sb.local_folder).all():
+                for folder in session.query(SyncFolders).filter(SyncFolders.local_folder == server_binding.local_folder).all():
                     folder.bind_state = False
                 folders = session.query(SyncFolders).\
-                                filter(SyncFolders.local_folder == sb.local_folder).\
+                                filter(SyncFolders.local_folder == server_binding.local_folder).\
                                 filter(SyncFolders.remote_id.in_(remote_roots_ids)).\
                                 all()
                 for folder in folders:
                     folder.check_state = folder.bind_state = True
 
-        session.commit()
+            session.commit()
         log.debug('end updating roots.')
 
     def synchronize_one(self, doc_pair, session = None, status = None):
@@ -1194,24 +1202,11 @@ class Synchronizer(object):
                 if server_binding is None:
                     local_folder = self._frontend.local_folder
                     server_binding = self._controller.get_server_binding(local_folder)
-                
-            self.get_folders(server_binding = server_binding, session = session)
-            count = session.query(SyncFolders).\
-                   filter(and_(SyncFolders.bind_state == True,
-                               SyncFolders.local_folder == server_binding.local_folder)).\
-                               count()
-            # top level folders would have been set as sync roots by wizard
-            if count == 0:
-                # user skipped the wizard
-                # set top-level folders as sync roots
-                self.check_toplevel_folders(server_binding = server_binding, session = session)
-                try:
-                    self.set_roots(server_binding = server_binding, session = session)
-                except Exception as e:
-                    log.error("Unable to set roots on '%s' for user '%s' (%s)",
-                                        server_binding.server_url, server_binding.remote_user, str(e))
-        # TODO temporary fix - eat exception
+            # TEMPORARRY Move this to app startup
+#            self.get_folders(server_binding, update_roots=True, 
+#                             completion_notifier=self.notify_folders_retrieved)
         except Exception, e:
+            # TODO temporary fix - eat exception
             log.debug("error retrieving folders: %s", str(e))
             
         try:
@@ -1227,6 +1222,7 @@ class Synchronizer(object):
                              self.loop_count)
                     break
                 try:
+                    # TODO there is only valid binding now
                     bindings = session.query(ServerBinding).all()
                     if len(bindings) == 0:
                         self.notify_to_signin()
@@ -1649,7 +1645,11 @@ class Synchronizer(object):
 #                for s, pair_state in states
 #                if s.parent_path == path]
 
-    def get_folders(self, session = None, server_binding = None):
+    def get_folders(self, sb, update_roots=True, 
+                    top_level_notifier=None,
+                    completion_notifier=None,
+                    subfolder_notifier=None,
+                    session = None):
         """Retrieve all folder hierarchy from server.
         If a server is not responding it is skipped.
         """
@@ -1661,80 +1661,171 @@ class Synchronizer(object):
         success = False
         if session is None:
             session = self.get_session()
-        if server_binding is not None:
-            server_bindings = [server_binding]
-        else:
-            server_bindings = session.query(ServerBinding).all()
-        for sb in server_bindings:
-            if sb.has_invalid_credentials():
-                # Skip servers with missing credentials
-                continue
-            try:
-                success = False
-                nxclient = self._controller.get_remote_client(sb)
-                if not nxclient.is_addon_installed():
-                    continue
 
-                self._update_clouddesk_root(sb.local_folder, session = session)
-                mydocs_folder = nxclient.get_mydocs()
-                mydocs_folder[u'title'] = Constants.MY_DOCS
+        if sb.has_invalid_credentials():
+            # Skip server with missing credentials
+            return False
+        
+        try:
+            nxclient = self._controller.get_remote_client(sb)
+            if not nxclient.is_addon_installed():
+                return False
 
-                nodes = tree()
-                nxclient.get_subfolders(mydocs_folder, nodes)
+            self._update_clouddesk_root(sb.local_folder, session = session)
+            mydocs_folder = nxclient.get_mydocs()
+            mydocs_folder[u'title'] = Constants.MY_DOCS
+            self._update_docs(mydocs_folder, sb.local_folder, session = session)
 
-                self._update_docs(mydocs_folder, nodes, sb.local_folder, session = session, dirty = dirty)
-
-                othersdocs_folders = nxclient.get_othersdocs(mydocs_folder['path'])
-
-                # create a fake Others' Docs folder
-                othersdocs_folder = {
-                                     u'uid': Constants.OTHERS_DOCS_UID,
-                                     u'title': Constants.OTHERS_DOCS,
-                                     u'repository': mydocs_folder[u'repository'],
-                                     }
-                nodes = tree()
-                for fld in othersdocs_folders:
-                    nodes[fld[u'title']]['value'] = FolderInfo(fld[u'uid'], fld[u'title'], othersdocs_folder[u'uid'])
-                    nxclient.get_subfolders(fld, nodes[fld[u'title']])
-
-                self._update_docs(othersdocs_folder, nodes, sb.local_folder, session = session, dirty = dirty)
-                success = True
-            except POSSIBLE_NETWORK_ERROR_TYPES as e:
-                # Ignore expected possible network related errors
-                success = self._handle_network_error(sb, e, session = session)
+            othersdocs_folders = nxclient.get_othersdocs(mydocs_folder['path'])
+            # create a fake Others' Docs folder
+            othersdocs_folder = {
+                                 u'uid': Constants.OTHERS_DOCS_UID,
+                                 u'title': Constants.OTHERS_DOCS,
+                                 u'repository': mydocs_folder[u'repository'],
+                                 }
+            self._update_docs(othersdocs_folder, sb.local_folder, session = session)
+            # cannot share ORM objects between threads
+            # pass local_folder as an parameter and retrieve server_binding in the worker thread
+            self.get_all_subfolders_async(sb.local_folder, mydocs_folder, othersdocs_folders, 
+                                          update_roots=update_roots, 
+                                          completion_notifier=completion_notifier, 
+                                          subfolder_notifier=subfolder_notifier)
+            success = True
+            session.commit()
+        except POSSIBLE_NETWORK_ERROR_TYPES as e:
+            # Ignore expected possible network related errors
+            log.debug("network error retrieving folders: %s", e)
+            success = self._handle_network_error(sb, e, session = session)
+        except Exception as e:
+            log.debug("error retrieving folders: %s", e)
 
         log.debug('end retrieving folders.')
-        if self._frontend is not None and success:
+        if success:
             try:
                 if dirty['add'] > 0 or dirty['del'] > 0:
-                    self._frontend.notify_folders_changed()
+                    if top_level_notifier: top_level_notifier(sb)
+            except KeyError:
+                pass            
+
+    def _get_all_subfolders(self, local_folder, mydocs, othersdocs, **kwargs):
+        log.debug('start retrieving subfolders.')    
+        success = False    
+        session = self.get_session()
+        server_binding = self._controller.get_server_binding(local_folder, session=session)
+        if not server_binding: return
+        
+        dirty = {}
+        dirty['add'] = 0
+        dirty['del'] = 0
+            
+        try:
+            nxclient = self._controller.get_remote_client(server_binding)
+            nodes = tree()
+            nxclient.get_subfolders(mydocs, nodes)
+            repo = mydocs[u'repository']
+            docId = mydocs[u'uid']
+            
+            # TODO support notification for each subfolder being updated
+            # using subfolder_notifier
+            self._update_docs_subfolders(docId, nodes, local_folder, repo, session=session, dirty=dirty)
+            # update subfolders for Others Docs
+            nodes = tree()
+            try:
+                # there may not be any children of othersdocs
+                # NOTE: in this case is an empty list instead of a dictionary!!
+                repo = othersdocs[u'repository']
+                docId = othersdocs[u'uid']
+                for fld in othersdocs:
+                    nodes[fld[u'title']]['value'] = FolderInfo(fld[u'uid'], fld[u'title'], othersdocs[u'uid'])
+                    nxclient.get_subfolders(fld, nodes[fld[u'title']])
+
+                self._update_docs_subfolders(docId, nodes, local_folder, repo, session=session, dirty=dirty)
+            except (ValueError, TypeError,):
+                log.debug('Others Docs is empty')
+                
+            if kwargs.get("update_roots", True):
+                self.update_roots(server_binding=server_binding, session=session)
+                
+            success = True
+            session.commit()
+        except POSSIBLE_NETWORK_ERROR_TYPES as e:
+            # Ignore expected possible network related errors
+            log.debug("network error retrieving subfolders: %s", e)
+            success = self._handle_network_error(server_binding, e, session = session)
+        except Exception as e:
+            log.debug("error retrieving subfolders: %s", e)
+
+        log.debug('end retrieving subfolders.')
+        if success:
+            try:
+                if dirty['add'] > 0 or dirty['del'] > 0:
+                    if kwargs.get("completion_notifier", None): 
+                        kwargs["completion_notifier"](local_folder)
             except KeyError:
                 pass
-
+                                  
+    def get_all_subfolders_async(self, local_folder, mydocs, othersdocs, **kwargs):
+#        Thread(target = self._get_all_subfolders,
+#                                  args = (local_folder, mydocs, othersdocs,),
+#                                  kwargs = kwargs
+#                                ).start()        
+                                
+        self._get_all_subfolders(local_folder, mydocs, othersdocs, **kwargs)
+                                  
+    def notify_folders_retrieved(self, local_folder):
+        self.communicator.folders_ready.emit(local_folder)
+        
+    @Slot(ServerBinding)
+    def set_default_roots(self, local_folder):
+        log.debug("start setting default sync roots")
+        session = self._controller.get_session()
+        server_binding = self._controller.get_server_binding(local_folder, session=session)
+        if not server_binding: return
+        
+        count = session.query(SyncFolders).\
+               filter(and_(SyncFolders.bind_state == True,
+                           SyncFolders.local_folder == server_binding.local_folder)).\
+                           count()
+        # top level folders would have been set as sync roots by wizard
+        if count == 0:
+            # user skipped the wizard
+            # set top-level folders as sync roots
+            self.check_toplevel_folders(server_binding = server_binding, session = session)
+            try:
+                self.set_roots(server_binding = server_binding, session = session)
+            except Exception as e:
+                log.error("Unable to set roots on '%s' for user '%s' (%s)",
+                                    server_binding.server_url, server_binding.remote_user, str(e))
+        log.debug("end setting default sync roots")
+                                      
     def check_toplevel_folders(self, server_binding = None, session = None):
         if session is None:
             session = self.wizard().session
 
-        if server_binding is not None:
-            server_bindings = [server_binding]
-        else:
-            server_bindings = session.query(ServerBinding).all()
-        for sb in server_bindings:
+        if not server_binding:
+            server_binding = self._controller.get_reusable_server_binding()
+
+        if server_binding:
             # clear all checked folders
-            all_folders = session.query(SyncFolders).filter(SyncFolders.local_folder == sb.local_folder).all()
+            all_folders = session.query(SyncFolders).\
+                            filter(SyncFolders.local_folder == server_binding.local_folder).all()
             for fld in all_folders:
                 fld.check_state = False
 
             try:
-                mydocs = session.query(SyncFolders).filter(and_(SyncFolders.remote_name == Constants.MY_DOCS,
-                                                                SyncFolders.local_folder == sb.local_folder)).one()
+                mydocs = session.query(SyncFolders).\
+                            filter(and_(SyncFolders.remote_name == Constants.MY_DOCS,
+                            SyncFolders.local_folder == server_binding.local_folder)).\
+                            one()
                 mydocs.check_state = True
                 others_folders = session.query(SyncFolders).\
                                         filter(and_(SyncFolders.remote_parent == Constants.OTHERS_DOCS_UID,
-                                                    SyncFolders.local_folder == sb.local_folder)).all()
+                                                    SyncFolders.local_folder == server_binding.local_folder)).\
+                                        all()
                 for fld in others_folders:
                     fld.check_state = True
                 session.commit()
+                log.debug("set My Docs and Others Docs subfolders as sync roots")
             except Exception, e:
                 log.debug("My Docs or Others Docs missing in SyncFolders table (%s)", e)
 
@@ -1759,11 +1850,11 @@ class Synchronizer(object):
     def get_remote_fs_client(self, server_binding):
         return self._controller.get_remote_fs_client(server_binding)
 
-    def _update_docs(self, docs, nodes, local_folder, session = None, dirty = None):
+    def _update_docs(self, docs, local_folder, session = None):
         if session is None:
             session = self.get_session()
 
-        repo = docs[u'repository']
+#        repo = docs[u'repository']
         docId = docs[u'uid']
         # check if already exists
         try:
@@ -1782,9 +1873,18 @@ class Synchronizer(object):
             session.add(folder)
 
         # add all subfolders
+#        root_folder = Constants.ROOT_OTHERS_DOCS if docId == Constants.OTHERS_DOCS_UID else Constants.ROOT_MYDOCS
+#        self._remove_folders(nodes, docId, local_folder, session, dirty = dirty)
+#        self._add_folders(nodes, repo, local_folder, root_folder, session, dirty = dirty)
+#        session.commit()
+        
+    def _update_docs_subfolders(self, docId, nodes, local_folder, repo, session=None, dirty=None):
+        if session is None:
+            session = self.get_session()
+        # add all subfolders
         root_folder = Constants.ROOT_OTHERS_DOCS if docId == Constants.OTHERS_DOCS_UID else Constants.ROOT_MYDOCS
-        self._remove_folders(nodes, docId, local_folder, session, dirty = dirty)
-        self._add_folders(nodes, repo, local_folder, root_folder, session, dirty = dirty)
+        self._remove_folders(nodes, docId, local_folder, session=session, dirty=dirty)
+        self._add_folders(nodes, repo, local_folder, root_folder, session=session, dirty=dirty)
         session.commit()
 
     def _add_folders(self, t, repo, local_folder, root_folder, session = None, dirty = None):
@@ -1832,31 +1932,30 @@ class Synchronizer(object):
         if session is None:
             session = self.get_session()
 
-        if server_binding is not None:
-            server_bindings = [server_binding]
-        else:
-            server_bindings = session.query(ServerBinding).all()
-        for sb in server_bindings:
+        if not server_binding:
+            server_binding = self._controller.get_reusable_server_binding()
+
+        if server_binding:
             roots_to_register = session.query(SyncFolders).\
                                 filter(SyncFolders.check_state == True).\
                                 filter(SyncFolders.bind_state == False).\
-                                filter(sb.local_folder == SyncFolders.local_folder).\
+                                filter(server_binding.local_folder == SyncFolders.local_folder).\
                                 all()
 
             roots_to_unregister = session.query(SyncFolders).\
                                 filter(SyncFolders.check_state == False).\
                                 filter(SyncFolders.bind_state == True).\
-                                filter(sb.local_folder == SyncFolders.local_folder).\
+                                filter(server_binding.local_folder == SyncFolders.local_folder).\
                                 all()
 
-            remote_client = self.get_remote_client(sb)
+            remote_client = self.get_remote_client(server_binding)
             for sync_folder in roots_to_register:
                 try:
                     remote_client.register_as_root(sync_folder.remote_id)
                     sync_folder.bind_state = True
                     session.commit()
                 except POSSIBLE_NETWORK_ERROR_TYPES as e:
-                    if not self._handle_network_error(sb, e, session = session):
+                    if not self._handle_network_error(server_binding, e, session = session):
                         raise
 
             for sync_folder in roots_to_unregister:
@@ -1865,7 +1964,7 @@ class Synchronizer(object):
                     sync_folder.bind_state = False
                     session.commit()
                 except POSSIBLE_NETWORK_ERROR_TYPES as e:
-                    if not self._handle_network_error(sb, e, session = session):
+                    if not self._handle_network_error(server_binding, e, session = session):
                         raise
 
     # NOT USED - synchronizer.set_roots is used instead
@@ -1921,24 +2020,25 @@ class Synchronizer(object):
         if session is None:
             session = self._controller.get_session()
 
-        server_bindings = session.query(ServerBinding).all()
-        for sb in server_bindings:
-            if sb.nag_maintenance_schedule():
-                self._reset_expired_maint_schedules(sb, session = session)
-                maint_remote_client = self._controller.get_maint_service_client(sb)
-                self.process_maintenance_schedule(sb, schedules = maint_remote_client.get_maintenance_schedule(sb))
+        server_binding = self._controller.get_reusable_server_binding()
+        if server_binding:
+            if server_binding.nag_maintenance_schedule():
+                self._reset_expired_maint_schedules(server_binding, session = session)
+                maint_remote_client = self._controller.get_maint_service_client(server_binding)
+                self.process_maintenance_schedule(server_binding, 
+                                                  schedules = maint_remote_client.get_maintenance_schedule(server_binding))
 
-            if sb.nag_upgrade_schedule():
-                upgrade_remote_client = self._controller.get_upgrade_service_client(sb)
-                creation_date, version, url = upgrade_remote_client.get_upgrade_info(sb)
-                self.process_upgrade_schedule(sb, creation_date, version, url)
+            if server_binding.nag_upgrade_schedule():
+                upgrade_remote_client = self._controller.get_upgrade_service_client(server_binding)
+                creation_date, version, url = upgrade_remote_client.get_upgrade_info(server_binding)
+                self.process_upgrade_schedule(server_binding, creation_date, version, url)
 
-            if sb.nag_quota_exceeded():
+            if server_binding.nag_quota_exceeded():
                 detail = _('Storage Quota exceeded')
-                self.persist_server_event(sb, detail,
+                self.persist_server_event(server_binding, detail,
                                           message_type = 'quota', session = session)
                 if self._frontend is not None:
-                    self._frontend.notify_quota_exceeded(sb.local_folder, Constants.APP_NAME, detail)
+                    self._frontend.notify_quota_exceeded(server_binding.local_folder, Constants.APP_NAME, detail)
 
     def update_last_access(self, sb):
         remote_client = self._controller.get_remote_client(sb)

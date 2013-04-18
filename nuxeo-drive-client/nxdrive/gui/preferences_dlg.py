@@ -10,6 +10,7 @@ import sys
 import platform
 import shutil
 from time import time
+from copy import copy
 
 from PySide.QtGui import QApplication, QDialog, QMessageBox, QDialogButtonBox, QFileDialog, QIcon
 from PySide.QtCore import Qt, QSettings
@@ -87,9 +88,8 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.values = None
         self.stop_on_apply = False
         self.local_folder = frontend._get_local_folder() if frontend is not None else DEFAULT_EX_NX_DRIVE_FOLDER
-        self.previous_local_folder = self.local_folder
-        self.local_folder_text_changed = False
         self.prev_local_folder = self.local_folder
+        self.local_folder_text_changed = False
         self.server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
         self.user = self.server_binding.remote_user if self.server_binding else Constants.ACCOUNT
         self.bknd_clicks = ClickDetector()
@@ -199,7 +199,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
     def _updateBinding(self):
         self.txtAccount.setText(self.user)
         self.txtAccount.setToolTip(self.user)
-        self.txtAccount.setReadOnly(self.server_binding is not None)
+        self.txtAccount.setReadOnly(self.controller.is_user_readonly())
         self.txtAccount.setEnabled(True)
         
         self.txtCloudfolder.setText(os.path.dirname(self.local_folder))
@@ -339,7 +339,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             return
                 
         self.user = self.txtAccount.text()
-        readonly_user = self.server_binding is not None
+        readonly_user = self.controller.is_user_readonly()
         # BEGIN remove site url
 #        server_url = self.txtUrl.text()
         server_url = self.server_binding.server_url if self.server_binding else Constants.CLOUDDESK_URL
@@ -371,14 +371,14 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         return result
 
     def _disconnect(self):
-        self.previous_local_folder = self.local_folder
+        self.prev_local_folder = self.local_folder
         self.server_binding = None
 
     def applyChanges(self):
         same_binding = False
         previous_binding = None
-        if self.previous_local_folder is not None:
-            previous_binding = self.controller.get_server_binding(local_folder = self.previous_local_folder, raise_if_missing = False)
+        if self.prev_local_folder is not None:
+            previous_binding = self.controller.get_server_binding(local_folder = self.prev_local_folder, raise_if_missing = False)
         same_binding = self.server_binding == previous_binding
         previous_user = previous_binding.remote_user if previous_binding else None
         current_user = self.server_binding.remote_user if self.server_binding else None
@@ -391,7 +391,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                     if self.result == ProgressDialog.CANCELLED:
                         return QDialog.Rejected
                     # disconnect
-                    self.controller.unbind_server(self.previous_local_folder)
+                    self.controller.unbind_server(self.prev_local_folder)
 
                 if self._isConnected():
                     # the binding may exist but credentials are invalid
@@ -544,12 +544,16 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         nxdrive.DEBUG = not nxdrive.DEBUG
         
     def reuse_folder(self):
-        if self.server_binding is None:
+        # This will prevent folder reuse on first sign in.
+        # Afterwards, username will not change (unless db is deleted).
+        # url though may still change if modified in the config file (and app is restarted)
+        server_binding = self.controller.get_reusable_server_binding()
+        if server_binding is None:
             return False
         # remove the trailing '/' before comparison
         s1 = Constants.CLOUDDESK_URL
         s1 = s1[:-1] if s1[-1] == '/' else s1
-        s2 = self.server_binding.server_url
+        s2 = server_binding.server_url
         s2 = s2[:-1] if s2[-1] == '/' else s2
-        return self.user == self.server_binding.remote_user and s1 == s2
+        return self.user == server_binding.remote_user and s1 == s2
         

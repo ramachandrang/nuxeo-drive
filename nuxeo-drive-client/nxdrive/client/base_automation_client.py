@@ -11,10 +11,10 @@ from datetime import datetime
 import urllib
 import urllib2
 from urllib import urlencode
-from urllib2 import HTTPHandler, HTTPSHandler
 from urllib2 import HTTPRedirectHandler
 from urllib2 import ProxyBasicAuthHandler
-from urllib2 import HTTPPasswordMgr
+#from urllib2 import HTTPHandler, HTTPSHandler
+#from urllib2 import HTTPPasswordMgr
 from cookielib import CookieJar
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -28,6 +28,7 @@ from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.utils import get_maintenance_message
 from nxdrive import Constants
 from nxdrive import DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION, DEBUG_UNAVAILABLE
+from nxdrive import USE_SINGLE_COOKIEJAR
 
 log = get_logger(__name__)
 
@@ -269,6 +270,8 @@ class BaseAutomationClient(object):
         cls._proxy_error_count = val
 
     permission = 'ReadWrite'
+    if USE_SINGLE_COOKIEJAR:
+        cookiejar = CookieJar()
 
     def __init__(self, server_url, user_id, device_id,
                  password = None, token = None, repository = "default",
@@ -302,8 +305,11 @@ class BaseAutomationClient(object):
 
         handlers = []
         proxy_support = None
-        self.cookiejar = CookieJar()
-        cookie_processor = urllib2.HTTPCookieProcessor(self.cookiejar)
+        if USE_SINGLE_COOKIEJAR:
+            cookie_processor = urllib2.HTTPCookieProcessor(BaseAutomationClient.cookiejar)
+        else:
+            self.cookiejar = CookieJar()
+            cookie_processor = urllib2.HTTPCookieProcessor(self.cookiejar)
 
         # NOTE 'proxy' classproperty does not work here (sample works!)
         # replace 'proxy' with 'get_proxy' and 'set_proxy' class methods
@@ -379,16 +385,33 @@ class BaseAutomationClient(object):
             log.debug('request host: %s', req.get_host())
             log.debug('original request host: %s', req.get_origin_req_host())
             log.debug('request type: %s', req.get_type())
+            log.debug('Authorization: %s', req.get_header('Authorization'))
+            log.debug('X-Application-Name: %s', req.get_header('X-application-name'))
+            log.debug('X-Authentication-Token: %s', req.get_header('X-authentication-token'))
+            cookie = req.get_header('Cookie')
+            if cookie:
+                cookies = cookie.split(';')
+                log.debug('cookies:')
+                for ck in cookies:
+                    name, value = ck.split('=', 1)
+                    log.debug('  %s: %s', name, value)
             if req.has_data():
                 log.debug('request data: %s...', str(req.get_data())[0:200])
 
-    def log_response(self, rsp, data):
+    def log_response(self, rsp, data='binary data'):
         if BaseAutomationClient._enable_trace:
             log.debug('------response------')
             log.debug('response code: %d', rsp.code)
             log.debug('--response headers--')
             for key, value in rsp.info().items():
-                log.debug('%s: %s', key, value)
+                if key == 'set-cookie':
+                    log.debug('cookies:')
+                    for cookie in value.split(','):
+                        pair, path = cookie.split(';', 1)
+                        name, value = pair.split('=', 1)
+                        log.debug('  %s: %s (%s)', name, value, path)
+                else:
+                    log.debug('%s: %s', key, value)
             log.debug('----response data---')
             # show data for text like data
             if not rsp.info().getencoding() == '7bit':
@@ -407,7 +430,10 @@ class BaseAutomationClient(object):
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
             req = urllib2.Request(self.automation_url, headers = headers)
-            self.cookiejar.add_cookie_header(req)
+            if USE_SINGLE_COOKIEJAR:
+                BaseAutomationClient.cookiejar.add_cookie_header(req)
+            else:
+                self.cookiejar.add_cookie_header(req)
             # --- BEGIN DEBUG ----
             self.log_request(req)
             # --- END DEBUG ----
@@ -480,7 +506,10 @@ class BaseAutomationClient(object):
 
         req = urllib2.Request(url, data, headers)
         timeout = self.timeout if timeout == -1 else timeout
-        self.cookiejar.add_cookie_header(req)
+        if USE_SINGLE_COOKIEJAR:
+            BaseAutomationClient.cookiejar.add_cookie_header(req)
+        else:
+            self.cookiejar.add_cookie_header(req)
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
@@ -619,7 +648,10 @@ class BaseAutomationClient(object):
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         log.trace("Calling '%s' for file '%s'", url, filename)
         req = urllib2.Request(url, data, headers)
-        self.cookiejar.add_cookie_header(req)
+        if USE_SINGLE_COOKIEJAR:
+            BaseAutomationClient.cookiejar.add_cookie_header(req)
+        else:
+            self.cookiejar.add_cookie_header(req)
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
@@ -724,7 +756,10 @@ class BaseAutomationClient(object):
         try:
             log.trace("Calling '%s' with headers: %r", url, headers)
             req = urllib2.Request(url, headers = headers)
-            self.cookiejar.add_cookie_header(req)
+            if USE_SINGLE_COOKIEJAR:
+                BaseAutomationClient.cookiejar.add_cookie_header(req)
+            else:
+                self.cookiejar.add_cookie_header(req)
             token = self.opener.open(req, timeout = self.timeout).read()
             token2 = token.decode('ascii')
             log.debug("received token: %s", token)
