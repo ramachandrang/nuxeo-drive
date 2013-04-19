@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import synonym
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.pool import SingletonThreadPool
+from sqlalchemy.pool import NullPool
 
 from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import LocalClient
@@ -639,7 +639,7 @@ def init_db(nxdrive_home, echo=False, scoped_sessions=True, poolclass=None):
 
     # SQLite cannot share connections across threads hence it's safer to
     # enforce this at the connection pool level
-    poolclass = SingletonThreadPool if poolclass is None else poolclass
+    poolclass = NullPool if poolclass is None else poolclass
     engine = create_engine('sqlite:///' + dbfile, echo=echo,
                            poolclass=poolclass)
 
