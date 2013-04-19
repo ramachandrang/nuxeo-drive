@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+# !/usr/bin/env python
 """Commandline interface for the Nuxeo Drive filesystem synchronizer"""
 
 import sys

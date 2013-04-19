@@ -20,9 +20,9 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         self.workspace_id = remote_fs_client.get_children_info(
             toplevel_folder_info.uid)[0].uid
 
-    #
+    # 
     # Test the API common with the local client API
-    #
+    # 
 
     def test_get_info(self):
         remote_client = self.remote_file_system_client_1
@@ -244,9 +244,9 @@ class TestIntegrationRemoteFileSystemClient(IntegrationTestCase):
         # TODO
         pass
 
-    #
+    # 
     # Test the API specific to the remote file system client
-    #
+    # 
 
     def test_get_fs_item(self):
         remote_client = self.remote_file_system_client_1

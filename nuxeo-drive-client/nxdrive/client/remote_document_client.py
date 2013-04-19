@@ -68,13 +68,14 @@ class RemoteDocumentClient(BaseAutomationClient):
     # Override constructor to initialize base folder
     # which is specific to RemoteDocumentClient
     def __init__(self, server_url, user_id, device_id,
-                 password = None, token = None, repository = "default",
-                 ignored_prefixes = None, ignored_suffixes = None,
-                 base_folder = None, timeout = 60, blob_timeout = None):
+                 password=None, token=None, repository="default",
+                 ignored_prefixes=None, ignored_suffixes=None,
+                 base_folder=None, timeout=60, blob_timeout=None,
+                 cookie_jar=None):
         super(RemoteDocumentClient, self).__init__(
             server_url, user_id, device_id, password, token, repository,
-            ignored_prefixes, ignored_suffixes, timeout = timeout,
-            blob_timeout = blob_timeout)
+            ignored_prefixes, ignored_suffixes, timeout=timeout,
+            blob_timeout=blob_timeout, cookie_jar=cookie_jar)
 
         # fetch the root folder ref
         self.base_folder = base_folder
@@ -85,9 +86,9 @@ class RemoteDocumentClient(BaseAutomationClient):
         else:
             self._base_folder_ref, self._base_folder_path = None, None
 
-    #
+    # 
     # API common with the local client API
-    #
+    # 
     def get_info(self, ref, raise_if_missing=True, fetch_parent_uid=True,
                  use_trash=True):
         if not self.exists(ref, use_trash=use_trash):
@@ -96,13 +97,13 @@ class RemoteDocumentClient(BaseAutomationClient):
                     self._check_ref(ref), self.server_url))
             return None
         return self._doc_to_info(self.fetch(self._check_ref(ref)),
-                                 fetch_parent_uid = fetch_parent_uid)
+                                 fetch_parent_uid=fetch_parent_uid)
 
     def get_content(self, ref):
         ref = self._check_ref(ref)
         return self.get_blob(ref)
 
-    def get_children_info(self, ref, types = DEFAULT_TYPES, limit = MAX_CHILDREN):
+    def get_children_info(self, ref, types=DEFAULT_TYPES, limit=MAX_CHILDREN):
         ref = self._check_ref(ref)
         query = (
             "SELECT * FROM Document"
@@ -122,27 +123,27 @@ class RemoteDocumentClient(BaseAutomationClient):
 
         return self._filtered_results(entries)
 
-    def make_folder(self, parent, name, doc_type = FOLDER_TYPE):
+    def make_folder(self, parent, name, doc_type=FOLDER_TYPE):
         # TODO: make it possible to configure context dependent:
         # - SocialFolder under SocialFolder or SocialWorkspace
         # - Folder under Folder or Workspace
         # This configuration should be provided by a special operation on the
         # server.
         parent = self._check_ref(parent)
-        doc = self.create(parent, doc_type, name = name,
-                    properties = {'dc:title': name})
+        doc = self.create(parent, doc_type, name=name,
+                    properties={'dc:title': name})
         return doc[u'uid']
 
-    def make_file(self, parent, name, content = None, doc_type = FILE_TYPE):
+    def make_file(self, parent, name, content=None, doc_type=FILE_TYPE):
         parent = self._check_ref(parent)
-        doc = self.create(parent, FILE_TYPE, name = name,
-                          properties = {'dc:title': name})
+        doc = self.create(parent, FILE_TYPE, name=name,
+                          properties={'dc:title': name})
         ref = doc[u'uid']
         if content is not None:
             self.attach_blob(ref, content, name)
         return ref
 
-    def update_content(self, ref, content, name = None):
+    def update_content(self, ref, content, name=None):
         if name is None:
             name = self.get_info(ref).name
         self.attach_blob(self._check_ref(ref), content, name)
@@ -160,7 +161,7 @@ class RemoteDocumentClient(BaseAutomationClient):
         else:
             return self.execute("Document.Delete", input=op_input)
 
-    def exists(self, ref, use_trash = True):
+    def exists(self, ref, use_trash=True):
         ref = self._check_ref(ref)
         id_prop = 'ecm:path' if ref.startswith('/') else 'ecm:uuid'
         if use_trash:
@@ -190,7 +191,7 @@ class RemoteDocumentClient(BaseAutomationClient):
                 ref = self._base_folder_path + ref
         return ref
 
-    def _doc_to_info(self, doc, fetch_parent_uid = True, parent_uid = None):
+    def _doc_to_info(self, doc, fetch_parent_uid=True, parent_uid=None):
         """Convert Automation document description to NuxeoDocumentInfo"""
         props = doc['properties']
         folderish = 'Folderish' in doc['facets']
@@ -229,13 +230,13 @@ class RemoteDocumentClient(BaseAutomationClient):
             doc['path'], folderish, last_update, digest, self.repository,
             doc['type'])
 
-    def _filtered_results(self, entries, fetch_parent_uid = True,
-                          parent_uid = None):
+    def _filtered_results(self, entries, fetch_parent_uid=True,
+                          parent_uid=None):
         # Filter out filenames that would be ignored by the file system client
         # so as to be consistent.
         filtered = []
-        for info in [self._doc_to_info(d, fetch_parent_uid = fetch_parent_uid,
-                                       parent_uid = parent_uid)
+        for info in [self._doc_to_info(d, fetch_parent_uid=fetch_parent_uid,
+                                       parent_uid=parent_uid)
                      for d in entries]:
             ignore = False
 
@@ -254,9 +255,9 @@ class RemoteDocumentClient(BaseAutomationClient):
 
         return filtered
 
-    #
+    # 
     # Generic Automation features reused from nuxeolib
-    #
+    # 
 
     # Document category
 
@@ -265,79 +266,79 @@ class RemoteDocumentClient(BaseAutomationClient):
         return self.execute("Document.Create", input="doc:" + ref,
             type=doc_type, name=name, properties=properties)
 
-    def update(self, ref, properties = None):
-        return self.execute("Document.Update", input = "doc:" + ref,
-            properties = properties)
+    def update(self, ref, properties=None):
+        return self.execute("Document.Update", input="doc:" + ref,
+            properties=properties)
 
     def set_property(self, ref, xpath, value):
-        return self.execute("Document.SetProperty", input = "doc:" + ref,
-            xpath = xpath, value = value)
+        return self.execute("Document.SetProperty", input="doc:" + ref,
+            xpath=xpath, value=value)
 
     def get_children(self, ref):
-        return self.execute("Document.GetChildren", input = "doc:" + ref)
+        return self.execute("Document.GetChildren", input="doc:" + ref)
 
     def get_parent(self, ref):
-        return self.execute("Document.GetParent", input = "doc:" + ref)
+        return self.execute("Document.GetParent", input="doc:" + ref)
 
     def lock(self, ref):
-        return self.execute("Document.Lock", input = "doc:" + ref)
+        return self.execute("Document.Lock", input="doc:" + ref)
 
     def unlock(self, ref):
-        return self.execute("Document.Unlock", input = "doc:" + ref)
+        return self.execute("Document.Unlock", input="doc:" + ref)
 
-    def move(self, ref, target, name = None):
-        return self.execute("Document.Move", input = "doc:" + ref,
-            target = target, name = name)
+    def move(self, ref, target, name=None):
+        return self.execute("Document.Move", input="doc:" + ref,
+            target=target, name=name)
 
-    def copy(self, ref, target, name = None):
-        return self.execute("Document.Copy", input = "doc:" + ref,
-            target = target, name = name)
+    def copy(self, ref, target, name=None):
+        return self.execute("Document.Copy", input="doc:" + ref,
+            target=target, name=name)
 
     # These ones are special: no 'input' parameter
 
     def fetch(self, ref):
         try:
-            return self.execute("Document.Fetch", value = ref)
+            return self.execute("Document.Fetch", value=ref)
         except urllib2.HTTPError as e:
             if e.code == 404:
                 raise NotFound(_("Failed to fetch document %r on server %r") % (
                     ref, self.server_url))
             raise e
 
-    def query(self, query, language = None):
-        return self.execute("Document.Query", query = query, language = language)
+    def query(self, query, language=None):
+        return self.execute("Document.Query", query=query, language=language)
 
     # Blob category
 
     def get_blob(self, ref):
-        return self.execute("Blob.Get", input = "doc:" + ref,
-                            timeout = self.blob_timeout)
+        return self.execute("Blob.Get", input="doc:" + ref,
+                            timeout=self.blob_timeout)
 
     def attach_blob(self, ref, blob, filename, **params):
         return self.execute_with_blob("Blob.Attach",
-            blob, filename, document = ref)
+            blob, filename, document=ref)
 
-    #
+    # 
     # Nuxeo Drive specific operations
-    #
+    # 
 
     def get_repository_names(self):
         return self.execute("GetRepositories")[u'value']
 
     def get_roots(self):
         entries = self.execute("NuxeoDrive.GetRoots")[u'entries']
-        return self._filtered_results(entries, fetch_parent_uid = False)
+        return self._filtered_results(entries, fetch_parent_uid=False)
 
     def register_as_root(self, ref):
         ref = self._check_ref(ref)
-        self.execute("NuxeoDrive.SetSynchronization", input = "doc:" + ref,
-                     enable = True)
+        self.execute("NuxeoDrive.SetSynchronization", input="doc:" + ref,
+                     enable=True)
         return True
 
     def unregister_as_root(self, ref):
         ref = self._check_ref(ref)
-        self.execute("NuxeoDrive.SetSynchronization", input = "doc:" + ref,
-                     enable = False)
+        self.execute("NuxeoDrive.SetSynchronization", input="doc:" + ref,
+                     enable=False)
         return True
 
     def get_storage_used(self):
@@ -365,7 +366,7 @@ class RemoteDocumentClient(BaseAutomationClient):
                    ecm:mixinType != 'HiddenInFacetedSearch' AND 
                    NOT ecm:path STARTSWITH '%s'
                    """ % mydocs_path
-        return self.execute('Document.Query', query = query)[u'entries']
+        return self.execute('Document.Query', query=query)[u'entries']
 
     def get_subfolders(self, parent, nodes):
         docId = parent[u'uid']
@@ -376,7 +377,7 @@ class RemoteDocumentClient(BaseAutomationClient):
                 ecm:mixinType != 'HiddenInNavigation' AND
                 ecm:isCheckedInVersion = 0""" % docId
 
-        subfolders = self.execute('Document.Query', query = query)[u'entries']
+        subfolders = self.execute('Document.Query', query=query)[u'entries']
         for sf in subfolders:
             nodes[sf[u'title']]['value'] = FolderInfo(sf[u'uid'], sf[u'title'], docId)
             self.get_subfolders(sf, nodes[sf[u'title']])

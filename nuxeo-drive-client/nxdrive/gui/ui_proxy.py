@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 # Form implementation generated from reading ui file 'proxy.ui'
-#
+# 
 # Created: Wed Jan  2 17:15:53 2013
 #      by: pyside-uic 0.2.13 running on PySide 1.1.1
-#
+# 
 # WARNING! All changes made in this file will be lost!
 
 from PySide import QtCore, QtGui
@@ -46,7 +46,7 @@ class Ui_ProxyDialog(object):
         self.txtRealm.setMaximumWidth(150)
         self.buttonBox = QtGui.QDialogButtonBox(ProxyDialog)
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Apply|QtGui.QDialogButtonBox.Cancel)
+        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Apply | QtGui.QDialogButtonBox.Cancel)
         self.buttonBox.setObjectName("buttonBox")
         grid = QtGui.QGridLayout(ProxyDialog)
         grid.addWidget(self.lblServer, 0, 0, 1, 1)

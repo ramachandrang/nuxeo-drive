@@ -69,7 +69,7 @@ class ClickDetector(QObject):
         
         
 class PreferencesDlg(QDialog, Ui_preferencesDlg):
-    def __init__(self, frontend = None, parent = None):
+    def __init__(self, frontend=None, parent=None):
         super(PreferencesDlg, self).__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
@@ -90,7 +90,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         self.local_folder = frontend._get_local_folder() if frontend is not None else DEFAULT_EX_NX_DRIVE_FOLDER
         self.prev_local_folder = self.local_folder
         self.local_folder_text_changed = False
-        self.server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing = False)
+        self.server_binding = self.controller.get_server_binding(self.local_folder, raise_if_missing=False)
         self.user = self.server_binding.remote_user if self.server_binding else Constants.ACCOUNT
         self.bknd_clicks = ClickDetector()
         self.proxy = None
@@ -222,7 +222,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         app = QApplication.instance()
         process_filter = EventFilter(self)
 
-        dlg = SyncFoldersDlg(frontend = self.frontend)
+        dlg = SyncFoldersDlg(frontend=self.frontend)
         if dlg.exec_() == QDialog.Rejected:
             return
 
@@ -239,11 +239,11 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
 
     def configProxy(self):
-        dlg = ProxyDlg(frontend = self.frontend)
+        dlg = ProxyDlg(frontend=self.frontend)
         self.result = dlg.exec_()
 
     def configProxy2(self):
-        dlg = ProxyAuthnDlg(frontend = self.frontend)
+        dlg = ProxyAuthnDlg(frontend=self.frontend)
         self.result = dlg.exec_()
 
     def setAutostart(self, state):
@@ -354,18 +354,18 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 return
             os.makedirs(local_folder)
 
-        result, self.values = prompt_authentication(self.controller, 
-                                                    local_folder, 
-                                                    url = server_url, 
-                                                    username = self.user, 
-                                                    is_user_readonly = readonly_user
+        result, self.values = prompt_authentication(self.controller,
+                                                    local_folder,
+                                                    url=server_url,
+                                                    username=self.user,
+                                                    is_user_readonly=readonly_user
                                                     )
         if result:
             self.user = self.values['username']
             self.frontend.server_binding = self.server_binding = ServerBinding(local_folder,
                                                                                 server_url,
                                                                                 self.user,
-                                                                                remote_password = self.values['password']
+                                                                                remote_password=self.values['password']
                                                                                 )
             self.frontend.local_folder = self.local_folder = local_folder
         return result
@@ -378,7 +378,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         same_binding = False
         previous_binding = None
         if self.prev_local_folder is not None:
-            previous_binding = self.controller.get_server_binding(local_folder = self.prev_local_folder, raise_if_missing = False)
+            previous_binding = self.controller.get_server_binding(local_folder=self.prev_local_folder, raise_if_missing=False)
         same_binding = self.server_binding == previous_binding
         previous_user = previous_binding.remote_user if previous_binding else None
         current_user = self.server_binding.remote_user if self.server_binding else None
@@ -387,7 +387,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
         if not same_binding:
             try:
                 if previous_binding is not None:
-                    self.result = ProgressDialog.stopServer(self.frontend, parent = self)
+                    self.result = ProgressDialog.stopServer(self.frontend, parent=self)
                     if self.result == ProgressDialog.CANCELLED:
                         return QDialog.Rejected
                     # disconnect
@@ -439,7 +439,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 #                error.exec_()
 #                return QDialog.Rejected
 
-            self.result = ProgressDialog.stopServer(self.frontend, parent = self)
+            self.result = ProgressDialog.stopServer(self.frontend, parent=self)
             if self.result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected
             try:
@@ -496,7 +496,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
         if useProxy != self.useProxy:
             # restart sync to clear all cached remote clients using the proxy
-            self.result = ProgressDialog.stopServer(self.frontend, parent = self)
+            self.result = ProgressDialog.stopServer(self.frontend, parent=self)
             if self.result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected
             # NOTE: this will not work for a remote client factory different from RemoteDocumentClient
@@ -513,7 +513,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 settings.setValue('preferences/proxyPwd', '')
                 settings.setValue('preferences/proxyRealm', '')
         elif useProxy and self.controller.proxy_changed():
-            self.result = ProgressDialog.stopServer(self.frontend, parent = self)
+            self.result = ProgressDialog.stopServer(self.frontend, parent=self)
             if self.result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected
             self.controller.set_proxy()

@@ -63,7 +63,7 @@ class ProgressDialog(QDialog):
         self.lblMov.setGeometry(ix, iy, sizeImg.width(), sizeImg.height())
         self.lblMsg.setGeometry(mx, my, sizeMsg.width(), sizeMsg.height())
         
-        #Looks better with background
+        # Looks better with background
 #        self.setAttribute(Qt.WA_TranslucentBackground)
         self.btn.clicked.connect(self.cancel)
         
@@ -85,7 +85,7 @@ class ProgressDialog(QDialog):
         self.accept()
         
     @classmethod
-    def stopServer(self, frontend, parent = None, cancel = True):
+    def stopServer(self, frontend, parent=None, cancel=True):
         from threading import Thread
         
         if hasattr(frontend, 'worker'):
@@ -98,7 +98,7 @@ class ProgressDialog(QDialog):
             frontend.controller.stop()
         
             # wait in a loop while displaying a message...
-            dlg = ProgressDialog(frontend, parent = parent, cancel = cancel)
+            dlg = ProgressDialog(frontend, parent=parent, cancel=cancel)
             return ProgressDialog.PROGRESS_DLG_RESULT[dlg.exec_()]
         else:
             return ProgressDialog.OK_AND_NO_RESTART

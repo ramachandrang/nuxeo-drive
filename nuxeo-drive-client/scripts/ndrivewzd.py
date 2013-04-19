@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+# !/usr/bin/env python
 """Commandline interface for launching the wizard from the installer"""
 
 import sys

@@ -960,7 +960,7 @@ class TestIntegrationSynchronization(IntegrationTestCase):
         local = LocalClient(
             os.path.join(self.local_nxdrive_folder_1, self.workspace_title))
         folder_names = [i.name for i in local.get_children_info('/')]
-        self.assertEquals(folder_names, 
+        self.assertEquals(folder_names,
             [u'Folder with forbidden chars- - - - - - - -'])
 
         # create some file on the server

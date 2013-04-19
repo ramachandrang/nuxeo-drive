@@ -21,6 +21,7 @@ from nxdrive.protocol_handler import register_protocol_handlers
 from nxdrive.utils import register_startup
 from nxdrive.utils import create_settings
 from nxdrive import Constants
+from nxdrive._version import __version__
 from nxdrive.controller import default_nuxeo_drive_folder
 from sqlalchemy.pool import SingletonThreadPool
 
@@ -65,227 +66,223 @@ PROTOCOL_COMMANDS = {
 DEBUGGING = 1
 
 
-def make_cli_parser(add_subparsers = True):
+def make_cli_parser(add_subparsers=True):
     """Parse commandline arguments using a git-like subcommands scheme"""
 
     common_parser = argparse.ArgumentParser(
-        add_help = False,
-    )
-    
-    common_parser.add_argument(
-        "--version", "-v",
-        action = 'store_true',
-        default = False,
-        help = _("print the program version.")
-    )
-        
+        add_help=False,
+    )       
     common_parser.add_argument(
         "--nxdrive-home",
-        default = "~/.nuxeo-drive",
-        help = _("Folder to store the %s configuration.") % Constants.APP_NAME
+        default="~/.nuxeo-drive",
+        help=_("Folder to store the %s configuration.") % Constants.APP_NAME
     )
     common_parser.add_argument(
         "--log-level-file",
-        default = "DEBUG",
-        help = _("Minimum log level for the file log (under NXDRIVE_HOME/logs).")
+        default="DEBUG",
+        help=_("Minimum log level for the file log (under NXDRIVE_HOME/logs).")
     )
     common_parser.add_argument(
         "--log-level-console",
-        default = "INFO",
-        help = _("Minimum log level for the console log.")
+        default="INFO",
+        help=_("Minimum log level for the console log.")
     )
     common_parser.add_argument(
         "--log-filename",
-        help = _("File used to store the logs, default "
+        help=_("File used to store the logs, default "
               "NXDRIVE_HOME/logs/nxaudit.logs")
     )
     common_parser.add_argument(
-        "--debug", default = False, action = "store_true",
-        help = _("Fire a debugger (ipdb or pdb) on uncaught error.")
+        "--debug", default=False, action="store_true",
+        help=_("Fire a debugger (ipdb or pdb) on uncaught error.")
     )
     common_parser.add_argument(
-        "--delay", default = DEFAULT_DELAY, type = float,
-        help = _("Delay in seconds between consecutive sync operations.")
+        "--delay", default=DEFAULT_DELAY, type=float,
+        help=_("Delay in seconds between consecutive sync operations.")
     )
     common_parser.add_argument(
         # XXX: Make it true by default as the fault tolerant mode is not yet
         # implemented
-        "--stop-on-error", default = True, action = "store_true",
-        help = _("Stop the process on first unexpected error."
+        "--stop-on-error", default=True, action="store_true",
+        help=_("Stop the process on first unexpected error."
         "Useful for developers and Continuous Integration.")
+    )
+    common_parser.add_argument(
+        '--start', '-s', action = 'store_true', help = _('start synchronization as soon as the gui starts.')
+    )
     common_parser.add_argument(
         "-v", "--version", action="version", version=__version__,
-        help="Print the current version of the Nuxeo Drive client."
+        help="Print the current version of the %s client."  % Constants.APP_NAME
     )
     parser = argparse.ArgumentParser(
-        parents = [common_parser],
-        description = _("Command line interface for %s operations.") % Constants.APP_NAME,
-        usage = USAGE,
+        parents=[common_parser],
+        description=_("Command line interface for %s operations.") % Constants.APP_NAME,
+        usage=USAGE,
     )
 
     if not add_subparsers:
         return parser
 
     subparsers = parser.add_subparsers(
-        title = 'Commands',
+        title='Commands',
     )
 
     # Link to a remote Nuxeo server
     bind_server_parser = subparsers.add_parser(
-        'bind-server', help = 'Attach a local folder to a %s server.' % Constants.PRODUCT_NAME,
-        parents = [common_parser],
+        'bind-server', help='Attach a local folder to a %s server.' % Constants.PRODUCT_NAME,
+        parents=[common_parser],
     )
-    bind_server_parser.set_defaults(command = 'bind_server')
+    bind_server_parser.set_defaults(command='bind_server')
     bind_server_parser.add_argument(
-        "--password", help = _("Password for the %s account") % Constants.PRODUCT_NAME)
+        "--password", help=_("Password for the %s account") % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument(
         "--local-folder",
-        help = _("Local folder that will host the list of synchronized"
+        help=_("Local folder that will host the list of synchronized"
         " workspaces with a remote %s server.") % Constants.PRODUCT_NAME,
-        default = DEFAULT_NX_DRIVE_FOLDER,
+        default=DEFAULT_NX_DRIVE_FOLDER,
     )
     bind_server_parser.add_argument(
-        "username", help = _("User account to connect to %s") % Constants.PRODUCT_NAME)
+        "username", help=_("User account to connect to %s") % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument("nuxeo_url",
-                                    help = _("URL of the %s server.") % Constants.PRODUCT_NAME)
+                                    help=_("URL of the %s server.") % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument(
-        "--remote-roots", nargs = "*", default = [],
-        help = _("Path synchronization roots (reference or path for"
+        "--remote-roots", nargs="*", default=[],
+        help=_("Path synchronization roots (reference or path for"
         " folderish %s documents such as Workspaces or Folders).") % Constants.PRODUCT_NAME)
     bind_server_parser.add_argument(
-        "--remote-repo", default = 'default',
-        help = _("Name of the remote repository.")
+        "--remote-repo", default='default',
+        help=_("Name of the remote repository.")
         )
 
     # Unlink from a remote Nuxeo server
     unbind_server_parser = subparsers.add_parser(
-        'unbind-server', help = 'Detach from a remote %s server.' % Constants.PRODUCT_NAME,
-        parents = [common_parser],
+        'unbind-server', help='Detach from a remote %s server.' % Constants.PRODUCT_NAME,
+        parents=[common_parser],
     )
-    unbind_server_parser.set_defaults(command = 'unbind_server')
+    unbind_server_parser.set_defaults(command='unbind_server')
     unbind_server_parser.add_argument(
         "--local-folder",
-        help = _("Local folder that hosts the list of synchronized"
+        help=_("Local folder that hosts the list of synchronized"
         " workspaces with a remote %s server.") % Constants.PRODUCT_NAME,
-        default = DEFAULT_NX_DRIVE_FOLDER,
+        default=DEFAULT_NX_DRIVE_FOLDER,
     )
 
     # Bind root folders
     bind_root_parser = subparsers.add_parser(
         'bind-root',
-        help = _('Attach a local folder as a root for synchronization.'),
-        parents = [common_parser],
+        help=_('Attach a local folder as a root for synchronization.'),
+        parents=[common_parser],
     )
-    bind_root_parser.set_defaults(command = 'bind_root')
+    bind_root_parser.set_defaults(command='bind_root')
     bind_root_parser.add_argument(
         "remote_root",
-        help = _("Remote path or id reference of a folder to synchronize.")
+        help=_("Remote path or id reference of a folder to synchronize.")
     )
     bind_root_parser.add_argument(
         "--local-folder",
-        help = _("Local folder that will host the list of synchronized"
+        help=_("Local folder that will host the list of synchronized"
         " workspaces with a remote %s server. Must be bound with the"
         " 'bind-server' command.") % Constants.PRODUCT_NAME,
-        default = DEFAULT_NX_DRIVE_FOLDER,
+        default=DEFAULT_NX_DRIVE_FOLDER,
     )
     bind_root_parser.add_argument(
-        "--remote-repo", default = 'default',
-        help = _("Name of the remote repository.")
+        "--remote-repo", default='default',
+        help=_("Name of the remote repository.")
     )
 
     # Unlink from a remote Nuxeo root
     unbind_root_parser = subparsers.add_parser(
-        'unbind-root', help = 'Detach from a remote %s root.' % Constants.PRODUCT_NAME,
-        parents = [common_parser],
+        'unbind-root', help='Detach from a remote %s root.' % Constants.PRODUCT_NAME,
+        parents=[common_parser],
     )
-    unbind_root_parser.set_defaults(command = 'unbind_root')
+    unbind_root_parser.set_defaults(command='unbind_root')
     unbind_root_parser.add_argument(
-        "local_root", help = _("Local sub-folder to de-synchronize.")
+        "local_root", help=_("Local sub-folder to de-synchronize.")
     )
 
     # Start / Stop the synchronization daemon
     start_parser = subparsers.add_parser(
-        'start', help = _('Start the synchronization as a GUI-less daemon'),
-        parents = [common_parser],
+        'start', help=_('Start the synchronization as a GUI-less daemon'),
+        parents=[common_parser],
     )
-    start_parser.set_defaults(command = 'start')
+    start_parser.set_defaults(command='start')
     stop_parser = subparsers.add_parser(
-        'stop', help = _('Stop the synchronization daemon'),
-        parents = [common_parser],
+        'stop', help=_('Stop the synchronization daemon'),
+        parents=[common_parser],
     )
-    stop_parser.set_defaults(command = 'stop')
+    stop_parser.set_defaults(command='stop')
     console_parser = subparsers.add_parser(
         'console',
-        help = _('Start a GUI-less synchronization without detaching the process.'),
-        parents = [common_parser],
+        help=_('Start a GUI-less synchronization without detaching the process.'),
+        parents=[common_parser],
     )
-    console_parser.set_defaults(command = 'console')
+    console_parser.set_defaults(command='console')
 
     status_parser = subparsers.add_parser(
         'status',
-        help = _('Fetch the status info of the children of a given folder.'),
-        parents = [common_parser],
+        help=_('Fetch the status info of the children of a given folder.'),
+        parents=[common_parser],
     )
-    status_parser.set_defaults(command = 'status')
+    status_parser.set_defaults(command='status')
     status_parser.add_argument(
-        "folder", help = _("Path to a local Nuxeo Drive folder.")
+        "folder", help=_("Path to a local Nuxeo Drive folder.")
     )
 
     gui_parser = subparsers.add_parser(
         'gui',
-        help = _('Start as a TrayIcon application.'),
-        parents = [common_parser],
+        help=_('Start as a TrayIcon application.'),
+        parents=[common_parser],
     )
-    gui_parser.set_defaults(command = 'gui')
+    gui_parser.set_defaults(command='gui')
 
     com_parser = subparsers.add_parser(
         'com',
-        help = _("Register or Unregister the COM Local Server"),
+        help=_("Register or Unregister the COM Local Server"),
     )
 
     if sys.platform == 'win32':
-        com_parser.set_defaults(command = 'com')
-        action = com_parser.add_mutually_exclusive_group(required = True)
+        com_parser.set_defaults(command='com')
+        action = com_parser.add_mutually_exclusive_group(required=True)
         action.add_argument(
-            '--register', required = False, action = 'store_true', help = _('Register COM Local Server')
+            '--register', required=False, action='store_true', help=_('Register COM Local Server')
         )
         action.add_argument(
-            '--unregister', required = False, action = 'store_true', help = _('Unregister COM Local Server')
+            '--unregister', required=False, action='store_true', help=_('Unregister COM Local Server')
         )
 
     # embedded test runner base on nose:
     test_parser = subparsers.add_parser(
         'test',
-        help = _('Run the %s test suite.') % Constants.APP_NAME,
-        parents = [common_parser],
+        help=_('Run the %s test suite.') % Constants.APP_NAME,
+        parents=[common_parser],
     )
 
     wizard_parser = subparsers.add_parser(
         'wizard',
-        help = _('Run the wizard.'),
-        parents = [common_parser],
+        help=_('Run the wizard.'),
+        parents=[common_parser],
     )
-    wizard_parser.set_defaults(command = 'wizard')
+    wizard_parser.set_defaults(command='wizard')
 
     switch_parser = subparsers.add_parser(
         'switch',
-        help = _('Switch between wizard and normal mode, when launching the app with no command')
+        help=_('Switch between wizard and normal mode, when launching the app with no command')
     )
-    mode = switch_parser.add_mutually_exclusive_group(required = True)
-    switch_parser.set_defaults(command = 'switch')
+    mode = switch_parser.add_mutually_exclusive_group(required=True)
+    switch_parser.set_defaults(command='switch')
     mode.add_argument(
-        '--wizard', '-w', required = False, action = 'store_true', default = False)
+        '--wizard', '-w', required=False, action='store_true', default=False)
     mode.add_argument(
-        '--normal', '-n', required = False, action = 'store_true', default = False)
+        '--normal', '-n', required=False, action='store_true', default=False)
 
-    test_parser.set_defaults(command = 'test')
+    test_parser.set_defaults(command='test')
     test_parser.add_argument(
-        "--with-coverage", default = False, action = "store_true",
-        help = _("Compute coverage report.")
+        "--with-coverage", default=False, action="store_true",
+        help=_("Compute coverage report.")
     )
     test_parser.add_argument(
-        "--with-profile", default = False, action = "store_true",
-        help = _("Compute profiling report.")
+        "--with-profile", default=False, action="store_true",
+        help=_("Compute profiling report.")
     )
     return parser
 
@@ -317,7 +314,7 @@ class CliHandler(object):
                 has_command = True
             filtered_args.append(arg)
 
-        parser = make_cli_parser(add_subparsers = has_command)
+        parser = make_cli_parser(add_subparsers=has_command)
         options = parser.parse_args(filtered_args)
         if options.debug:
             # Install Post-Mortem debugger hook
@@ -347,15 +344,15 @@ class CliHandler(object):
 
         configure(
             filename,
-            file_level = options.log_level_file,
-            console_level = options.log_level_console,
-            command_name = options.command,
+            file_level=options.log_level_file,
+            console_level=options.log_level_console,
+            command_name=options.command,
         )
 
-    def looper(self, options = None):
+    def looper(self, options=None):
         def wrapper(operation):
             delay = getattr(options, 'delay', DEFAULT_DELAY)
-            return self.controller.loop(delay = delay, sync_operation = operation)
+            return self.controller.loop(delay=delay, sync_operation=operation)
         return wrapper
 
     def handle(self, argv):
@@ -368,7 +365,7 @@ class CliHandler(object):
         self._configure_logger(options)
 
         # Initialize a controller for this process
-        self.controller = Controller.getController(options.nxdrive_home, poolclass = SingletonThreadPool)
+        self.controller = Controller.getController(options.nxdrive_home, poolclass=SingletonThreadPool)
 
         # Find the command to execute based on the
         handler = getattr(self, command, None)
@@ -393,9 +390,9 @@ class CliHandler(object):
                 raise
             else:
                 self.log.error("Error executing '%s': %s", command, e,
-                          exc_info = True)
+                          exc_info=True)
 
-    def launch(self, options = None):
+    def launch(self, options=None):
         """Launch the QT app in the main thread and sync in another thread."""
 
         # check is in wizard mode
@@ -414,22 +411,22 @@ class CliHandler(object):
             options.start = True
             self.gui(options)
 
-    def gui(self, options = None):
+    def gui(self, options=None):
         from nxdrive.gui.menubar import startApp
         result = startApp(self.controller, options)
         return result
 
-    def wizard(self, options = None):
+    def wizard(self, options=None):
         from nxdrive.gui.wizard import startWizard
         return startWizard(self.controller, options)
 
-    def switch(self, options = None):
+    def switch(self, options=None):
         if options.wizard:
             settings.setValue('wizard', True)
         elif options.normal:
             settings.setValue('wizard', False)
 
-    def start(self, options = None):
+    def start(self, options=None):
         """Launch the synchronization in a daemonized process (under POSIX)"""
         # Close DB connections before Daemonization
         self.controller.dispose()
@@ -439,7 +436,7 @@ class CliHandler(object):
         self._configure_logger(options)
         self.log.debug("Synchronization daemon started.")
         self.controller.synchronizer.loop(
-            delay = getattr(options, 'delay', DEFAULT_DELAY))
+            delay=getattr(options, 'delay', DEFAULT_DELAY))
         return 0
 
     def console(self, options):
@@ -447,7 +444,7 @@ class CliHandler(object):
             delay=getattr(options, 'delay', DEFAULT_DELAY))
         return 0
 
-    def stop(self, options = None):
+    def stop(self, options=None):
         self.controller.stop()
         return 0
 
@@ -471,7 +468,7 @@ class CliHandler(object):
                                     options.username, password)
         for root in options.remote_roots:
             self.controller.bind_root(options.local_folder, root,
-                                      repository = options.remote_repo)
+                                      repository=options.remote_repo)
         return 0
 
     def unbind_server(self, options):
@@ -480,7 +477,7 @@ class CliHandler(object):
 
     def bind_root(self, options):
         self.controller.bind_root(options.local_folder, options.remote_root,
-                                  repository = options.remote_repo)
+                                  repository=options.remote_repo)
         return 0
 
     def unbind_root(self, options):
@@ -531,13 +528,13 @@ class CliHandler(object):
             "nxdrive.tests.test_integration_versioning",
             "nxdrive.tests.test_synchronizer",
         ]
-        return 0 if nose.run(argv = argv) else 1
+        return 0 if nose.run(argv=argv) else 1
 
 def register_iconovelay_handler():
     if sys.platform == 'win32':
         import win32com.server.register
         from nxdrive.icon_overlay.win32 import IconOverlay
-        win32com.server.register.UseCommandLine(IconOverlay, debug = DEBUGGING)
+        win32com.server.register.UseCommandLine(IconOverlay, debug=DEBUGGING)
 
         keyname = r'Software\Microsoft\Windows\CurrentVersion\Explorer\ShellIconOverlayIdentifiers\%sOverlay' % Constants.SHORT_APP_NAME
         key = win32api.RegCreateKey (win32con.HKEY_LOCAL_MACHINE, keyname)

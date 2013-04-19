@@ -15,7 +15,7 @@ from nxdrive.gui.progress_dlg import ProgressDialog
 settings = create_settings()
 
 class ProxyAuthnDlg(QDialog, Ui_ProxyAuthnDialog):
-    def __init__(self, frontend = None, parent = None):
+    def __init__(self, frontend=None, parent=None):
         super(ProxyAuthnDlg, self).__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
@@ -57,7 +57,7 @@ class ProxyAuthnDlg(QDialog, Ui_ProxyAuthnDialog):
             invalidate = True
             
         if invalidate:
-            result = ProgressDialog.stopServer(self.frontend, parent = self)
+            result = ProgressDialog.stopServer(self.frontend, parent=self)
             if result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected   
 

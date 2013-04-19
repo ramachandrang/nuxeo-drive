@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 # Resource object code
-#
+# 
 # Created: Wed Apr 10 23:50:02 2013
 #      by: The Resource Compiler for PySide (Qt v4.8.1)
-#
+# 
 # WARNING! All changes made in this file will be lost!
 
 from PySide import QtCore

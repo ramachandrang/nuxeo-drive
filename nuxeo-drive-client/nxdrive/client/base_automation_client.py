@@ -13,22 +13,21 @@ import urllib2
 from urllib import urlencode
 from urllib2 import HTTPRedirectHandler
 from urllib2 import ProxyBasicAuthHandler
-#from urllib2 import HTTPHandler, HTTPSHandler
-#from urllib2 import HTTPPasswordMgr
-from cookielib import CookieJar
+# from urllib2 import HTTPHandler, HTTPSHandler
+# from urllib2 import HTTPPasswordMgr
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 
 from nxdrive.logging_config import get_logger
 from nxdrive.client.common import DEFAULT_IGNORED_PREFIXES
 from nxdrive.client.common import DEFAULT_IGNORED_SUFFIXES
+from nxdrive.client.common import safe_filename
 from nxdrive.utils import create_settings
 from nxdrive.utils import classproperty
 from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.utils import get_maintenance_message
 from nxdrive import Constants
 from nxdrive import DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION, DEBUG_UNAVAILABLE
-from nxdrive import USE_SINGLE_COOKIEJAR
 
 log = get_logger(__name__)
 
@@ -51,7 +50,7 @@ class DeviceQuotaExceeded(Exception):
         self.message = _("Maximum number of <font color='red'>%d linked devices</font> has been reached. Click <a href='%s'>here</a> to unlink.")
 
 class Forbidden(Exception):
-    def __init__(self, url, user_id, code = 403, data = ''):
+    def __init__(self, url, user_id, code=403, data=''):
         self.url = url
         self.user_id = user_id
         self.code = code
@@ -62,7 +61,7 @@ class Forbidden(Exception):
                 "http code=%d, data=%s") % (self.user_id, self.url, self.code, str(self.data)))
         
 class Unauthorized(Exception):
-    def __init__(self, url, user_id, code = 401, data = ''):
+    def __init__(self, url, user_id, code=401, data=''):
         self.url = url
         self.user_id = user_id
         self.code = code
@@ -84,7 +83,7 @@ class StorageQuotaExceeded(Exception):
                 " storing document %s") % (self.user_id, self.url, self.ref))
 
 def raise_403_error(url, user, e):
-    if e is not None and isinstance(e, urllib2.HTTPError) and e.code==403:
+    if e is not None and isinstance(e, urllib2.HTTPError) and e.code == 403:
         if hasattr(e, "fp"):
             data = e.fp.read()
             try:
@@ -109,7 +108,7 @@ class MaintenanceMode(Exception):
                 schedule = schedules['ScheduleItems'][0]
             else:
                 schedule = None
-            self.msg, self.detail, self.data1, self.data2 = get_maintenance_message(status, schedule = schedule)
+            self.msg, self.detail, self.data1, self.data2 = get_maintenance_message(status, schedule=schedule)
         else:
             self.msg, self.detail, self.data1, self.data2 = get_maintenance_message('maintenance')
 
@@ -125,8 +124,8 @@ class ProxyInfo(object):
     PROXY_AUTODETECT = 'autodetect'
     PROXY_DIRECT = 'direct'
 
-    def __init__(self, autodetect = False, server_url = None, port = None, 
-                 authn_required = False, user = None, pwd = None, realm = None):
+    def __init__(self, autodetect=False, server_url=None, port=None,
+                 authn_required=False, user=None, pwd=None, realm=None):
         self.autodetect = autodetect
         self.server_url = server_url
         self.port = port
@@ -156,7 +155,7 @@ class ProxyInfo(object):
             user = settings.value('preferences/proxyUser')
             pwd = settings.value('preferences/proxyPwd')
             realm = settings.value('preferences/proxyRealm')
-            return ProxyInfo(autodetect = True, user = user, pwd = pwd, realm = realm)
+            return ProxyInfo(autodetect=True, user=user, pwd=pwd, realm=realm)
         elif useProxy == ProxyInfo.PROXY_SERVER:
             server = settings.value('preferences/proxyServer')
             if not server:
@@ -183,8 +182,8 @@ class ProxyInfo(object):
                 else:
                     authN = settings.value('preferences/proxyAuthN', False)
                     port = settings.value('preferences/proxyPort', 0)
-                return ProxyInfo(server_url = server, port = port, authn_required = authN, 
-                                 user = user, pwd = pwd, realm = realm)
+                return ProxyInfo(server_url=server, port=port, authn_required=authN,
+                                 user=user, pwd=pwd, realm=realm)
         else:
             return None
 
@@ -255,7 +254,7 @@ class BaseAutomationClient(object):
         return cls._proxy
 
     @classmethod
-    def set_proxy(cls, val = None):
+    def set_proxy(cls, val=None):
         cls._proxy = val
 
     @classproperty
@@ -270,13 +269,12 @@ class BaseAutomationClient(object):
         cls._proxy_error_count = val
 
     permission = 'ReadWrite'
-    if USE_SINGLE_COOKIEJAR:
-        cookiejar = CookieJar()
 
     def __init__(self, server_url, user_id, device_id,
-                 password = None, token = None, repository = "default",
-                 ignored_prefixes = None, ignored_suffixes = None,
-                 timeout = 60, blob_timeout = None, is_automation = True):
+                 password=None, token=None, repository="default",
+                 ignored_prefixes=None, ignored_suffixes=None,
+                 timeout=60, blob_timeout=None,
+                 is_automation=True, cookie_jar=None):
         self.timeout = timeout
         self.blob_timeout = blob_timeout
         if ignored_prefixes is not None:
@@ -301,13 +299,16 @@ class BaseAutomationClient(object):
         self.device_id = device_id
         if user_id is not None:
             # skip for service w/o authentication (like the external maintenance and upgrade services)
-            self._update_auth(password = password, token = token)
+            self._update_auth(password=password, token=token)
 
         self.cookie_jar = cookie_jar
         cookie_processor = urllib2.HTTPCookieProcessor(
             cookiejar=cookie_jar)
         self.opener = urllib2.build_opener(cookie_processor)
         self.automation_url = server_url + 'site/automation/'
+        
+        handlers = []
+        proxy_support = None
 
         # NOTE 'proxy' classproperty does not work here (sample works!)
         # replace 'proxy' with 'get_proxy' and 'set_proxy' class methods
@@ -347,7 +348,7 @@ class BaseAutomationClient(object):
                 proxy_support = urllib2.ProxyHandler({'http' : r'http://' + proxy_url,
                                                       'https' : r'https://' + proxy_url})
 #                pwd_mgr = HTTPPasswordMgr()
-#
+# 
 #                pwd_mgr.add_password('sla', r'http://' + proxy_url,
 #                                    BaseAutomationClient.get_proxy().user,
 #                                    BaseAutomationClient.get_proxy().pwd)
@@ -427,15 +428,11 @@ class BaseAutomationClient(object):
             " with user %r")
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
         try:
-            req = urllib2.Request(self.automation_url, headers = headers)
-            if USE_SINGLE_COOKIEJAR:
-                BaseAutomationClient.cookiejar.add_cookie_header(req)
-            else:
-                self.cookiejar.add_cookie_header(req)
+            req = urllib2.Request(self.automation_url, headers=headers)
             # --- BEGIN DEBUG ----
             self.log_request(req)
             # --- END DEBUG ----
-            raw_response = self.opener.open(req, timeout = self.timeout)
+            raw_response = self.opener.open(req, timeout=self.timeout)
             data = raw_response.read()
             response = json.loads(data)
             # --- BEGIN DEBUG ----
@@ -466,7 +463,7 @@ class BaseAutomationClient(object):
         for operation in response["operations"]:
             self.operations[operation['id']] = operation
 
-    def execute(self, command, input = None, timeout = -1, **params):
+    def execute(self, command, input=None, timeout= -1, **params):
         if self._error is not None:
             # Simulate a configurable (e.g. network or server) error for the
             # tests
@@ -497,7 +494,7 @@ class BaseAutomationClient(object):
         cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
         url = self.automation_url + command
         log.trace("Calling '%s' with cookies %r and json payload: %r",
-            url, cookies,  data)
+            url, cookies, data)
         base_error_message = (
             _("Failed to connect to %s Content Automation on server %r"
             " with user %r")
@@ -505,15 +502,11 @@ class BaseAutomationClient(object):
 
         req = urllib2.Request(url, data, headers)
         timeout = self.timeout if timeout == -1 else timeout
-        if USE_SINGLE_COOKIEJAR:
-            BaseAutomationClient.cookiejar.add_cookie_header(req)
-        else:
-            self.cookiejar.add_cookie_header(req)
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
         try:
-            resp = self.opener.open(req, timeout = timeout)
+            resp = self.opener.open(req, timeout=timeout)
             # --- BEGIN DEBUG ----
             if DEBUG_MAINTENANCE_EXCEPTION:
                 from StringIO import StringIO
@@ -585,8 +578,8 @@ class BaseAutomationClient(object):
         self._check_params(command, None, params)
 
         container = MIMEMultipart("related",
-                type = "application/json+nxrequest",
-                start = "request")
+                type="application/json+nxrequest",
+                start="request")
 
         d = {'params': params}
         json_data = json.dumps(d)
@@ -653,17 +646,13 @@ class BaseAutomationClient(object):
             "Failed to connect to %s Content Automation on server %r"
             " with user %r"
         ) % (Constants.PRODUCT_NAME, self.server_url, self.user_id)
-		cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
+        cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
         req = urllib2.Request(url, data, headers)
-        if USE_SINGLE_COOKIEJAR:
-            BaseAutomationClient.cookiejar.add_cookie_header(req)
-        else:
-            self.cookiejar.add_cookie_header(req)
         # --- BEGIN DEBUG ----
         self.log_request(req)
         # ---- END DEBUG -----
         try:
-            resp = self.opener.open(req, timeout = self.blob_timeout)
+            resp = self.opener.open(req, timeout=self.blob_timeout)
             # --- BEGIN DEBUG ----
             if DEBUG_QUOTA_EXCEPTION:
                 from StringIO import StringIO
@@ -731,7 +720,7 @@ class BaseAutomationClient(object):
     def is_addon_installed(self):
         return 'NuxeoDrive.GetRoots' in self.operations
 
-    def request_token(self, revoke = False):
+    def request_token(self, revoke=False):
         """Request and return a new token for the user"""
 
         parameters = {
@@ -763,16 +752,12 @@ class BaseAutomationClient(object):
         else:
             prev_opener = None
 
-		cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
+        cookies = list(self.cookie_jar) if self.cookie_jar is not None else []
         try:
             log.trace("Calling '%s' with headers: %r and cookies %r",
                 url, headers, cookies)
-            req = urllib2.Request(url, headers = headers)
-            if USE_SINGLE_COOKIEJAR:
-                BaseAutomationClient.cookiejar.add_cookie_header(req)
-            else:
-                self.cookiejar.add_cookie_header(req)
-            token = self.opener.open(req, timeout = self.timeout).read()
+            req = urllib2.Request(url, headers=headers)
+            token = self.opener.open(req, timeout=self.timeout).read()
             token2 = token.decode('ascii')
             log.debug("received token: %s", token)
         except urllib2.HTTPError as e:
@@ -813,11 +798,11 @@ class BaseAutomationClient(object):
         log.trace("Got token '%s' with cookies %r", token, cookies)
         # Use the (potentially re-newed) token from now on
         if not revoke:
-            self._update_auth(token = token)
+            self._update_auth(token=token)
         return token
 
     def revoke_token(self):
-        self.request_token(revoke = True)
+        self.request_token(revoke=True)
 
     def wait(self):
         self.execute("NuxeoDrive.WaitForAsyncCompletion")
@@ -826,12 +811,12 @@ class BaseAutomationClient(object):
         if token is not None:
             # server is using token, not password for authentication
             try:
-                self.execute('Drive.LastAccess', lastAccess = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                             token = token)
+                self.execute('Drive.LastAccess', lastAccess=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                             token=token)
             except ValueError:
                 log.debug("operation 'Drive.LastAccess' is not implemented.")
 
-    def _update_auth(self, password = None, token = None):
+    def _update_auth(self, password=None, token=None):
         """Select the most appropriate authentication heads based on credentials"""
         if token is not None:
             self.auth = ('X-Authentication-Token', token)
@@ -891,7 +876,7 @@ class BaseAutomationClient(object):
             try:
                 exc = json.loads(detail)
                 log.debug(exc['message'])
-                log.debug(exc['stack'], exc_info = True)
+                log.debug(exc['stack'], exc_info=True)
             except:
                 # Error message should always be a JSON message,
                 # but sometimes it's not

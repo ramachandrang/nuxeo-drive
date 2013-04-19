@@ -14,7 +14,7 @@ from PySide.QtCore import Qt
 from PySide.QtGui import QWizard, QWizardPage, QPixmap, QIcon, QPalette, QApplication
 from PySide.QtGui import QLabel, QLineEdit, QGridLayout, QHBoxLayout, QVBoxLayout
 from PySide.QtGui import QPushButton, QRadioButton, QCheckBox, QGroupBox, QFileDialog, QDialog, QMessageBox
-#from PySide.QtWebKit import QWebView
+# from PySide.QtWebKit import QWebView
 
 from folders_dlg import SyncFoldersDlg
 from proxy_dlg import ProxyDlg
@@ -54,7 +54,7 @@ class CpoWizard(QWizard):
     FinalPageId = 5
     AdvancedPageId = 6
 
-    def __init__(self, controller, options = None, parent = None):
+    def __init__(self, controller, options=None, parent=None):
         super(CpoWizard, self).__init__(parent)
 
         self.controller = controller
@@ -141,7 +141,7 @@ class CpoWizard(QWizard):
         return self.currentId() + 1
 
     def _unbind_if_bound(self, folder):
-        server_binding = self.controller.get_server_binding(session = self.session, raise_if_missing = False)
+        server_binding = self.controller.get_server_binding(session=self.session, raise_if_missing=False)
         unbind = False
         if server_binding is not None:
             unbind = server_binding.local_folder != folder
@@ -165,7 +165,7 @@ class CpoWizard(QWizard):
         
     def get_local_folder(self):
         # get the connected binding, if any
-        server_binding = self.controller.get_server_binding(raise_if_missing = False)
+        server_binding = self.controller.get_server_binding(raise_if_missing=False)
         if server_binding is None:
             bindings = self.controller.list_server_bindings()
             if len(bindings) == 1:
@@ -231,7 +231,7 @@ class CpoWizard(QWizard):
 
 
 class IntroPage(QWizardPage):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         super(IntroPage, self).__init__(parent)
         self.auth_ok = False
 
@@ -285,7 +285,7 @@ class IntroPage(QWizardPage):
 #        grid.addWidget(self.txtPwd, 3, 1)
 #        hlayout2 = QHBoxLayout()
 #        hlayout2.addWidget(self.lblMessage)
-##        hlayout2.addStretch(1)
+# #        hlayout2.addStretch(1)
 #        hlayout2.addWidget(self.btnProxy)
 #        hlayout2.setStretch(0, 4)
 #        hlayout2.setStretch(1, 1)
@@ -426,7 +426,7 @@ class IntroPage(QWizardPage):
         return self.auth_ok
 
     def showProxy(self):
-        dlg = ProxyDlg(frontend = self.wizard())
+        dlg = ProxyDlg(frontend=self.wizard())
         self.result = dlg.exec_()
 
     # use mandatory fields instead
@@ -444,7 +444,7 @@ class IntroPage(QWizardPage):
         
 
 class InstallOptionsPage(QWizardPage):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         super(InstallOptionsPage, self).__init__(parent)
 #        self.typical = True
 
@@ -552,7 +552,7 @@ class InstallOptionsPage(QWizardPage):
                    filter(SyncFolders.bind_state == True).count()
             if count == 0:
                 # check top-level folders as sync roots
-                self.wizard().controller.synchronizer.check_toplevel_folders(session = session)
+                self.wizard().controller.synchronizer.check_toplevel_folders(session=session)
 
                 # set the synchronized roots
                 app = QApplication.instance()
@@ -578,7 +578,7 @@ class InstallOptionsPage(QWizardPage):
             self.wizard().add_skip_tour(back=False)
 
 class GuideOnePage(QWizardPage):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         super(GuideOnePage, self).__init__(parent)
         
         # force logo display on win32
@@ -620,7 +620,7 @@ class GuideOnePage(QWizardPage):
             self.wizard().remove_skip_tour(back=False)
 
 class GuideTwoPage(QWizardPage):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         super(GuideTwoPage, self).__init__(parent)
 
         self.setTitle(self.tr('Access your files from everywhere using %s!') % Constants.PRODUCT_NAME)
@@ -652,7 +652,7 @@ class GuideTwoPage(QWizardPage):
         self.setLayout(vLayout)
 
 class GuideThreePage(QWizardPage):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         super(GuideThreePage, self).__init__(parent)
 
         self.setTitle(self.tr('The %s Notification Icon') % Constants.APP_NAME)
@@ -687,7 +687,7 @@ class GuideThreePage(QWizardPage):
         self.setLayout(vLayout)
 
 class AdvancedPage(QWizardPage):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         super(AdvancedPage, self).__init__(parent)
 
         self.setTitle(self.tr('Advanced Setup'))
@@ -856,14 +856,14 @@ class AdvancedPage(QWizardPage):
         process_filter = EventFilter(self)
 
         try:
-            dlg = SyncFoldersDlg(frontend = self.wizard())
+            dlg = SyncFoldersDlg(frontend=self.wizard())
             if dlg.exec_() == QDialog.Rejected:
                 return
 
             # set the synchronized roots
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
-            self.wizard().controller.set_roots(session = self.wizard().session)
+            self.wizard().controller.set_roots(session=self.wizard().session)
             self.wizard().session.commit()
             self.setCommitPage(True)
 
@@ -877,7 +877,7 @@ class AdvancedPage(QWizardPage):
             self.removeEventFilter(process_filter)
 
 class FinalPage(QWizardPage):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         super(FinalPage, self).__init__(parent)
 
         self.setTitle(self.tr('Successfully Completed.'))

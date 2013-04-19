@@ -8,7 +8,7 @@ import urllib2
 from PySide.QtGui import QMessageBox
 
 class RecoverableError(Exception):
-    def __init__(self, text, info, buttons = QMessageBox.Ok):
+    def __init__(self, text, info, buttons=QMessageBox.Ok):
         super(RecoverableError, self).__init__()
         self.text = text
         self.info = info

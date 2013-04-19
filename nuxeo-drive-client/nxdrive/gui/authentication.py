@@ -27,8 +27,8 @@ is_dialog_open = False
 class Dialog(QDialog):
     """Dialog box to prompt the user for Server Bind credentials"""
 
-    def __init__(self, fields_spec, title = None, fields_title = None,
-                 callback = None, parent = None):
+    def __init__(self, fields_spec, title=None, fields_title=None,
+                 callback=None, parent=None):
         super(Dialog, self).__init__(parent)
         if QtGui is None:
             raise RuntimeError(self.tr("PySide is not installed."))
@@ -99,9 +99,9 @@ class Dialog(QDialog):
         super(Dialog, self).reject()
 
 
-def prompt_authentication(controller, local_folder, url = None, username = None,
-                          is_url_readonly = False, is_user_readonly = False, 
-                          parent = None, app = None, update = True):
+def prompt_authentication(controller, local_folder, url=None, username=None,
+                          is_url_readonly=False, is_user_readonly=False,
+                          parent=None, app=None, update=True):
     """Prompt a QT dialog to ask for user credentials for binding a server"""
     global is_dialog_open
 
@@ -189,7 +189,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
                 dialog.show_message(e.message % (e.max_devices, url))
             except Exception as e:
                 msg = _("Unable to connect to %s") % url
-                log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
+                log.debug("Unable to connect to %s (%s)", url, str(e), exc_info=True)
                 # TODO: catch a new ServerUnreachable catching network issues
                 dialog.show_message(msg)
                 return False
@@ -199,7 +199,7 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
             return False
         except Exception as e:
             msg = _("Unable to connect to %s") % url
-            log.debug("Unable to connect to %s (%s)", url, str(e), exc_info = True)
+            log.debug("Unable to connect to %s (%s)", url, str(e), exc_info=True)
             # TODO: catch a new ServerUnreachable catching network issues
             dialog.show_message(msg)
             return False
@@ -210,8 +210,8 @@ def prompt_authentication(controller, local_folder, url = None, username = None,
 #        QApplicationSingleton()
 #        QtGui.QApplication([])
 
-    dialog = Dialog(fields_spec, title = _("%s Authentication") % Constants.APP_NAME,
-                    callback = bind_server)
+    dialog = Dialog(fields_spec, title=_("%s Authentication") % Constants.APP_NAME,
+                    callback=bind_server)
     is_dialog_open = True
     try:
         dialog.exec_()
@@ -229,6 +229,6 @@ if __name__ == '__main__':
     local_folder = default_nuxeo_drive_folder()
     print prompt_authentication(
         ctl, local_folder,
-        url = 'http://localhost:8080/nuxeo',
-        username = 'Administrator',
+        url='http://localhost:8080/nuxeo',
+        username='Administrator',
     )

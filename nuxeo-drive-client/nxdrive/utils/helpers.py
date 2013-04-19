@@ -82,7 +82,7 @@ def find_data_path():
     # Fall-back to the regular method that should work both the ndrive script
     return os.path.join(os.path.split(sys.argv[0])[0], 'data')
     
-def get_maintenance_message(status, schedule = None):
+def get_maintenance_message(status, schedule=None):
     from dateutil import tz
     from datetime import datetime
 
@@ -103,12 +103,12 @@ def get_maintenance_message(status, schedule = None):
         # convert to local times
         from_tz = tz.tzutc()
         to_tz = tz.tzlocal()
-        #grab utc times for database
+        # grab utc times for database
         data1 = start_utc
         data2 = end_utc
-        #convert local time for message
-        start_utc = start_utc.replace(tzinfo = from_tz)
-        end_utc = end_utc.replace(tzinfo = from_tz)
+        # convert local time for message
+        start_utc = start_utc.replace(tzinfo=from_tz)
+        end_utc = end_utc.replace(tzinfo=from_tz)
         start_local = start_utc.astimezone(to_tz)
         end_local = end_utc.astimezone(to_tz)
         if status == 'maintenance':
@@ -311,7 +311,7 @@ class QApplicationSingleton(object):
     
     # # The constructor
     #  @param self The object pointer.
-    def __init__(self, appid, args = []):
+    def __init__(self, appid, args=[]):
         # Check whether we already have an instance
         if QApplicationSingleton._iInstance is None:
             # Create and remember instance

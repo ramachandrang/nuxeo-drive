@@ -14,7 +14,7 @@ from PySide.QtCore import Qt
 import nxdrive.gui.qrc_resources
 from nxdrive.model import ServerEvent
 
-SQLID_ROLE = Qt.UserRole+1
+SQLID_ROLE = Qt.UserRole + 1
 
 
 class InfoDlg(QDialog):
@@ -23,7 +23,7 @@ class InfoDlg(QDialog):
 
         self.frontend = frontend
         self.table = QTableView()
-        buttonbox = QDialogButtonBox(QDialogButtonBox.Cancel|QDialogButtonBox.Ok, parent=self)
+        buttonbox = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok, parent=self)
         self.btn_select = QPushButton(self.tr("Select All"))
         self.btn_clear = QPushButton(self.tr('Clear All'))
         self.btn_delete = QPushButton(self.tr('Delete'))
@@ -72,7 +72,7 @@ class InfoDlg(QDialog):
             # TODO convert to local time
             from_tz = tz.tzutc()
             to_tz = tz.tzlocal()
-            event_time_utc = server_events[row].utc_time.replace(tzinfo = from_tz)
+            event_time_utc = server_events[row].utc_time.replace(tzinfo=from_tz)
             event_time_local = event_time_utc.astimezone(to_tz)
             item2 = QStandardItem(event_time_local.strftime('%x %X'))
 
@@ -127,14 +127,14 @@ class InfoDlg(QDialog):
         row_count = self.model.rowCount()
         col_count = self.model.columnCount()
         topleft = self.model.indexFromItem(self.model.item(0, 0))
-        bottomright = self.model.indexFromItem(self.model.item(row_count-1, col_count-1))
+        bottomright = self.model.indexFromItem(self.model.item(row_count - 1, col_count - 1))
         for i in xrange(row_count, 0, -1):
-            item0 = self.model.item(i-1, 0)
+            item0 = self.model.item(i - 1, 0)
             if item0.checkState():
-                item2 = self.model.item(i-1, 2)
+                item2 = self.model.item(i - 1, 2)
                 item_id = item2.data(SQLID_ROLE)
                 items_deleted.append(item_id)
-                self.model.removeRow(i-1)
+                self.model.removeRow(i - 1)
                 
         if len(items_deleted) > 0:
             self.session.query(ServerEvent).\

@@ -96,7 +96,7 @@ def default_nuxeo_drive_folder():
 
 
 class Event(object):
-    def __init__(self, name = 'none'):
+    def __init__(self, name='none'):
         self.__name = name
 
     @property
@@ -118,7 +118,7 @@ class ExceptionEvent(Event):
         super(ExceptionEvent, self).__init__(ExceptionEvent.event_names[code])
 
 class EventHandler:
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         self.__parent = parent
     def Handle(self, event, **kvargs):
         handler = 'Handle_' + event.name
@@ -169,21 +169,22 @@ class Controller(object):
 
     # Used for binding server / roots and managing tokens
     remote_doc_client_factory = RemoteDocumentClient
-
+ 
     # Used for FS synchronization operations
+    remote_fs_client_factory = RemoteFileSystemClient
     remote_maint_service_client_factory = RemoteMaintServiceClient
     remote_upgrade_service_client_factory = RemoteUpgradeServiceClient
-    __instance = None
-
+    __instance = None    
+    
     @staticmethod
-    def getController(config_folder = None, echo = None, poolclass = None, timeout = 60):
+    def getController(config_folder=None, echo=None, poolclass=None, timeout=60):
         if not Controller.__instance:
             if not config_folder:
                 return None
-            Controller.__instance = Controller(config_folder, echo = None, poolclass = None, timeout = 60)
+            Controller.__instance = Controller(config_folder, echo=None, poolclass=None, timeout=60)
         return Controller.__instance
 
-    def __init__(self, config_folder, echo = None, poolclass = None, timeout = 60):
+    def __init__(self, config_folder, echo=None, poolclass=None, timeout=60):
 
         if Controller.__instance:
             raise Controller.__instance
@@ -207,7 +208,7 @@ class Controller(object):
         # Handle connection to the local Nuxeo Drive configuration and
         # metadata sqlite database.
         self._engine, self._session_maker = init_db(
-            self.config_folder, echo = echo, poolclass = poolclass)
+            self.config_folder, echo=echo, poolclass=poolclass)
 
         config_file = Constants.CONFIG_FILE
         config_file = os.path.join(normalized_path(config_folder), config_file)
@@ -242,7 +243,7 @@ class Controller(object):
     def get_loop_count(self):
         return self.loop_count
 
-    def get_device_config(self, session = None):
+    def get_device_config(self, session=None):
         """Fetch the singleton configuration object for this device"""
         if session is None:
             session = self.get_session()
@@ -264,7 +265,7 @@ class Controller(object):
         the stop message between the two.
 
         """
-        pid = self.synchronizer.check_running(process_name = "sync")
+        pid = self.synchronizer.check_running(process_name="sync")
         if pid is None:
             # this could happen if the nxdrive_sync.pid file is in use
             # and the pid could not be written into it at startup
@@ -292,20 +293,20 @@ class Controller(object):
         session = self.get_session()
         # Find the server binding for this absolute path
         try:
-            binding, path = self._binding_path(folder_path, session = session)
+            binding, path = self._binding_path(folder_path, session=session)
         except NotFound:
             return [], None
 
         try:
             folder_state = session.query(LastKnownState).filter_by(
-                local_folder = binding.local_folder,
-                local_path = path,
+                local_folder=binding.local_folder,
+                local_path=path,
             ).one()
         except NoResultFound:
             return [], path
 
         states = self._pair_states_recursive(session, folder_state)
-		return states, path
+        return states, path
         
     def children_states_as_files(self, folder_path):
         states, path = self._children_states(folder_path)
@@ -348,7 +349,7 @@ class Controller(object):
                              " should be not None.") % doc_pair)
 
         children_states = session.query(LastKnownState).filter_by(
-            local_folder = doc_pair.local_folder).filter(f).order_by(
+            local_folder=doc_pair.local_folder).filter(f).order_by(
                 asc(LastKnownState.local_name),
                 asc(LastKnownState.remote_name),
             ).all()
@@ -368,13 +369,13 @@ class Controller(object):
         # Pre-pend the folder state to the descendants
         return [(doc_pair, pair_state)] + results
 
-    def _binding_path(self, local_path, session = None):
+    def _binding_path(self, local_path, session=None):
         """Find a server binding and relative path for a given FS path"""
         local_path = normalized_path(local_path)
 
         # Check exact binding match
-        binding = self.get_server_binding(local_path, session = session,
-            raise_if_missing = False)
+        binding = self.get_server_binding(local_path, session=session,
+            raise_if_missing=False)
         if binding is not None:
             return binding, u'/'
 
@@ -400,8 +401,8 @@ class Controller(object):
         path = path.replace(os.path.sep, u'/')
         return binding, path
 
-    def get_server_binding(self, local_folder = None, raise_if_missing = False,
-                           session = None):
+    def get_server_binding(self, local_folder=None, raise_if_missing=False,
+                           session=None):
         """Find the ServerBinding instance for a given local_folder"""
 
         if session is None:
@@ -430,7 +431,7 @@ class Controller(object):
                 raise RuntimeError(msg)
             return None
 
-    def list_server_bindings(self, session = None):
+    def list_server_bindings(self, session=None):
         if session is None:
             session = self.get_session()
         return session.query(ServerBinding).all()
@@ -484,13 +485,13 @@ class Controller(object):
                      local_folder, server_url, username)
             token = nxclient.request_token()
             server_binding = ServerBinding(local_folder, server_url, username,
-                                           remote_password = password,
-                                           remote_token = token)
+                                           remote_password=password,
+                                           remote_token=token)
             session.add(server_binding)
 
             # ignore if this fails
             try:
-                self.update_server_storage_used(server_url, username, session = session)
+                self.update_server_storage_used(server_url, username, session=session)
             except Exception as e:
                 log.debug("Failed to retrieve storage: %s", str(e))
 
@@ -502,10 +503,10 @@ class Controller(object):
             remote_info = remote_client.get_filesystem_root_info()
 
             state = LastKnownState(server_binding.local_folder,
-                                   local_info = local_info,
-                                   local_state = 'synchronized',
-                                   remote_info = remote_info,
-                                   remote_state = 'synchronized')
+                                   local_info=local_info,
+                                   local_state='synchronized',
+                                   remote_info=remote_info,
+                                   remote_state='synchronized')
             session.add(state)
             session.commit()
             return server_binding
@@ -523,8 +524,8 @@ class Controller(object):
         Local files are not deleted"""
         session = self.get_session()
         local_folder = normalized_path(local_folder)
-        binding = self.get_server_binding(local_folder, raise_if_missing = True,
-                                          session = session)
+        binding = self.get_server_binding(local_folder, raise_if_missing=True,
+                                          session=session)
         if not binding: return
 
         # Revoke token if necessary
@@ -534,7 +535,7 @@ class Controller(object):
                         binding.server_url,
                         binding.remote_user,
                         self.device_id,
-                        token = binding.remote_token)
+                        token=binding.remote_token)
                 log.info("Revoking token for '%s' with account '%s'",
                          binding.server_url, binding.remote_user)
                 nxclient.revoke_token()
@@ -663,10 +664,10 @@ class Controller(object):
         pwdhash = base64.b16encode(md5.new(password).digest()).lower()
         return self._rerequest_clouddesk_token(username, pwdhash), pwdhash
 
-    def get_browser_token(self, local_folder, session = None):
+    def get_browser_token(self, local_folder, session=None):
         """Retrieve federated token if it exists and is still valid, or request a new one"""
 
-        server_binding = self.get_server_binding(local_folder, raise_if_missing = False)
+        server_binding = self.get_server_binding(local_folder, raise_if_missing=False)
         if server_binding is None:
             return None
 
@@ -694,8 +695,8 @@ class Controller(object):
 
         return fdtoken
 
-    def bind_root(self, local_folder, remote_ref, repository = 'default',
-                  session = None):
+    def bind_root(self, local_folder, remote_ref, repository='default',
+                  session=None):
         """Bind local root to a remote root (folderish document in Nuxeo).
 
         local_folder must be already bound to an existing Nuxeo server.
@@ -707,29 +708,29 @@ class Controller(object):
         session = self.get_session() if session is None else session
         local_folder = normalized_path(local_folder)
         server_binding = self.get_server_binding(
-            local_folder, raise_if_missing = True, session = session)
+            local_folder, raise_if_missing=True, session=session)
 
         nxclient = self.get_remote_doc_client(server_binding,
-            repository = repository)
+            repository=repository)
 
         # Register the root on the server
         nxclient.register_as_root(remote_ref)
 
-    def unbind_root(self, local_folder, remote_ref, repository = 'default',
-                    session = None):
+    def unbind_root(self, local_folder, remote_ref, repository='default',
+                    session=None):
         """Remove binding to remote folder"""
         session = self.get_session() if session is None else session
         server_binding = self.get_server_binding(
-            local_folder, raise_if_missing = True, session = session)
+            local_folder, raise_if_missing=True, session=session)
 
         nxclient = self.get_remote_doc_client(server_binding,
-            repository = repository)
+            repository=repository)
 
         # Unregister the root on the server
         nxclient.unregister_as_root(remote_ref)
 
-    def list_pending(self, limit = 100, local_folder = None, ignore_in_error = None,
-                     session = None):
+    def list_pending(self, limit=100, local_folder=None, ignore_in_error=None,
+                     session=None):
         """List pending files to synchronize, ordered by path
 
         Ordering by path makes it possible to synchronize sub folders content
@@ -746,7 +747,7 @@ class Controller(object):
             predicates.append(LastKnownState.local_folder == local_folder)
 
         if ignore_in_error is not None and ignore_in_error > 0:
-            max_date = datetime.utcnow() - timedelta(seconds = ignore_in_error)
+            max_date = datetime.utcnow() - timedelta(seconds=ignore_in_error)
             predicates.append(or_(
                 LastKnownState.last_sync_error_date == None,
                 LastKnownState.last_sync_error_date < max_date))
@@ -766,10 +767,10 @@ class Controller(object):
             asc(LastKnownState.local_path)
         ).limit(limit).all()
 
-    def next_pending(self, local_folder = None, session = None):
+    def next_pending(self, local_folder=None, session=None):
         """Return the next pending file to synchronize or None"""
-        pending = self.list_pending(limit = 1, local_folder = local_folder,
-                                    session = session)
+        pending = self.list_pending(limit=1, local_folder=local_folder,
+                                    session=session)
         return pending[0] if len(pending) > 0 else None
 
     def _get_client_cache(self):
@@ -797,8 +798,8 @@ class Controller(object):
         remote_client.make_raise(self._remote_error)
         return remote_client
 
-    def get_remote_doc_client(self, sb, repository = 'default',
-                              base_folder = None):
+    def get_remote_doc_client(self, sb, repository='default',
+                              base_folder=None):
         """Return an instance of Nuxeo Document Client"""
 
         return self.remote_doc_client_factory(
@@ -808,10 +809,10 @@ class Controller(object):
             timeout=self.timeout, cookie_jar=self.cookie_jar)
 
     def get_remote_client(self, server_binding, repository='default',
-                          base_folder=u'/'):
-        # Backward compat
+                          base_folder=None):
+        # Backward compatibility
         return self.get_remote_doc_client(server_binding,
-            repository = repository, base_folder = base_folder)
+            repository=repository, base_folder=base_folder)
 
     def invalidate_client_cache(self, server_url):
         cache = self._get_client_cache()
@@ -820,7 +821,7 @@ class Controller(object):
                 del cache[key]
 
     # NOT USED
-    def _get_mydocs_folder(self, server_binding, session = None):
+    def _get_mydocs_folder(self, server_binding, session=None):
         if self.mydocs_folder is None:
             if session is None:
                 session = self.get_session()
@@ -838,7 +839,7 @@ class Controller(object):
 
         return self.mydocs_folder
 
-    def get_root_folder_synced(self, server_binding, session = None):
+    def get_root_folder_synced(self, server_binding, session=None):
         if session is None:
             session = self.get_session()
         try:
@@ -854,7 +855,7 @@ class Controller(object):
             return None
 
 
-    def get_mydocs_folder_synced(self, server_binding, session = None):
+    def get_mydocs_folder_synced(self, server_binding, session=None):
         if session is None:
             session = self.get_session()
         try:
@@ -869,7 +870,7 @@ class Controller(object):
             log.debug("multiple My Docs folders found error!")
             return None
 
-    def get_guest_folder_synced(self, server_binding, session = None):
+    def get_guest_folder_synced(self, server_binding, session=None):
         if session is None:
             session = self.get_session()
         try:
@@ -884,7 +885,7 @@ class Controller(object):
             log.debug("multiple My Docs folders found error!")
             return None
 
-    def get_otherdocs_folder_synced(self, server_binding, session = None):
+    def get_otherdocs_folder_synced(self, server_binding, session=None):
         if session is None:
             session = self.get_session()
         try:
@@ -913,7 +914,7 @@ class Controller(object):
         session = self.get_session()
         try:
             states = session.query(LastKnownState).filter_by(
-                remote_ref = remote_ref,
+                remote_ref=remote_ref,
             ).all()
             for state in states:
                 if (state.server_binding.server_url == server_url):
@@ -924,11 +925,11 @@ class Controller(object):
     def get_state_for_local_path(self, local_os_path):
         """Find a DB state from a local filesystem path"""
         session = self.get_session()
-        sb, local_path = self._binding_path(local_os_path, session = session)
+        sb, local_path = self._binding_path(local_os_path, session=session)
         return session.query(LastKnownState).filter_by(
-            local_folder = sb.local_folder, local_path = local_path).one()
+            local_folder=sb.local_folder, local_path=local_path).one()
 
-    def recover_from_invalid_credentials(self, server_binding, exception, session = None):
+    def recover_from_invalid_credentials(self, server_binding, exception, session=None):
         code = getattr(exception, 'code', None)
         if code == 401:
             log.debug('Detected invalid credentials for: %s', server_binding.local_folder)
@@ -1009,7 +1010,7 @@ class Controller(object):
             storage_key = (sb.server_url, sb.remote_user)
             self.storage[storage_key] = None
 
-    def update_storage_used(self, server_binding = None, session = None):
+    def update_storage_used(self, server_binding=None, session=None):
         if session is None:
             session = self.get_session()
         if not server_binding:
@@ -1020,14 +1021,14 @@ class Controller(object):
                 try:
                     server_binding.used_storage, server_binding.total_storage = remote_client.get_storage_used()
                     session.commit()
-                    log.debug("used storage=%s, total storage=%s", 
+                    log.debug("used storage=%s, total storage=%s",
                               str(server_binding.used_storage), str(server_binding.total_storage))
                 except ValueError:
                     # operation not implemented
-                    log.debug("failed to retrieve storage for url: %s, user: %s", 
+                    log.debug("failed to retrieve storage for url: %s, user: %s",
                               server_binding.server_url, server_binding.remote_user)
 
-    def update_server_storage_used(self, url, user, session = None):
+    def update_server_storage_used(self, url, user, session=None):
         if session is None:
             session = self.get_session()
         sb = self.get_reusable_server_binding()
@@ -1064,8 +1065,8 @@ class Controller(object):
         if self.status_thread is None or not self.status_thread.isAlive():
             try:
                 self.http_server = HttpServer(Constants.INTERNAL_HTTP_PORT, self)
-                self.status_thread = Thread(target = http_server_loop,
-                                          args = (self.http_server,))
+                self.status_thread = Thread(target=http_server_loop,
+                                          args=(self.http_server,))
                 self.status_thread.start()
             except:
                 pass
@@ -1120,21 +1121,21 @@ class Controller(object):
             folder_struct = {}
             folder_struct['name'] = folder
             if state == 'synchronized':
-                states = self.children_states_as_files(folder, session = session)
+                states = self.children_states_as_files(folder, session=session)
                 files = [f for f, status in states if status == state]
             elif state == 'progress' and not transition:
-                self.synchronizer.scan_local(folder, session = session)
-                states = self.children_states_as_files(folder, session = session)
+                self.synchronizer.scan_local(folder, session=session)
+                states = self.children_states_as_files(folder, session=session)
                 files = [f for f, status in states if status in PROGRESS_STATES]
             elif state == 'progress' and transition:
-                states = self.children_states_as_paths(folder, session = session)
+                states = self.children_states_as_paths(folder, session=session)
                 files = [f for f, status in states if status in PROGRESS_STATES]
                 files = self.get_next_synced_files(files)
             elif state == 'conflicted' and not transition:
-                states = self.children_states_as_files(folder, session = session)
+                states = self.children_states_as_files(folder, session=session)
                 files = [f for f, status in states if status in CONFLICTED_STATES]
             elif state == 'conflicted' and transition:
-                states = self.children_states_as_paths(folder, session = session)
+                states = self.children_states_as_paths(folder, session=session)
                 files = [f for f, status in states if status in CONFLICTED_STATES]
                 files = self.get_next_synced_files(files)
             else:
@@ -1150,7 +1151,7 @@ class Controller(object):
             session.rollback()
             raise
 
-    def get_next_synced_files(self, paths, session = None):
+    def get_next_synced_files(self, paths, session=None):
         """Called from the http thread to return file(s) which transitioned from
         'in progress' or 'conflicted' state to 'synchronized' state."""
 
@@ -1193,7 +1194,7 @@ class Controller(object):
             is_automation = url.startswith(server_binding.server_url)
             remote_client = self.remote_upgrade_service_client_factory(
                 url, None, self.device_id,
-                timeout = self.timeout, is_automation = is_automation)
+                timeout=self.timeout, is_automation=is_automation)
             cache[cache_key] = remote_client
         # Make it possible to have the remote client simulate any kind of
         # failure
@@ -1213,14 +1214,14 @@ class Controller(object):
             is_automation = url.startswith(server_binding.server_url)
             remote_client = self.remote_maint_service_client_factory(
                 url, None, self.device_id,
-                timeout = self.timeout, is_automation = is_automation)
+                timeout=self.timeout, is_automation=is_automation)
             cache[cache_key] = remote_client
         # Make it possible to have the remote client simulate any kind of
         # failure
         remote_client.make_raise(self._remote_error)
         return remote_client
 
-    def _reset_upgrade_info(self, sb, session = None):
+    def _reset_upgrade_info(self, sb, session=None):
         """Remove all upgrade info with same or lower version number than the current one."""
         if session is None:
             session = self.get_session()
@@ -1259,13 +1260,13 @@ class Controller(object):
         elif sys.platform == 'win32':
             pass
 
-    def check_nonremovable_folders(self, server_binding, session = None):
+    def check_nonremovable_folders(self, server_binding, session=None):
         if session is None:
             session = self.get_session()
-        folders = (self.get_root_folder_synced(server_binding, session = session),
-                   self.get_mydocs_folder_synced(server_binding, session = session),
-                   self.get_guest_folder_synced(server_binding, session = session),
-                   self.get_otherdocs_folder_synced(server_binding, session = session),)
+        folders = (self.get_root_folder_synced(server_binding, session=session),
+                   self.get_mydocs_folder_synced(server_binding, session=session),
+                   self.get_guest_folder_synced(server_binding, session=session),
+                   self.get_otherdocs_folder_synced(server_binding, session=session),)
 
         for fld in folders:
             if fld:

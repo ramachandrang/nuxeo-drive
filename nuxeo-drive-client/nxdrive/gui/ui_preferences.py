@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 # Form implementation generated from reading ui file 'preferences.ui'
-#
+# 
 # Created: Sat Feb  9 19:57:49 2013
 #      by: pyside-uic 0.2.13 running on PySide 1.1.1
-#
+# 
 # WARNING! All changes made in this file will be lost!
 
 from PySide import QtCore, QtGui
@@ -100,7 +100,7 @@ class Ui_preferencesDlg(object):
         self.gridLayout.addWidget(self.label_5, 1, 0, 1, 1)
         self.lblStorage = QtGui.QLabel(self.widget)
         self.lblStorage.setMinimumSize(QtCore.QSize(0, 22))
-        self.lblStorage.setAlignment(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+        self.lblStorage.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
         self.lblStorage.setObjectName("lblStorage")
         self.gridLayout.addWidget(self.lblStorage, 1, 1, 1, 1)
 #        self.hLayout = QtGui.QHBoxLayout()
@@ -113,7 +113,7 @@ class Ui_preferencesDlg(object):
 #        self.hLayout.addStretch(1)
         self.lblComputer = QtGui.QLabel(self.widget)
         self.lblComputer.setMinimumSize(QtCore.QSize(250, 22))
-        self.lblComputer.setAlignment(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+        self.lblComputer.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
         self.lblComputer.setObjectName("lblComputer")
         self.gridLayout.addWidget(self.lblComputer, 2, 1, 1, 1)
         self.gridLayout.setRowStretch(2, 1)
@@ -185,7 +185,7 @@ class Ui_preferencesDlg(object):
         # Folders to synchronize
         self.label_9 = QtGui.QLabel(self.layoutWidget2)
         self.label_9.setMinimumSize(QtCore.QSize(0, 22))
-        self.label_9.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.label_9.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignTrailing | QtCore.Qt.AlignVCenter)
         self.label_9.setObjectName("label_9")
         self.gridLayout_3.addWidget(self.label_9, 1, 1, 1, 1)
         self.btnSelect = QtGui.QPushButton(self.layoutWidget2)
@@ -226,7 +226,7 @@ class Ui_preferencesDlg(object):
         self.horizontalLayout.addItem(spacerItem2)
         self.buttonBox = QtGui.QDialogButtonBox(self.layoutWidget3)
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Apply|QtGui.QDialogButtonBox.Cancel)
+        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Apply | QtGui.QDialogButtonBox.Cancel)
         self.buttonBox.setObjectName("buttonBox")
         self.horizontalLayout.addWidget(self.buttonBox)
 

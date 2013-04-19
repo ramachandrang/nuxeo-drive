@@ -16,8 +16,6 @@ DEBUG_UNAVAILABLE = False
 NAG_EVERY_LOOP = False
 """Synchronize 'conflicted' state"""
 DEBUG_SYNC_CONFLICTED = True
-"""Use a global cookiejar"""
-USE_SINGLE_COOKIEJAR = True
 
 """Setup i18n"""
 import gettext

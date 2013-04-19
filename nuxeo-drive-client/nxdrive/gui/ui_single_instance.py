@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 # Form implementation generated from reading ui file 'single_instance.ui'
-#
+# 
 # Created: Sun Mar 24 11:10:03 2013
 #      by: pyside-uic 0.2.13 running on PySide 1.1.1
-#
+# 
 # WARNING! All changes made in this file will be lost!
 
 from PySide import QtCore, QtGui
@@ -34,12 +34,12 @@ class Ui_Dialog(object):
         self.label_2.setText("")
         self.label_2.setPixmap(QtGui.QPixmap(":/watermark_medium.png"))
         self.label_2.setScaledContents(False)
-        self.label_2.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
+        self.label_2.setAlignment(QtCore.Qt.AlignLeading | QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
         self.label_2.setObjectName("label_2")
         self.horizontalLayout_3.addWidget(self.label_2)
         self.label = QtGui.QLabel(self.verticalLayoutWidget)
         self.label.setBaseSize(QtCore.QSize(0, 0))
-        self.label.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+        self.label.setAlignment(QtCore.Qt.AlignLeading | QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
         self.label.setWordWrap(True)
         self.label.setObjectName("label")
         self.horizontalLayout_3.addWidget(self.label)

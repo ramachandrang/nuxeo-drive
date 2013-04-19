@@ -36,7 +36,7 @@ try:
             pwdhash = key
         return base64.standard_b64encode(encpwd), base64.standard_b64encode(pwdhash)
 
-    def decrypt_password(encpwd, pwdhash = ''):
+    def decrypt_password(encpwd, pwdhash=''):
         if encpwd is None: return encpwd
         
         pwdhash = base64.standard_b64decode(pwdhash)
@@ -60,7 +60,7 @@ except ImportError as e:
     def encrypt_password(pwd):
         return pwd, ''
 
-    def decrypt_password(encpwd, pwdhash = ''):
+    def decrypt_password(encpwd, pwdhash=''):
         return encpwd
 
 

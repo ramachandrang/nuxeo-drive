@@ -19,7 +19,7 @@ PORT = '8080'
 PORT_INTEGER = int(PORT)
 
 class ProxyDlg(QDialog, Ui_ProxyDialog):
-    def __init__(self, frontend = None, parent = None):
+    def __init__(self, frontend=None, parent=None):
         super(ProxyDlg, self).__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
@@ -159,7 +159,7 @@ class ProxyDlg(QDialog, Ui_ProxyDialog):
                 invalidate = True
                 
         if invalidate:
-            result = ProgressDialog.stopServer(self.frontend, parent = self)
+            result = ProgressDialog.stopServer(self.frontend, parent=self)
             if result == ProgressDialog.CANCELLED:
                 return QDialog.Rejected   
 

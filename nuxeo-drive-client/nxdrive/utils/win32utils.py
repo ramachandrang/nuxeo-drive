@@ -22,7 +22,7 @@ log = get_logger(__name__)
 FILE_NOT_FOUND = 0x80070002
 
 
-def update_win32_reg_key(reg, path, attributes = ()):
+def update_win32_reg_key(reg, path, attributes=()):
     """Helper function to create / set a key with attribute values"""
     import _winreg
     key = _winreg.CreateKey(reg, path)

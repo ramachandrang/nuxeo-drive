@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 # Form implementation generated from reading ui file 'sync_folders.ui'
-#
+# 
 # Created: Wed Dec 12 11:43:39 2012
 #      by: pyside-uic 0.2.13 running on PySide 1.1.0
-#
+# 
 # WARNING! All changes made in this file will be lost!
 
 from PySide import QtCore, QtGui
@@ -27,7 +27,7 @@ class Ui_Dialog(object):
         self.verticalLayout.addWidget(self.treeView)
         self.buttonBox = QtGui.QDialogButtonBox(self.widget)
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Cancel|QtGui.QDialogButtonBox.Ok)
+        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Cancel | QtGui.QDialogButtonBox.Ok)
         self.buttonBox.setObjectName("buttonBox")
         self.verticalLayout.addWidget(self.buttonBox)
 

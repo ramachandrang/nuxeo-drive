@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 # Form implementation generated from reading ui file 'proxy.ui'
-#
+# 
 # Created: Wed Jan  2 17:15:53 2013
 #      by: pyside-uic 0.2.13 running on PySide 1.1.1
-#
+# 
 # WARNING! All changes made in this file will be lost!
 
 from PySide import QtCore, QtGui
@@ -36,7 +36,7 @@ class Ui_ProxyAuthnDialog(object):
         gridLayout.addWidget(self.txtPwd, 2, 1, 1, 1)
         self.buttonBox = QtGui.QDialogButtonBox(ProxyAuthnDialog)
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Apply|QtGui.QDialogButtonBox.Cancel)
+        self.buttonBox.setStandardButtons(QtGui.QDialogButtonBox.Apply | QtGui.QDialogButtonBox.Cancel)
         self.buttonBox.setObjectName("buttonBox")
         gridLayout.addWidget(self.buttonBox, 3, 0, 1, 2, QtCore.Qt.AlignRight)
         self.setLayout(gridLayout)
