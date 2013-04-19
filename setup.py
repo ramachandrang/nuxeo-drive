@@ -111,11 +111,14 @@ for filename in os.listdir(icons_home):
     if os.path.isfile(filepath):
         icons_files.append(filepath)
 
-old_version = None
-init_file = os.path.abspath(os.path.join(
-        'nuxeo-drive-client', 'nxdrive', '__init__.py'))
-with open(init_file, 'rb') as f:
-    version = f.readline().split("=")[1].strip().replace('\'', '')
+################################################
+# Nuxeo Drive version
+# old_version = None
+# init_file = os.path.abspath(os.path.join(
+#        'nuxeo-drive-client', 'nxdrive', '__init__.py'))
+# with open(init_file, 'rb') as f:
+#    version = f.readline().split("=")[1].strip().replace('\'', '')
+################################################
 
 images_files = []
 for filename in os.listdir(images_home):
@@ -149,12 +152,14 @@ if '--dev' in sys.argv:
     timestamp = timestamp.replace(".", "")
     timestamp = timestamp.replace("T", "")
     timestamp = timestamp.replace("-", "")
-    old_version = version
-    version = version.replace('-dev', "b" + timestamp)
-    with open(init_file, 'wb') as f:
-        f.write("__version__ = '%s'" % version)
+################################################
+# Nuxeo Drive version
+#    old_version = version
+#    version = version.replace('-dev', "b" + timestamp)
+#    with open(init_file, 'wb') as f:
+#        f.write("__version__ = '%s'" % version)
+################################################
     print "Updated version to " + version
-
 
 includes = [
             "PySide",
