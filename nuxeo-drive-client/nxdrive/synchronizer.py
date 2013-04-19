@@ -629,6 +629,21 @@ class Synchronizer(object):
                                 all()
                 for folder in folders:
                     folder.check_state = folder.bind_state = True
+                    
+                # TT#2112 - check Others Docs although is not reported by the server!!
+                others_subfolders = session.query(SyncFolders).\
+                                        filter(SyncFolders.local_folder == server_binding.local_folder).\
+                                        filter(SyncFolders.remote_parent ==  Constants.OTHERS_DOCS_UID).\
+                                        all()
+                        
+                bind_states = [fld.bind_state for fld in others_subfolders]
+                # all() return True for an empty list
+                if all(bind_states) and len(bind_states) > 0:
+                    others_folder = session.query(SyncFolders).\
+                                            filter(SyncFolders.local_folder == server_binding.local_folder).\
+                                            filter(SyncFolders.remote_id == Constants.OTHERS_DOCS_UID).\
+                                            one()
+                    others_folder.check_state = True
 
             session.commit()
         log.debug('end updating roots.')
@@ -1724,7 +1739,7 @@ class Synchronizer(object):
             return False
         
         try:
-            nxclient = self._controller.get_remote_client(sb)
+            nxclient = self.get_remote_client(sb)
             if not nxclient.is_addon_installed():
                 return False
 
@@ -1733,7 +1748,6 @@ class Synchronizer(object):
             mydocs_folder[u'title'] = Constants.MY_DOCS
             self._update_docs(mydocs_folder, sb.local_folder, session=session)
 
-            othersdocs_folders = nxclient.get_othersdocs(mydocs_folder['path'])
             # create a fake Others' Docs folder
             othersdocs_folder = {
                                  u'uid': Constants.OTHERS_DOCS_UID,
@@ -1743,7 +1757,7 @@ class Synchronizer(object):
             self._update_docs(othersdocs_folder, sb.local_folder, session=session)
             # cannot share ORM objects between threads
             # pass local_folder as an parameter and retrieve server_binding in the worker thread
-            self.get_all_subfolders_async(sb.local_folder, mydocs_folder, othersdocs_folders,
+            self.get_all_subfolders_async(sb.local_folder, mydocs_folder, othersdocs_folder,
                                           update_roots=update_roots,
                                           completion_notifier=completion_notifier,
                                           subfolder_notifier=subfolder_notifier)
@@ -1776,7 +1790,7 @@ class Synchronizer(object):
         dirty['del'] = 0
             
         try:
-            nxclient = self._controller.get_remote_client(server_binding)
+            nxclient = self.get_remote_client(server_binding)
             nodes = tree()
             nxclient.get_subfolders(mydocs, nodes)
             repo = mydocs[u'repository']
@@ -1785,20 +1799,17 @@ class Synchronizer(object):
             # TODO support notification for each subfolder being updated
             # using subfolder_notifier
             self._update_docs_subfolders(docId, nodes, local_folder, repo, session=session, dirty=dirty)
+           
             # update subfolders for Others Docs
             nodes = tree()
-            try:
-                # there may not be any children of othersdocs
-                # NOTE: in this case is an empty list instead of a dictionary!!
-                repo = othersdocs[u'repository']
-                docId = othersdocs[u'uid']
-                for fld in othersdocs:
-                    nodes[fld[u'title']]['value'] = FolderInfo(fld[u'uid'], fld[u'title'], othersdocs[u'uid'])
-                    nxclient.get_subfolders(fld, nodes[fld[u'title']])
+            repo = othersdocs[u'repository']
+            docId = othersdocs[u'uid']
+            othersdocs_folders = nxclient.get_othersdocs(mydocs['path'])     
+            for fld in othersdocs_folders:
+                nodes[fld[u'title']]['value'] = FolderInfo(fld[u'uid'], fld[u'title'], othersdocs[u'uid'])
+                nxclient.get_subfolders(fld, nodes[fld[u'title']])
 
-                self._update_docs_subfolders(docId, nodes, local_folder, repo, session=session, dirty=dirty)
-            except (ValueError, TypeError,):
-                log.debug('Others Docs is empty')
+            self._update_docs_subfolders(docId, nodes, local_folder, repo, session=session, dirty=dirty)
                 
             if kwargs.get("update_roots", True):
                 self.update_roots(server_binding=server_binding, session=session)
@@ -1875,16 +1886,24 @@ class Synchronizer(object):
                             SyncFolders.local_folder == server_binding.local_folder)).\
                             one()
                 mydocs.check_state = True
+                
+                # TT#2112 - set Others Docs checked by default
+                othersdocs = session.query(SyncFolders).\
+                                        filter(SyncFolders.local_folder == server_binding.local_folder).\
+                                        filter(SyncFolders.remote_id == Constants.OTHERS_DOCS_UID).\
+                                        one()
+                othersdocs.check_state = True
                 others_folders = session.query(SyncFolders).\
                                         filter(and_(SyncFolders.remote_parent == Constants.OTHERS_DOCS_UID,
                                                     SyncFolders.local_folder == server_binding.local_folder)).\
                                         all()
                 for fld in others_folders:
                     fld.check_state = True
+                    
                 session.commit()
                 log.debug("set My Docs and Others Docs subfolders as sync roots")
             except Exception, e:
-                log.debug("My Docs or Others Docs missing in SyncFolders table (%s)", e)
+                log.debug("error setting up My Docs and Others Docs as sync roots (%s)", e)
 
     def _update_clouddesk_root(self, local_folder, session=None):
         if session is None:
@@ -1904,8 +1923,10 @@ class Synchronizer(object):
             session.add(folder)
             session.commit()
 
-    def get_remote_fs_client(self, server_binding):
-        return self._controller.get_remote_fs_client(server_binding)
+    def get_remote_client(self, server_binding, repository='default',
+                          base_folder=None):
+        return self._controller.get_remote_client(server_binding, repository=repository,
+                          base_folder=base_folder)
 
     def _update_docs(self, docs, local_folder, session=None):
         if session is None:
@@ -2075,7 +2096,7 @@ class Synchronizer(object):
                     self._frontend.notify_quota_exceeded(server_binding.local_folder, Constants.APP_NAME, detail)
 
     def update_last_access(self, sb):
-        remote_client = self._controller.get_remote_client(sb)
+        remote_client = self.get_remote_client(sb)
         if remote_client is not None:
             remote_client.update_last_access(sb.remote_token)
 

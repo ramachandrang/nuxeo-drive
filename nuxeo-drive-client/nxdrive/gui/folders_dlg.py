@@ -217,7 +217,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
                 else:
                     sync_folder.check_state = True if parent.checkState() == Qt.Checked else False
                     
-            if not folder_id == Constants.OTHERS_DOCS_UID and not folder_id == Constants.CLOUDDESK_UID:
+            if not folder_id == Constants.CLOUDDESK_UID:
     #            states = [parent.child(i).checkState() for i in range(parent.rowCount())]
     #            first_state = states[0]
     #            other_states = filter(lambda state: state != first_state, states[1:])

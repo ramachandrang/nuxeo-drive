@@ -164,7 +164,7 @@ def make_cli_parser(add_subparsers=True):
         "--local-folder",
         help=_("Local folder that hosts the list of synchronized"
         " workspaces with a remote %s server.") % Constants.PRODUCT_NAME,
-        default=DEFAULT_NX_DRIVE_FOLDER,
+#        default=DEFAULT_NX_DRIVE_FOLDER,
     )
 
     # Bind root folders

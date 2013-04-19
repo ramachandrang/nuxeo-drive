@@ -523,7 +523,8 @@ class Controller(object):
 
         Local files are not deleted"""
         session = self.get_session()
-        local_folder = normalized_path(local_folder)
+        if local_folder:
+            local_folder = normalized_path(local_folder)
         binding = self.get_server_binding(local_folder, raise_if_missing=True,
                                           session=session)
         if not binding: return

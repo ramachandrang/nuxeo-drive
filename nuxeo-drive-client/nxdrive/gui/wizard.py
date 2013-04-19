@@ -90,9 +90,15 @@ class CpoWizard(QWizard):
     def add_skip_tour(self, back=True):
         self.setButtonText(QWizard.CustomButton1, self.tr('&Skip Tour'))
         self.setOption(QWizard.HaveCustomButton1 , True)
-        self.customButtonClicked.connect(self.skip_tour)
+        self.customButtonClicked.connect(self.custom_button_click)
 
-        btnList = [QWizard.Stretch, QWizard.CustomButton1, QWizard.CommitButton, QWizard.NextButton, QWizard.FinishButton]
+        btnList = [QWizard.Stretch, 
+                   QWizard.CustomButton2, 
+                   QWizard.CustomButton1, 
+                   QWizard.CommitButton, 
+                   QWizard.NextButton, 
+                   QWizard.FinishButton,
+                  ]
         if back:
             btnList.insert(3, QWizard.BackButton)
         self.setButtonLayout(btnList)
@@ -102,17 +108,42 @@ class CpoWizard(QWizard):
 #        self.setOption(QWizard.CustomButton1, False)
         btn = self.button(QWizard.CustomButton1)
         if btn.text():
-            self.customButtonClicked.disconnect(self.skip_tour)
+            self.customButtonClicked.disconnect(self.custom_button_click)
 
         self.setOption(QWizard.HaveCustomButton1 , False)
-        btnList = [QWizard.Stretch, QWizard.CommitButton, QWizard.NextButton, QWizard.FinishButton]
+        btnList = [QWizard.Stretch, 
+                   QWizard.CustomButton2, 
+                   QWizard.CommitButton, 
+                   QWizard.NextButton, 
+                   QWizard.FinishButton
+                   ]
         if back:
             btnList.insert(2, QWizard.BackButton)
         self.setButtonLayout(btnList)
 
+    def add_exit(self):
+        self.setButtonText(QWizard.CustomButton2, self.tr('E&xit'))
+        self.setOption(QWizard.HaveCustomButton2, True)
+        self.customButtonClicked.connect(self.custom_button_click)
+        
+        btnList = [QWizard.Stretch, 
+                   QWizard.CustomButton2, 
+                   QWizard.CustomButton1, 
+                   QWizard.CommitButton, 
+                   QWizard.NextButton, 
+                   QWizard.FinishButton,
+                  ]
+        self.setButtonLayout(btnList)
+        
     def remove_back_button(self):
         btnList = [QWizard.Stretch, QWizard.CommitButton, QWizard.NextButton, QWizard.FinishButton]
         self.setButtonLayout(btnList)
+        
+    def custom_button_click(self, custom_button):
+        if custom_button == QWizard.CustomButton1:
+            self.skip_tour(custom_button)
+        elif custom_button == QWizard.CustomButton2:
+            self.reject()
         
     def skip_tour(self, custom_button):
         if custom_button == QWizard.CustomButton1:
@@ -217,16 +248,17 @@ class CpoWizard(QWizard):
 
     def reject(self):
         self.session.rollback()
-        # prompt user for wizard mode
-        msgbox = QMessageBox(QMessageBox.Question, Constants.PRODUCT_NAME,
-                                                  self.tr('Do you want to start next time in wizard mode?'))
-        msgbox.setInformativeText(self.tr("Select Yes to start in wizard mode or No to start the normal application, when launched next time."))
-        msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        ret = msgbox.exec_()
-        if ret == QMessageBox.No:
-            settings = create_settings()
-            settings.setValue('wizard', False)
-
+        # FEATURE REMOVED - prompt user for wizard mode
+#        msgbox = QMessageBox(QMessageBox.Question, Constants.PRODUCT_NAME,
+#                                                  self.tr('Do you want to start next time in wizard mode?'))
+#        msgbox.setInformativeText(self.tr("Select Yes to start in wizard mode or No to start the normal application, when launched next time."))
+#        msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+#        ret = msgbox.exec_()
+#        if ret == QMessageBox.No:
+#            settings = create_settings()
+#            settings.setValue('wizard', False)
+        settings = create_settings()
+        settings.setValue('wizard', False)
         return super(CpoWizard, self).reject()
 
 
@@ -506,6 +538,7 @@ class InstallOptionsPage(QWizardPage):
     def initializePage(self):
         self.rdButtonTypical.setChecked(True)
         self.wizard().add_skip_tour(back=False)
+        self.wizard().add_exit()
 
         app = QApplication.instance()
         process_filter = EventFilter(self)
@@ -516,8 +549,10 @@ class InstallOptionsPage(QWizardPage):
             # get the server binding for authenticated user and server
             server_binding = self.wizard().server_binding
             # retrieve folders for typical setup
-            self.wizard().controller.synchronizer.get_folders(server_binding=server_binding)
-            self.wizard().controller.synchronizer.update_roots(server_binding=server_binding)
+            synchronizer = self.controller.synchronizer
+            synchronizer.get_folders(server_binding, update_roots=True, 
+                 completion_notifier=synchronizer.notify_folders_retrieved)
+            
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
         except Exception as e:
@@ -534,7 +569,7 @@ class InstallOptionsPage(QWizardPage):
             if os.path.exists(folder) and not self.wizard().keep_location:
                 msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
                                                           self.tr("Folder %s already exists. Do you want to use it?" % folder))
-                msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one on the Advanced next page.\n"
+                msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one on the Advanced page.\n"
                                                   "Note that if this folder was used by a different user, some files/folders may not be synchronized correctly."))
                 msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                 ret = msgbox.exec_()
@@ -614,6 +649,7 @@ class GuideOnePage(QWizardPage):
         
     def cleanupPage(self):
         advanced = self.wizard().field('advanced')
+        self.wizard().add_exit()
         if not advanced:
             self.wizard().add_skip_tour(back=False)
         else:
@@ -822,6 +858,7 @@ class AdvancedPage(QWizardPage):
 
     def cleanupPage(self):
         advanced = self.wizard().field('advanced')
+        self.wizard().add_exit()
         if not advanced:
             self.wizard().add_skip_tour()
         else:
@@ -863,7 +900,7 @@ class AdvancedPage(QWizardPage):
             # set the synchronized roots
             app.setOverrideCursor(Qt.WaitCursor)
             self.installEventFilter(process_filter)
-            self.wizard().controller.set_roots(session=self.wizard().session)
+            self.wizard().controller.synchronizer.set_roots(session=self.wizard().session)
             self.wizard().session.commit()
             self.setCommitPage(True)
 
