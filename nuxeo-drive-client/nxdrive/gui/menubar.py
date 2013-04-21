@@ -771,10 +771,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
     def rebuild_menu(self):
         """update when menu is activated"""
 
+        session = self.controller.get_session()
         if self.server_binding is None:
             storage_text, exceeded = None, False
         else:
-            storage_text, exceeded = self.controller.get_storage(self.server_binding)
+            storage_text, exceeded = self.controller.get_storage(self.server_binding, session=session)
         if storage_text is None:
             self.actionUsedStorage.setVisible(False)
         else:
@@ -784,7 +785,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             self.actionUsedStorage.setIcon(icon)
             self.actionUsedStorage.setIconVisibleInMenu(exceeded)
 
-        session = self.controller.get_session()
         username = self.controller.getUserName()
         connected = self._is_connected()
         self.actionUsername.setText(username if connected else self.tr('Not signed in'))

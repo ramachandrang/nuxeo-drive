@@ -24,7 +24,6 @@ from PySide import QtCore
 from cookielib import CookieJar
 
 import nxdrive
-from nxdrive.commandline import DEFAULT_DELAY
 from nxdrive.client import LocalClient
 from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import RemoteDocumentClient
@@ -40,7 +39,6 @@ from nxdrive.model import ServerBinding
 from nxdrive.model import LastKnownState
 from nxdrive.model import SyncFolders
 from nxdrive.model import ServerEvent
-from nxdrive.model import RecentFiles
 from nxdrive.model import PROGRESS_STATES, CONFLICTED_STATES
 from nxdrive.synchronizer import Synchronizer
 from nxdrive.synchronizer import POSSIBLE_NETWORK_ERROR_TYPES
@@ -67,6 +65,7 @@ schema_url = r'federatedloginservices.xml'
 service_url = r'http://login.sharpb2bcloud.com'
 ns = r'http://www.inventua.com/federatedloginservices/'
 CLOUDDESK_SCOPE = r'clouddesk'
+from nxdrive.Constants import DEFAULT_DELAY
 
 log = get_logger(__name__)
 
@@ -1022,14 +1021,14 @@ class Controller(object):
             remote_client = self.get_remote_client(server_binding)
             if remote_client is not None:
                 try:
-                    server_binding.used_storage, server_binding.total_storage = remote_client.get_storage_used()
+                    used_storage, total_storage = remote_client.get_storage_used()
+                    server_binding.used_storage, server_binding.total_storage = float(used_storage), float(total_storage)
                     session.commit()
                     log.debug("used storage=%s, total storage=%s",
                               str(server_binding.used_storage), str(server_binding.total_storage))
-                except ValueError:
-                    # operation not implemented
-                    log.debug("failed to retrieve storage for url: %s, user: %s",
-                              server_binding.server_url, server_binding.remote_user)
+                except ValueError as e:
+                    log.debug("failed to retrieve storage for url: %s, user: %s: (%s)",
+                              server_binding.server_url, server_binding.remote_user, e)
 
     def update_server_storage_used(self, url, user, session=None):
         if session is None:
@@ -1046,8 +1045,12 @@ class Controller(object):
                     pass
         return (0, 0)
 
-    def get_storage(self, server_binding):
+    def get_storage(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
         try:
+            # ServerBinding was updated but in a different thread, so the object must be refreshed
+            session.refresh(server_binding)
             used, total = server_binding.used_storage, server_binding.total_storage
             if total == 0:
                 return None, False
@@ -1056,8 +1059,7 @@ class Controller(object):
                         used >= total
         except KeyError:
             return None, False
-        except InvalidRequestError:
-            session = self.get_session()
+        except:
             session.rollback()
             return None, False
 

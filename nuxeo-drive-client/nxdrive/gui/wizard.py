@@ -6,6 +6,7 @@ Created on Jan 16, 2013
 
 from __future__ import division
 import sys
+import os
 import os.path
 import subprocess
 import urllib
@@ -370,10 +371,9 @@ class IntroPage(QWizardPage):
 
     def login(self):
         if self.auth_ok:
-            self.auth_ok = False
             self.lblMessage.clear()
-#            self.completeChanged.emit()
-            return True
+            self.completeChanged.emit()
+            return self.auth_ok
 
         from nxdrive.client import Unauthorized, DeviceQuotaExceeded
         app = QApplication.instance()
@@ -471,8 +471,7 @@ class IntroPage(QWizardPage):
         result = self.login()
         if result:
             self.setCommitPage(True)
-        return result    
-        return True    
+        return result      
         
 
 class InstallOptionsPage(QWizardPage):
@@ -566,7 +565,7 @@ class InstallOptionsPage(QWizardPage):
             # 'typical' route
             folder = self.wizard().local_folder
 
-            if os.path.exists(folder) and not self.wizard().keep_location:
+            if os.path.exists(folder) and os.listdir(folder) and not self.wizard().keep_location:
                 msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
                                                           self.tr("Folder %s already exists. Do you want to use it?" % folder))
                 msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one on the Advanced page.\n"
@@ -817,7 +816,7 @@ class AdvancedPage(QWizardPage):
 
         local_folder = os.path.join(location, Constants.DEFAULT_NXDRIVE_FOLDER)
         url = Constants.CLOUDDESK_URL
-        if os.path.exists(local_folder) and not self.wizard().keep_location:
+        if os.path.exists(local_folder) and os.listdir(local_folder) and not self.wizard().keep_location:
             msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
                                                       self.tr("Folder %s already exists. Do you want to use it?" % local_folder))
             msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one.\n"

@@ -32,8 +32,8 @@ if sys.platform == 'win32':
 
 settings = create_settings()
 
+from nxdrive.Constants import DEFAULT_DELAY
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
-DEFAULT_DELAY = 5.0
 USAGE = """cpodesktop [command]
 
 If no command is provided, the graphical application is started along with a

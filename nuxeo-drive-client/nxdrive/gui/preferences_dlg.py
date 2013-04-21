@@ -285,7 +285,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 self.local_folder_text_changed = False
                 return
          
-        if not self.reuse_folder() and os.path.exists(folder):
+        if not self.reuse_folder() and os.path.exists(folder) and os.listdir(folder):
             error = QMessageBox(QMessageBox.Warning, self.tr("Path Error"),
                                                       self.tr("Folder %s already exists") % folder,
                                                       QMessageBox.Ok,
@@ -329,7 +329,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
         parent_folder = self.txtCloudfolder.text()
         local_folder = os.path.join(parent_folder, Constants.DEFAULT_NXDRIVE_FOLDER)
-        if not self.reuse_folder() and os.path.exists(local_folder):
+        if not self.reuse_folder() and os.path.exists(local_folder) and os.listdir(local_folder):
             msg = QMessageBox(QMessageBox.Warning, self.tr('Folder Exists'),
                               self.tr("The folder %s already exists.") % local_folder,
                               QMessageBox.Ok)

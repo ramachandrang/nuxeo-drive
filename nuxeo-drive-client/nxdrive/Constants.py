@@ -24,6 +24,8 @@ APP_STATE_QUITTING = 'quitting'
 APP_SUBSTATE_AVAILABLE = 'available'
 APP_SUBSTATE_MAINTENANCE = 'maintenance'
 
+DEFAULT_DELAY = 5.0
+
 INFO_STATE_NONE = 'none'
 INFO_STATE_MAINTENANCE_SCHEDULE = 'maint_schedule'
 INFO_STATE_QUOTA = 'quota'
@@ -52,6 +54,7 @@ INTERNAL_HTTP_PORT = 63111
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
 CLOUDDESK_REMOTE_NAME = u'Nuxeo Drive'
 APP_ID = CLOUDDESK_UID
+
 MY_DOCS = u'My Docs'
 OTHERS_DOCS = u'Other Docs'
 GUEST_FOLDER = u'Guest Folder'
@@ -68,6 +71,7 @@ SERVICE_NOTIFICATION_INTERVAL = 6 * 3600  # six hours
 FDTOKEN_DURATION = 15 * 60
 SYNC_STATUS_STOP = 1
 SYNC_STATUS_START = 2
+
 APP_ICON_DIALOG = ':/icon_dlg.png'
 APP_ICON_ENABLED = ':/indicator_icon_enabled.png'
 APP_ICON_DISABLED = ':/indicator_icon_disabled.png'

@@ -6,6 +6,7 @@ from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
+from sqlalchemy import Float
 from sqlalchemy import Sequence
 from sqlalchemy import String
 from sqlalchemy import Boolean
@@ -122,8 +123,8 @@ class ServerBinding(Base):
     password_hash = Column(String)
     password_key = Column(String)
     fdtoken_creation_date = Column(DateTime)
-    total_storage = Column(Integer)
-    used_storage = Column(Integer)
+    total_storage = Column(Float)
+    used_storage = Column(Float)
     # passive_updates=False *only* needed if the database
     # does not implement ON UPDATE CASCADE
 #    roots = relationship("RootBinding", passive_updates = False, passive_deletes = True, cascade = "all, delete, delete-orphan")
