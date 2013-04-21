@@ -24,6 +24,7 @@ from PySide import QtCore
 from cookielib import CookieJar
 
 import nxdrive
+from nxdrive.commandline import DEFAULT_DELAY
 from nxdrive.client import LocalClient
 from nxdrive.client import RemoteFileSystemClient
 from nxdrive.client import RemoteDocumentClient
@@ -89,7 +90,7 @@ def default_nuxeo_drive_folder():
 
     # Fallback to home folder otherwiseConstants.DEFAULT_NXDRIVE_FOLDER)
     # NOTE: on Windows, '~' is expanded with 'Users' in lowercase, which causes issues later on
-    home = os.path.expanduser('~')
+    home = os.path.expanduser(u'~')
     if sys.platform == 'win32':
         home = home[:3] + home[3].upper() + home[4:]
     return os.path.join(home, Constants.DEFAULT_NXDRIVE_FOLDER)
@@ -282,7 +283,7 @@ class Controller(object):
         else:
             log.info("Failed to get process id, app will not quit.")
 
-    def _children_states(self, folder_path):
+    def _children_states(self, folder_path, session=None):
         """List the status of the children of a folder
 
         The state of the folder is a summary of their descendant rather
@@ -290,7 +291,8 @@ class Controller(object):
         use for the end user.
 
         """
-        session = self.get_session()
+        if session is None:
+            session = self.get_session()
         # Find the server binding for this absolute path
         try:
             binding, path = self._binding_path(folder_path, session=session)
@@ -308,8 +310,8 @@ class Controller(object):
         states = self._pair_states_recursive(session, folder_state)
         return states, path
         
-    def children_states_as_files(self, folder_path):
-        states, path = self._children_states(folder_path)
+    def children_states_as_files(self, folder_path, session=None):
+        states, path = self._children_states(folder_path, session=session)
         if not path or not states:
             return states
         else:
@@ -317,8 +319,8 @@ class Controller(object):
                     for s, pair_state in states
                     if s.local_parent_path == path]
 
-    def children_states_as_paths(self, folder_path):
-        states, path = self._children_states(folder_path)
+    def children_states_as_paths(self, folder_path, session=None):
+        states, path = self._children_states(folder_path, session=session)
         if not path or not states:
             return states
         else:
@@ -1162,10 +1164,12 @@ class Controller(object):
         if session is None:
             session = self.get_session()
         self.sync_condition.acquire()
-        num_synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
-                                filter(LastKnownState.local_path.in_(paths)).count()
-        if num_synced == 0:
-            self.sync_condition.wait()
+        num_synced = 0
+        while num_synced == 0:
+            self.sync_condition.wait(DEFAULT_DELAY)
+            num_synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
+                                    filter(LastKnownState.local_path.in_(paths)).count()
+                                
         synced = session.query(LastKnownState).filter(LastKnownState.pair_state == 'synchronized').\
                                 filter(LastKnownState.local_path.in_(paths)).all()
         self.sync_condition.release()

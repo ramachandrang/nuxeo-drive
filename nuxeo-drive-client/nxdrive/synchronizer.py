@@ -706,7 +706,7 @@ class Synchronizer(object):
            doc_pair.pair_state in SYNC_STATES:
             condition = self._controller.sync_condition
             condition.acquire()
-            condition.notify()
+            condition.notify_all()
             condition.release()
 
     def _synchronize_locally_modified(self, doc_pair, session,
@@ -1902,6 +1902,10 @@ class Synchronizer(object):
                     
                 session.commit()
                 log.debug("set My Docs and Others Docs subfolders as sync roots")
+            except NoResultFound:
+                log.debug("My Docs or Others Docs do not exist")
+            except MultipleResultsFound:
+                log.debug("multiple My Docs or Others Docs (programming error)")
             except Exception, e:
                 log.debug("error setting up My Docs and Others Docs as sync roots (%s)", e)
 

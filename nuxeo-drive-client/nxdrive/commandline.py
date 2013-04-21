@@ -418,7 +418,8 @@ class CliHandler(object):
 
     def wizard(self, options=None):
         from nxdrive.gui.wizard import startWizard
-        return startWizard(self.controller, options)
+        result = startWizard(self.controller, options)
+        return result
 
     def switch(self, options=None):
         if options.wizard:

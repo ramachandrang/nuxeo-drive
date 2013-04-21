@@ -707,7 +707,7 @@ class GuideThreePage(QWizardPage):
                                         "<br>{2} means you are signed in and connected.<br/>"
                                         "Note: an animated icon indicates synchronization is in progress."
                                         "<br>{3} shows you are offline.<br/>"
-                                        "To connect, <b>{4}click</b> {2} and select <b>Properties</b>. Select <b>Account</b> tab and enter your credentials. "
+                                        "To connect, <b>{4}click</b> {2} and select <b>Preferences...</b>. Select <b>Account</b> tab and enter your credentials. "
                                         "You will be automatically logged in from now on.</body></html>").\
                              format(sys_bar, Constants.PRODUCT_NAME, img_tag1, img_tag2, click_type))
                                 

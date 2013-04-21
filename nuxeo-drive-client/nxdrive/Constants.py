@@ -12,10 +12,10 @@ try:
 except ImportError:
     __version__ = '0.0.0.0'
 
-COMPANY_NAME = 'Sharp'
-PRODUCT_NAME = _('Cloud Portal Office')
-APP_NAME = PRODUCT_NAME + _(' Desktop')
-SHORT_APP_NAME = 'CpoDesktop'
+COMPANY_NAME = u'Sharp'
+PRODUCT_NAME = u'Cloud Portal Office'
+APP_NAME = PRODUCT_NAME + u' Desktop'
+SHORT_APP_NAME = u'CpoDesktop'
 OSX_APP_NAME = APP_NAME
 
 APP_STATE_RUNNING = 'running'
@@ -32,29 +32,29 @@ INFO_STATE_INVALID_CREDENTIALS = 'invalid_cred'
 INFO_STATE_INVALID_PROXY = 'invalid_proxy'
 
 DEFAULT_NXDRIVE_FOLDER = PRODUCT_NAME
-CONFIG_FILE = 'nxdrive.cfg'
+CONFIG_FILE = u'nxdrive.cfg'
 
 # TODO replace with CloudDesk url and admin(?) account
-CLOUDDESK_URL = r'https://qadm.sharpb2bcloud.com/app1'
+CLOUDDESK_URL = ur'https://qadm.sharpb2bcloud.com/app1'
 ACCOUNT = ''
-# CLOUDDESK_URL = r'http://localhost:8080/nuxeo'
-SERVICE_NAME = 'Cloud Portal Office'
+# CLOUDDESK_URL = ur'http://localhost:8080/nuxeo'
+SERVICE_NAME = u'Cloud Portal Office'
 
 if USE_LOCAL_SERVICE:
-    MAINTENANCE_SERVICE_URL = u'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
-    UPGRADE_SERVICE_URL = u'http://hbdisdlw7.enet.sharplabs.com/Maintenance/SoftwareUpdates.svc/json/'
+    MAINTENANCE_SERVICE_URL = ur'http://hbdisdlw7.enet.sharplabs.com/Maintenance/MaintenanceSchedule.svc/json/'
+    UPGRADE_SERVICE_URL = ur'http://hbdisdlw7.enet.sharplabs.com/Maintenance/SoftwareUpdates.svc/json/'
     # UPGRADE_SERVICE_URL = r'http://localhost:8000/upgrade/default/upgrade.json/'
 else:
-    MAINTENANCE_SERVICE_URL = u'https://qa-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
-    UPGRADE_SERVICE_URL = u'https://qa-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
+    MAINTENANCE_SERVICE_URL = ur'https://qa-mgmt.sharpb2bcloud.com/Maintenance/MaintenanceSchedule.svc/json/'
+    UPGRADE_SERVICE_URL = ur'https://qa-mgmt.sharpb2bcloud.com/Maintenance/SoftwareUpdates.svc/json/'
 
 INTERNAL_HTTP_PORT = 63111
 CLOUDDESK_UID = '0da71bd4-4aff-11e2-9c64-3c075442cb05'
-CLOUDDESK_REMOTE_NAME = "Nuxeo Drive"
+CLOUDDESK_REMOTE_NAME = u'Nuxeo Drive'
 APP_ID = CLOUDDESK_UID
-MY_DOCS = r'My Documents'
-OTHERS_DOCS = r'Other Documents'
-GUEST_FOLDER = r'Guest Folder'
+MY_DOCS = u'My Docs'
+OTHERS_DOCS = u'Other Docs'
+GUEST_FOLDER = u'Guest Folder'
 OTHERS_DOCS_UID = '3910c811-4977-11e2-8a7d-3c075442cb05'
 ROOT_CLOUDDESK = 0
 ROOT_MYDOCS = 1
@@ -102,10 +102,10 @@ elif sys.platform == 'win32':
     APP_IMG_WIZARD_WATERMARK = ':/watermark.png'
     APP_IMG_WIZARD_BANNER = ':/banner.png'
 
-COPYRIGHT_FILE = r'CloudDesk_EULA.txt'
-HELP_FILE = r'Cloud_Portal_Office_Help.pdf'
-ICON_OVERLAY_SYNC = r'nxdrive/data/icons/cpo-sync.ico'
-ICON_APP_ENABLED = r'CP_Red_Office_16x16_Online.png'
-ICON_APP_DISABLED = r'CP_Red_Office_16x16_Offline.png'
+COPYRIGHT_FILE = u'CloudDesk_EULA.txt'
+HELP_FILE = u'Cloud_Portal_Office_Help.pdf'
+ICON_OVERLAY_SYNC = u'nxdrive/data/icons/cpo-sync.ico'
+ICON_APP_ENABLED = u'CP_Red_Office_16x16_Online.png'
+ICON_APP_DISABLED = u'CP_Red_Office_16x16_Offline.png'
 
 

@@ -281,7 +281,10 @@ setup(
     **freeze_options
 )
 
-if old_version is not None:
-    with open(init_file, 'wb') as f:
-        f.write("__version__ = '%s'" % old_version)
-    print "Restored version to " + old_version
+################################################
+# Nuxeo Drive version
+#if old_version is not None:
+#    with open(init_file, 'wb') as f:
+#        f.write("__version__ = '%s'" % old_version)
+#    print "Restored version to " + old_version
+################################################
