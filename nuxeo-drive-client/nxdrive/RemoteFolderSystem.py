@@ -42,7 +42,7 @@ def get_model(session, folder_dlg):
             return None
         
         controller.synchronizer.get_folders(server_binding, update_roots=True, session=session,
-                         completion_notifier=folder_dlg.notify_folders_retrieved)
+                         completion_notifiers=folder_dlg.notify_folders_retrieved)
         
         sync_folder = session.query(SyncFolders).\
                         filter(SyncFolders.remote_parent == None).\

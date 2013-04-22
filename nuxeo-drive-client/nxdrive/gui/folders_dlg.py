@@ -33,6 +33,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
                              Constants.PRODUCT_NAME)
         if frontend is None:
             return
+        self.model = None
         self.frontend = frontend
         self.controller = self.frontend.controller
         self.server_binding = self.frontend.server_binding
@@ -42,8 +43,9 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         # TO DO this crashes the Python interpreter!!!
         self.communicator = Communicator()
         self.communicator.ancestorChanged.connect(self.set_ascendant_state)
-        # Note: connect this signal before running thread(s)
-        frontend.communicator.folders.connect(self.folders_changed)
+        # Note: connect this signals before running thread(s)
+        self.communicator.folders.connect(self.folders_changed)
+        self.frontend.communicator.folders.connect(self.folders_changed)
 
         try:
             self.model = get_model(frontend.controller.get_session(), self)
@@ -65,8 +67,11 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
             label.setAlignment(Qt.AlignHCenter)
             self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
 
+
     @Slot(str)
     def folders_changed(self, local_folder):
+        if self.model is None:
+            self.communicator.folders.emit(self.server_binding.local_folder)
         session = self.frontend.controller.get_session()
         root = self.model.invisibleRootItem().child(0)
         update_model(session, root, local_folder)
@@ -248,7 +253,5 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
 
 
     def notify_folders_retrieved(self, local_folder):
-        # Slot is not called!!
-        self.communicator.folders.emit(local_folder)
-        # call the function directly
-        self.folders_changed(local_folder)
+        self.communicator.folders.emit(self.server_binding.local_folder)
+

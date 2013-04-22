@@ -228,7 +228,7 @@ class Communicator(QObject):
     invalid_proxy = Signal(str, str)
     message = Signal(str, str, QSystemTrayIcon.MessageIcon)
     error = Signal(str, str, QMessageBox.StandardButton)
-    folders = Signal()
+    folders = Signal(str)
     messageReceived = Signal(str)
 
     def __init__(self):

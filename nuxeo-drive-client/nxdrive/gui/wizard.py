@@ -548,18 +548,22 @@ class InstallOptionsPage(QWizardPage):
             # get the server binding for authenticated user and server
             server_binding = self.wizard().server_binding
             # retrieve folders for typical setup
-            synchronizer = self.controller.synchronizer
+            synchronizer = self.wizard().controller.synchronizer
             synchronizer.get_folders(server_binding, update_roots=True, 
-                 completion_notifier=synchronizer.notify_folders_retrieved)
+                 completion_notifiers=[synchronizer.notify_folders_retrieved,
+                                       self.notify_folders_retrieved,])
             
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
         except Exception as e:
-            pass
+            log.debug('Failed to get folders: %s', e)
         finally:
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
 
+    def notify_folders_retrieved(self, local_folder):
+        self.wizard().communicator.folders.emit(local_folder)
+                
     def validatePage(self):
         if not self.rdButtonAdvanced.isChecked():
             # 'typical' route
@@ -581,27 +585,27 @@ class InstallOptionsPage(QWizardPage):
                 os.makedirs(folder)
 
             # if no root binding  exists, bind everything
-            session = self.wizard().session
-            count = session.query(SyncFolders).\
-                   filter(SyncFolders.bind_state == True).count()
-            if count == 0:
-                # check top-level folders as sync roots
-                self.wizard().controller.synchronizer.check_toplevel_folders(session=session)
-
-                # set the synchronized roots
-                app = QApplication.instance()
-                process_filter = EventFilter(self)
-                app.setOverrideCursor(Qt.WaitCursor)
-                self.installEventFilter(process_filter)
-                try:
-                    self.wizard().controller.synchronizer.set_roots()
-                except Exception as e:
-                    username = self.field('username')
-                    log.error(self.tr("Unable to set roots on '%s' for user '%s' (%s)"),
-                                        Constants.CLOUDDESK_URL, username, str(e))
-                finally:
-                    app.restoreOverrideCursor()
-                    self.removeEventFilter(process_filter)
+#            session = self.wizard().session
+#            count = session.query(SyncFolders).\
+#                   filter(SyncFolders.bind_state == True).count()
+#            if count == 0:
+#                # check top-level folders as sync roots
+#                self.wizard().controller.synchronizer.check_toplevel_folders(session=session)
+#
+#                # set the synchronized roots
+#                app = QApplication.instance()
+#                process_filter = EventFilter(self)
+#                app.setOverrideCursor(Qt.WaitCursor)
+#                self.installEventFilter(process_filter)
+#                try:
+#                    self.wizard().controller.synchronizer.set_roots()
+#                except Exception as e:
+#                    username = self.field('username')
+#                    log.error(self.tr("Unable to set roots on '%s' for user '%s' (%s)"),
+#                                        Constants.CLOUDDESK_URL, username, str(e))
+#                finally:
+#                    app.restoreOverrideCursor()
+#                    self.removeEventFilter(process_filter)
 
         return True
 

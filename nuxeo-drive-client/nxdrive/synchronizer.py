@@ -10,6 +10,7 @@ import urllib2
 import socket
 import httplib
 import psutil
+from threading import Thread
 
 from PySide.QtCore import Signal
 from PySide.QtCore import Slot
@@ -1718,9 +1719,9 @@ class Synchronizer(object):
         return self._controller.get_remote_fs_client(server_binding)
 
     def get_folders(self, sb, update_roots=True,
-                    top_level_notifier=None,
-                    completion_notifier=None,
-                    subfolder_notifier=None,
+                    top_level_notifiers=None,
+                    completion_notifiers=None,
+                    subfolder_notifiers=None,
                     session=None):
         """Retrieve all folder hierarchy from server.
         If a server is not responding it is skipped.
@@ -1759,8 +1760,8 @@ class Synchronizer(object):
             # pass local_folder as an parameter and retrieve server_binding in the worker thread
             self.get_all_subfolders_async(sb.local_folder, mydocs_folder, othersdocs_folder,
                                           update_roots=update_roots,
-                                          completion_notifier=completion_notifier,
-                                          subfolder_notifier=subfolder_notifier)
+                                          completion_notifiers=completion_notifiers,
+                                          subfolder_notifiers=subfolder_notifiers)
             success = True
             session.commit()
         except POSSIBLE_NETWORK_ERROR_TYPES as e:
@@ -1773,8 +1774,9 @@ class Synchronizer(object):
         log.debug('end retrieving folders.')
         if success:
             try:
-                if dirty['add'] > 0 or dirty['del'] > 0:
-                    if top_level_notifier: top_level_notifier(sb)
+                if top_level_notifiers and (dirty['add'] > 0 or dirty['del'] > 0):
+                    for notifier in top_level_notifiers:
+                        notifier(sb)
             except KeyError:
                 pass            
 
@@ -1827,18 +1829,19 @@ class Synchronizer(object):
         if success:
             try:
                 if dirty['add'] > 0 or dirty['del'] > 0:
-                    if kwargs.get("completion_notifier", None): 
-                        kwargs["completion_notifier"](local_folder)
+                    if kwargs.get("completion_notifiers", None): 
+                        for notifier in kwargs["completion_notifiers"]:
+                            notifier(local_folder)
             except KeyError:
                 pass
                                   
     def get_all_subfolders_async(self, local_folder, mydocs, othersdocs, **kwargs):
-#        Thread(target = self._get_all_subfolders,
-#                                  args = (local_folder, mydocs, othersdocs,),
-#                                  kwargs = kwargs
-#                                ).start()        
+        Thread(target = self._get_all_subfolders,
+                                  args = (local_folder, mydocs, othersdocs,),
+                                  kwargs = kwargs
+                                ).start()        
                                 
-        self._get_all_subfolders(local_folder, mydocs, othersdocs, **kwargs)
+#        self._get_all_subfolders(local_folder, mydocs, othersdocs, **kwargs)
                                   
     def notify_folders_retrieved(self, local_folder):
         self.communicator.folders_ready.emit(local_folder)
