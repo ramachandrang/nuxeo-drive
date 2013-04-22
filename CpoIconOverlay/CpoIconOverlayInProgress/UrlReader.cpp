@@ -190,7 +190,7 @@ char* UrlReader::getJsonStringFromServer(const wchar_t* request, bool isThread) 
 				hRequest = NULL;
 
 	// Use WinHttpOpen to obtain a session handle.
-	hSession = WinHttpOpen( L"WinHTTP Example/1.0",  
+	hSession = WinHttpOpen( L"WinHTTP - OverlayInProgress",  
 							WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
 							WINHTTP_NO_PROXY_NAME, 
 							WINHTTP_NO_PROXY_BYPASS, 0);
