@@ -11,6 +11,8 @@ import socket
 import httplib
 import psutil
 from threading import Thread
+import weakref
+import inspect
 
 from PySide.QtCore import Signal
 from PySide.QtCore import Slot
@@ -180,7 +182,7 @@ def dicts(t):
 
 class AsyncCommunicator(QObject):
     # signal to indicate that folders have been retrieved
-    folders_ready = Signal(ServerBinding)
+    folders_ready = Signal(str, bool)
     
     
 class Synchronizer(object):
@@ -208,6 +210,7 @@ class Synchronizer(object):
     def __init__(self, controller):
         self._controller = controller
         self._frontend = None
+        self.mydocs_folder = None
         self._sync_operation = None
         self.loop_count = 0
         self.quota_exceeded = False
@@ -608,6 +611,7 @@ class Synchronizer(object):
         """Ensure that the list of bound roots match server-side info"""
 
         log.debug('start updating roots.')
+        roots_changed = False
         session = self.get_session() if session is None else session
         if not server_binding:
             server_binding = self.get_reusable_server_binding()
@@ -622,8 +626,19 @@ class Synchronizer(object):
                 nxclient = self.get_remote_client(server_binding, repository=repo)
                 remote_roots = nxclient.get_roots()
                 remote_roots_ids = [rr.uid for rr in remote_roots]
-                for folder in session.query(SyncFolders).filter(SyncFolders.local_folder == server_binding.local_folder).all():
+                current_roots = session.query(SyncFolders).\
+                                    filter(SyncFolders.local_folder == server_binding.local_folder).\
+                                    filter(SyncFolders.bind_state == True).\
+                                    all()
+                current_roots_ids = [r.remote_id for r in current_roots]
+                if set(remote_roots_ids) != set(current_roots_ids):
+                    roots_changed = True
+                    
+                for folder in session.query(SyncFolders).\
+                                    filter(SyncFolders.local_folder == server_binding.local_folder).\
+                                    all():
                     folder.bind_state = False
+                    
                 folders = session.query(SyncFolders).\
                                 filter(SyncFolders.local_folder == server_binding.local_folder).\
                                 filter(SyncFolders.remote_id.in_(remote_roots_ids)).\
@@ -648,6 +663,7 @@ class Synchronizer(object):
 
             session.commit()
         log.debug('end updating roots.')
+        return roots_changed
 
     def synchronize_one(self, doc_pair, session=None, status=None):
         """Refresh state and perform network transfer for a pair of documents."""
@@ -1330,7 +1346,7 @@ class Synchronizer(object):
 #                    server_binding = self._controller.get_server_binding(local_folder)
 #            # TEMPORARRY Move this to app startup
 #            self.get_folders(server_binding, update_roots=True, 
-#                             completion_notifier=self.notify_folders_retrieved)
+#                             completion_notifiers=[self.notify_folders_retrieved,])
 #        except Exception, e:
 #            # TODO temporary fix - eat exception
 #            log.debug("error retrieving folders: %s", str(e))
@@ -1745,20 +1761,24 @@ class Synchronizer(object):
                 return False
 
             self._update_clouddesk_root(sb.local_folder, session=session)
-            mydocs_folder = nxclient.get_mydocs()
-            mydocs_folder[u'title'] = Constants.MY_DOCS
-            self._update_docs(mydocs_folder, sb.local_folder, session=session)
+            self.mydocs_folder = nxclient.get_mydocs()
+            # replace title to 'My Docs' to be shown in the folders dialog
+            self.mydocs_folder[u'title'] = Constants.MY_DOCS
+            self._update_docs(self.mydocs_folder, sb.local_folder, session=session)
 
             # create a fake Others' Docs folder
             othersdocs_folder = {
                                  u'uid': Constants.OTHERS_DOCS_UID,
                                  u'title': Constants.OTHERS_DOCS,
-                                 u'repository': mydocs_folder[u'repository'],
+                                 u'repository': self.mydocs_folder[u'repository'],
                                  }
             self._update_docs(othersdocs_folder, sb.local_folder, session=session)
-            # cannot share ORM objects between threads
-            # pass local_folder as an parameter and retrieve server_binding in the worker thread
-            self.get_all_subfolders_async(sb.local_folder, mydocs_folder, othersdocs_folder,
+
+            if completion_notifiers:
+                completion_notifiers = dict((k, weakref.proxy(v)) for (k,v) in completion_notifiers.items())
+            if subfolder_notifiers:
+                subfolder_notifiers = dict((k, weakref.proxy(v)) for (k,v) in subfolder_notifiers.items())
+            self.get_all_subfolders_async(sb.local_folder, self.mydocs_folder, othersdocs_folder,
                                           update_roots=update_roots,
                                           completion_notifiers=completion_notifiers,
                                           subfolder_notifiers=subfolder_notifiers)
@@ -1775,8 +1795,9 @@ class Synchronizer(object):
         if success:
             try:
                 if top_level_notifiers and (dirty['add'] > 0 or dirty['del'] > 0):
-                    for notifier in top_level_notifiers:
-                        notifier(sb)
+                    for notifier_method, notifier_instance_or_class in top_level_notifiers.items():
+                        notifier = getattr(notifier_instance_or_class, notifier_method, None)
+                        if notifier: notifier()
             except KeyError:
                 pass            
 
@@ -1790,7 +1811,8 @@ class Synchronizer(object):
         dirty = {}
         dirty['add'] = 0
         dirty['del'] = 0
-            
+        roots_changed = False
+        
         try:
             nxclient = self.get_remote_client(server_binding)
             nodes = tree()
@@ -1814,7 +1836,7 @@ class Synchronizer(object):
             self._update_docs_subfolders(docId, nodes, local_folder, repo, session=session, dirty=dirty)
                 
             if kwargs.get("update_roots", True):
-                self.update_roots(server_binding=server_binding, session=session)
+                roots_changed = self.update_roots(server_binding=server_binding, session=session)
                 
             success = True
             session.commit()
@@ -1826,14 +1848,18 @@ class Synchronizer(object):
             log.debug("error retrieving subfolders: %s", e)
 
         log.debug('end retrieving subfolders.')
-        if success:
-            try:
-                if dirty['add'] > 0 or dirty['del'] > 0:
-                    if kwargs.get("completion_notifiers", None): 
-                        for notifier in kwargs["completion_notifiers"]:
-                            notifier(local_folder)
-            except KeyError:
-                pass
+        try:
+            if kwargs.get("completion_notifiers", None):
+                update = dirty['add'] > 0 or dirty['del'] > 0 or roots_changed
+                for notifier_method, notifier_instance_or_class in kwargs["completion_notifiers"].items():
+                    try:
+                        notifier = getattr(notifier_instance_or_class, notifier_method, None)
+                        if notifier: notifier(local_folder, update)
+                    except ReferenceError:
+                        log.debug('notifier has been destructed')
+                        continue
+        except KeyError:
+            pass            
                                   
     def get_all_subfolders_async(self, local_folder, mydocs, othersdocs, **kwargs):
         Thread(target = self._get_all_subfolders,
@@ -1843,12 +1869,13 @@ class Synchronizer(object):
                                 
 #        self._get_all_subfolders(local_folder, mydocs, othersdocs, **kwargs)
                                   
-    def notify_folders_retrieved(self, local_folder):
-        self.communicator.folders_ready.emit(local_folder)
+    def notify_folders_retrieved(self, local_folder, update):
+        self.communicator.folders_ready.emit(local_folder, update)
         
-    @Slot(ServerBinding)
-    def set_default_roots(self, local_folder):
+    @Slot(str, bool)
+    def set_default_roots(self, local_folder, update):
         log.debug("start setting default sync roots")
+        # ignore update argument
         session = self._controller.get_session()
         server_binding = self._controller.get_server_binding(local_folder, session=session)
         if not server_binding: return

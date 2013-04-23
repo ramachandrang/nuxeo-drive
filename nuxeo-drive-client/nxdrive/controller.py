@@ -286,7 +286,7 @@ class Controller(object):
         """List the status of the children of a folder
 
         The state of the folder is a summary of their descendant rather
-        than their own instric synchronization step which is of little
+        than their own intrinsic synchronization step which is of little
         use for the end user.
 
         """
@@ -305,6 +305,8 @@ class Controller(object):
             ).one()
         except NoResultFound:
             return [], path
+        except MultipleResultsFound:
+            raise Exception('multiple states for path: %s' % path)
 
         states = self._pair_states_recursive(session, folder_state)
         return states, path
@@ -1089,14 +1091,12 @@ class Controller(object):
         self.http_server = None
 
     def sync_status_app(self, state, folder, transition):
-        import json
         from cgi import escape
         import cherrypy
 
-        if state is None or folder is None or\
+        if not state or not folder or\
                 transition.lower() not in ("yes", "true", "t", "1", "no", "false", "f", "0"):
-            cherrypy.response.status = '400 Bad Request'
-            return None
+            raise ValueError('invalid parameters')
 
         # Always escape user input to avoid script injection
         state = escape(state)

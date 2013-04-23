@@ -8,8 +8,8 @@ from PySide.QtGui import QDialog, QStandardItem, QIcon, QDialogButtonBox
 from PySide.QtCore import Qt, QObject, Signal, Slot, QModelIndex
 
 from nxdrive.model import SyncFolders
-from ui_sync_folders import Ui_Dialog
-from nxdrive.RemoteFolderSystem import get_model, update_model
+from ui_sync_folders import Ui_FoldersDlg
+from nxdrive.RemoteFolderSystem import RemoteFoldersModel
 from nxdrive.RemoteFolderSystem import ID_ROLE, CHECKED_ROLE
 from nxdrive import Constants
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
@@ -20,17 +20,18 @@ log = get_logger(__name__)
 
 class Communicator(QObject):
     ancestorChanged = Signal(QStandardItem)
-    folders = Signal(str)
+    folders = Signal(str, bool)
 
 
-class SyncFoldersDlg(QDialog, Ui_Dialog):
+class SyncFoldersDlg(QDialog, Ui_FoldersDlg):
     def __init__(self, frontend = None, parent = None):
         super(SyncFoldersDlg, self).__init__(parent)
         self.setupUi(self)
         self.setWindowIcon(QIcon(Constants.APP_ICON_DIALOG))
         self.setWindowTitle(Constants.APP_NAME + self.tr(' Synced Folders'))
-        self.lblHelp.setText(self.tr('Select the folders from your %s account to sync with this computer.') % 
-                             Constants.PRODUCT_NAME)
+        self.help_message = self.tr('Select the folders from your %s account to sync with this computer.') %\
+                                    Constants.PRODUCT_NAME
+        self.lblHelp.setText(self.help_message)
         if frontend is None:
             return
         self.model = None
@@ -48,15 +49,13 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         self.frontend.communicator.folders.connect(self.folders_changed)
 
         try:
-            self.model = get_model(frontend.controller.get_session(), self)
-            if self.model is None:
-                log.debug('cannot retrieve model.')
-                return
-
-            self.treeView.setModel(self.model)
-            root = self.model.invisibleRootItem().child(0)
-            self.clear_all(root)
-            self.set_checked_state(root)
+            self.lblHelp.setText(self.help_message + self.tr(" <font color='#00BFFF'>Retrieving data...</font>"))
+            self.model = RemoteFoldersModel(self)
+            self.model.populate_model()
+            self.root = self.model.get_model().invisibleRootItem().child(0)
+            self.treeView.setModel(self.model.get_model())
+            self.clear_all(self.root)
+            self.set_checked_state(self.root)
             self.expand()
             # hide header and all columns but first one
             self.treeView.setHeaderHidden(True)
@@ -68,13 +67,14 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
             self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
 
 
-    @Slot(str)
-    def folders_changed(self, local_folder):
-        if self.model is None:
-            self.communicator.folders.emit(self.server_binding.local_folder)
+    @Slot(str, bool)
+    def folders_changed(self, local_folder, update):
         session = self.frontend.controller.get_session()
-        root = self.model.invisibleRootItem().child(0)
-        update_model(session, root, local_folder)
+        self.progressBar.setVisible(False)
+        self.lblHelp.setText(self.help_message)
+        if update:
+            self.model.update_model(self.root, local_folder, session=session)
+            self.set_checked_state(self.root)
 
     def set_checked_state(self, parent):
         """Initialize the state of all checkboxes based on the model."""
@@ -112,7 +112,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
 
 
     def item_clicked(self, index):
-        item = self.model.itemFromIndex(index)
+        item = self.model.get_model().itemFromIndex(index)
         if not item.isEnabled():
             return
         # get status of all children
@@ -203,8 +203,7 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
 
     def accept(self):
         # update the sync_folders db table
-        root = self.model.invisibleRootItem().child(0)
-        self._update_state(root)
+        self._update_state(self.root)
         super(SyncFoldersDlg, self).accept()
 
     def _update_state(self, parent, clear = False):
@@ -251,7 +250,6 @@ class SyncFoldersDlg(QDialog, Ui_Dialog):
         except Exception, e:
             log.debug('failed to update folder state: %s', e)
 
-
-    def notify_folders_retrieved(self, local_folder):
-        self.communicator.folders.emit(self.server_binding.local_folder)
+    def notify_folders_retrieved(self, local_folder, update):
+        self.communicator.folders.emit(self.server_binding.local_folder, update)
 

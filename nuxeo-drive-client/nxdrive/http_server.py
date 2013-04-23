@@ -43,18 +43,18 @@ class HttpServer(object):
             
     @tools.json_out()
     def GET(self, state=None, folder=None, transition='false'):
+        # Already checked at server startup
 #        if self.app is None:
 #            cherrypy.response.status = '500 Internal Server Error'
 #            return {"error": "'sync_status_app' is not defined"}
-        
-        if isDebug():
+        try:
             return self.app(state, folder, transition)
-        else:
-            try:
-                return self.app(state, folder, transition)
-            except Exception, e:
-                cherrypy.response.status = '400 Bad Request'
-                return {'error': str(e)}
+        except ValueError, e:
+            cherrypy.response.status = '400 Bad Request'
+            return {'error': str(e)}
+        except Exception, e:
+            cherrypy.response.status = '500 Internal Server Error'
+            return {'error': str(e)}
             
     def start(self):
         conf = {

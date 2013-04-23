@@ -303,8 +303,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
             
         if self.server_binding:     
             self.controller.synchronizer.get_folders(self.server_binding, update_roots=True, 
-                             completion_notifiers=[self.controller.synchronizer.notify_folders_retrieved,
-                                                   self.notify_folders_retrieved,])
+                             completion_notifiers={'notify_folders_retrieved': self.controller.synchronizer,
+                                                   'notify_systray_folders_retrieved': self})
 
 
     def enable_trace(self, state):
@@ -1144,8 +1144,9 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                            detail,
                                            QtGui.QSystemTrayIcon.Information)
             
-    def notify_folders_retrieved(self, local_folder):
-        self.communicator.folders.emit(local_folder)
+    # NOT USED
+    def notify_systray_folders_retrieved(self, local_folder, update):
+        self.communicator.folders.emit(local_folder, update)
 
     def _is_new_version_available(self):
         try:

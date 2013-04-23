@@ -550,8 +550,8 @@ class InstallOptionsPage(QWizardPage):
             # retrieve folders for typical setup
             synchronizer = self.wizard().controller.synchronizer
             synchronizer.get_folders(server_binding, update_roots=True, 
-                 completion_notifiers=[synchronizer.notify_folders_retrieved,
-                                       self.notify_folders_retrieved,])
+                 completion_notifiers={'notify_folders_retrieved': synchronizer,
+                                       'notify_folders_retrieved': self})      
             
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
@@ -561,8 +561,9 @@ class InstallOptionsPage(QWizardPage):
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
 
-    def notify_folders_retrieved(self, local_folder):
-        self.wizard().communicator.folders.emit(local_folder)
+    # NOT USED
+    def notify_folders_retrieved(self, local_folder, update):
+        self.wizard().communicator.folders.emit(local_folder, update)
                 
     def validatePage(self):
         if not self.rdButtonAdvanced.isChecked():
@@ -571,7 +572,7 @@ class InstallOptionsPage(QWizardPage):
 
             if os.path.exists(folder) and os.listdir(folder) and not self.wizard().keep_location:
                 msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
-                                                          self.tr("Folder %s already exists. Do you want to use it?" % folder))
+                                                          self.tr("Folder %s already exists. Do you want to use it?") % folder)
                 msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one on the Advanced page.\n"
                                                   "Note that if this folder was used by a different user, some files/folders may not be synchronized correctly."))
                 msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -822,7 +823,7 @@ class AdvancedPage(QWizardPage):
         url = Constants.CLOUDDESK_URL
         if os.path.exists(local_folder) and os.listdir(local_folder) and not self.wizard().keep_location:
             msgbox = QMessageBox(QMessageBox.Warning, self.tr("Folder Exists"),
-                                                      self.tr("Folder %s already exists. Do you want to use it?" % local_folder))
+                                                      self.tr("Folder %s already exists. Do you want to use it?") % local_folder)
             msgbox.setInformativeText(self.tr("Select <b>Yes</b> to keep this location or <b>No</b> to select a different one.\n"
                                               "Note that if this folder was used by a different user, some files/folders may not be synchronized correctly."))
             msgbox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
