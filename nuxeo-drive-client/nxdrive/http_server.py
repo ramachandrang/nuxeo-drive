@@ -43,18 +43,14 @@ class HttpServer(object):
             
     @tools.json_out()
     def GET(self, state=None, folder=None, transition='false'):
-#        if self.app is None:
-#            cherrypy.response.status = '500 Internal Server Error'
-#            return {"error": "'sync_status_app' is not defined"}
-        
-        if isDebug():
+        try:
             return self.app(state, folder, transition)
-        else:
-            try:
-                return self.app(state, folder, transition)
-            except Exception, e:
-                cherrypy.response.status = '400 Bad Request'
-                return {'error': str(e)}
+        except ValueError, e:
+            cherrypy.response.status = '400 Bad Request'
+            return {'error': str(e)}
+        except Exception, e:
+            cherrypy.response.status = '500 Internal Server Error'
+            return {'error': str(e)}
             
     def start(self):
         conf = {
@@ -66,11 +62,24 @@ class HttpServer(object):
                 'request.dispatch': cherrypy.dispatch.MethodDispatcher(),
             }
         }
+        self.rootfolder = RootFolder(self.controller)
         self.stop = Terminator()
         cleanup = getattr(self.controller, 'status_thread_cleanup', None)
         if cleanup is not None:
             cherrypy.engine.subscribe('exit', cleanup)
         cherrypy.quickstart(self, '/', conf)
         
+class RootFolder(object):
+    exposed = True
+    def __init__(self, controller):
+        self.controller = controller
+        
+    @tools.json_out()
+    def GET(self):
+        server_binding = self.controller.get_reusable_server_binding()
+        local_folder = server_binding.local_folder if server_binding else None
+        json_struct = { 'root': local_folder }
+        cherrypy.response.status = '200 OK'
+        return json_struct
     
         
