@@ -9,7 +9,7 @@ set INNO_COMPILER=c:\Program Files (x86)\Inno Setup 5\iscc
 set DLL_DIR=CpoIconOverlay
 set DLL_BUILD_SCRIPT=build-dlls.bat
 set CPO_EXE=CpoDesktop.exe
-set VERSION=0.2.1
+set VERSION=0.2.3
 
 pushd
 
