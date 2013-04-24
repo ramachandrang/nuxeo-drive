@@ -5,7 +5,7 @@ from __future__ import division
 import sys
 import os
 from urllib import quote
-from threading import local
+import threading
 import os.path
 import urllib2
 import urlparse
@@ -160,6 +160,13 @@ class StopSyncingHandler(EventHandler):
         if frontend is not None:
             frontend.notify_offline(server_binding.local_folder, event)
 
+class BindingNotFound(Exception):
+    def __init__(self, local_folder):
+        self.local_folder = local_folder
+        
+    def __str__(self):
+        return 'root folder is %s' % self.local_folder
+    
 class Controller(object):
     """Manage configuration and perform Nuxeo Drive Operations
 
@@ -296,7 +303,9 @@ class Controller(object):
         try:
             binding, path = self._binding_path(folder_path, session=session)
         except NotFound:
-            return [], None
+            server_binding = self.get_reusable_server_binding()
+            local_folder = server_binding.local_folder if server_binding else None
+            raise BindingNotFound(local_folder)
 
         try:
             folder_state = session.query(LastKnownState).filter_by(
@@ -433,7 +442,12 @@ class Controller(object):
             if raise_if_missing:
                 raise RuntimeError(msg)
             return None
-
+        except Exception as e:
+            msg = str(e)
+            if raise_if_missing:
+                raise RuntimeError(msg)
+            return None
+        
     def list_server_bindings(self, session=None):
         if session is None:
             session = self.get_session()
@@ -1151,6 +1165,10 @@ class Controller(object):
 
             json_struct['list'] = folder_list
             cherrypy.response.status = '200 OK'
+            return json_struct
+        except BindingNotFound as e:
+            cherrypy.response.status = '409 Conflict'
+            json_struct = { 'root': e.local_folder }
             return json_struct
         except:
             session.rollback()
