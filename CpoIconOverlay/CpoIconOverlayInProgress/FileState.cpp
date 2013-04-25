@@ -15,7 +15,7 @@ FileState::FileState(LPCTSTR userPath)
 	urlPathEncode(path);
 
 	urlReader = UrlReader::UrlReader(path, &myFileSyncMap);
-	urlReader.parse();
+	//urlReader.parse();
 	time(&cacheResetTimer);
 }
 
@@ -41,14 +41,16 @@ void FileState::isValidCache()
 bool FileState::inProgress(LPCTSTR path)
 {
 	isValidCache();
-	//clearCache();
+
+	//make sure we have connection
+	if(urlReader.getConnState() == false){
+		return false;
+	}
 	
 	TCHAR file[MAX_PATH];
 	_tcscpy(file, path);
 	urlPathEncode(file);
 
-	//MessageBox(NULL, path, L"File Path InProgress", MB_OK);
-	printf("FilePath = %s", path);
 	TCHAR * tempPtr = new TCHAR[MAX_PATH];
 	_tcscpy(tempPtr, file);
 	bool isValidFolder = false;
@@ -70,15 +72,15 @@ bool FileState::inProgress(LPCTSTR path)
 			urlReader.parseSubFolder(fileFolder);
 			if(myFileSyncMap.find(file) != myFileSyncMap.end()){
 				urlReader.longPull(tempPtr);
-				delete fileFolder;
-				fileFolder = NULL;
+				//delete fileFolder;
+				//fileFolder = NULL;
 				//MessageBox(NULL, path, L"return true after query", MB_OK);
 				//urlReader.longPull(file);
 				return true;
 			}
 		}
-		delete fileFolder;
-		fileFolder = NULL;
+		//delete fileFolder;
+		//fileFolder = NULL;
 		if(isValidFolder && isValidConn){
 			//MessageBox(NULL, path, L"return false after everything", MB_OK);
 			//SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSHNOWAIT, path, NULL);
@@ -101,7 +103,11 @@ void FileState::clearCache(){//clears map to reset cache
 }
 
 bool FileState::isValidCloudFolder(TCHAR * folder){
-	TCHAR * sub = _tcsstr(folder, TEXT("Cloud Portal Office"));
+	//urlReader.getUserRootPath();
+	//TCHAR * sub = _tcsstr(folder, TEXT("Cloud Portal Office"));
+	TCHAR * userPath = urlReader.getUserRootPath();
+	urlPathEncode(userPath);
+	TCHAR * sub = _tcsstr(folder, userPath);
 	if(sub == NULL){
 		return false;
 	}else{

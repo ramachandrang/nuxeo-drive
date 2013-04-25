@@ -18,7 +18,7 @@ typedef std::map<std::wstring, bool> syncMap;
 class UrlReader
 {
 private:
-	TCHAR * userPath;
+	TCHAR userPath[MAX_PATH];
 	syncMap * fileStateSyncedMap;
 	bool isValidConn;
 	TCHAR currDir[MAX_PATH];
@@ -31,6 +31,7 @@ public:
 	void UrlReader::performParse(TCHAR * urlParams);
 	void UrlReader::longPull(TCHAR * filePath);
 	bool UrlReader::getConnState();
+	void UrlReader::queryForUserRoot();
 	void UrlReader::parseJsonValue(json_value *val);
 	char* UrlReader::getJsonStringFromServer(const wchar_t* request, bool isThread);
 	void UrlReader::urlPathEncode(TCHAR * path);

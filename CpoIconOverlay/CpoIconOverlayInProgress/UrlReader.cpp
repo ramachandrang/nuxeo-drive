@@ -11,13 +11,7 @@ UrlReader::UrlReader()
 UrlReader::UrlReader(LPCTSTR inputPath, syncMap * map)
 {
 	//add Cloud Desk folder to path
-	TCHAR * doc = TEXT("/Documents/Cloud Portal Office/My Documents");
-	TCHAR rootFolder[MAX_PATH];
-	_tcscpy(rootFolder, inputPath);
-	StringCchCat(rootFolder, MAX_PATH, doc);
-
-	userPath = new TCHAR [MAX_PATH];
-	_tcscpy(userPath, rootFolder);
+	queryForUserRoot();
 
 	this->fileStateSyncedMap = map;
 
@@ -41,7 +35,7 @@ void UrlReader::parseSubFolder(TCHAR * subFolder){
 }
 
 void UrlReader::performParse(TCHAR * urlParams){
-	char* jsonStringToParse = UrlReader::getJsonStringFromServer(urlParams, false);
+	char* jsonStringToParse = getJsonStringFromServer(urlParams, false);
 	if(isValidConn){
 		json_settings settings;
 		memset(&settings, 0, sizeof (json_settings)); 
@@ -103,17 +97,33 @@ void UrlReader::longPull(TCHAR * filePath){
 		}
 		i++;
 	}
-	//refresh parent folder icon
-	SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSH, parentFolder, NULL);
 	_tcscpy(ps.folderPath, temp);
-	delete temp;
-	temp = NULL;
+	//delete temp;
+	//temp = NULL;
 	ps.urlReader = this;
 	//unsigned int lastOcc = _tcslen(filePath) - _tcslen(_tcsrchr(filePath, '/'));
 	//_tcsncpy(ps.filePath, filePath, folderLen);
 	//_tcsncpy(ps.folderPath, filePath, _tcslen(filePath) - _tcslen(_tcsrchr(filePath, '/')));
 
 	_beginthread(longPullThread, 0, (void *)&ps);
+	//refresh parent folder icon
+	SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSH, parentFolder, NULL);
+}
+
+void UrlReader::queryForUserRoot(){
+	if(isValidConn){
+		TCHAR * rootFolderQuery = TEXT("/rootfolder");
+		char * rootPath = getJsonStringFromServer(rootFolderQuery, false);
+		if(rootPath){
+			json_settings settings;
+			memset(&settings, 0, sizeof (json_settings)); 
+			char error[256];
+			json_value * jsonRootPath = json_parse_ex(&settings, rootPath, error);
+			char * path = jsonRootPath->u.object.values->value->u.string.ptr;
+
+			MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, userPath, MAX_PATH);
+		}	
+	}
 }
 
 TCHAR * UrlReader::getUserRootPath(){
@@ -309,8 +319,6 @@ TCHAR * UrlReader::getFileFolder(TCHAR * path){
 	_tcscpy(folder, file);
 	return folder;
 }
-
-
 
 UrlReader::~UrlReader(void)
 {
