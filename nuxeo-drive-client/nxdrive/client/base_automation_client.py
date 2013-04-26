@@ -27,7 +27,8 @@ from nxdrive.utils import classproperty
 from nxdrive.utils import ProxyConnectionError, ProxyConfigurationError
 from nxdrive.utils import get_maintenance_message
 from nxdrive import Constants
-from nxdrive import DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION, DEBUG_UNAVAILABLE
+from nxdrive import DEBUG_QUOTA_EXCEPTION, DEBUG_MAINTENANCE_EXCEPTION
+from nxdrive import DEBUG_UNAVAILABLE, USE_CLOUDDESK_TOKEN
 
 log = get_logger(__name__)
 
@@ -723,19 +724,30 @@ class BaseAutomationClient(object):
     def request_token(self, revoke=False):
         """Request and return a new token for the user"""
 
-        parameters = {
-            'deviceId': self.device_id,
-            'applicationName': self.application_name,
-            'computerName': platform.node(),
-            'permission': self.permission,
-            'revoke': 'true' if revoke else 'false',
-        }
+        if USE_CLOUDDESK_TOKEN:
+            parameters = {
+                'deviceId': self.device_id,
+                'applicationName': self.application_name,
+                'computerName': platform.node(),
+                'permission': self.permission,
+                'revoke': 'true' if revoke else 'false',
+            }
+        else:
+            parameters = {
+                'deviceId': self.device_id,
+                'applicationName': self.application_name,
+                'permission': self.permission,
+                'revoke': 'true' if revoke else 'false',
+            }            
         device_description = DEVICE_DESCRIPTIONS.get(sys.platform)
         if device_description:
             parameters['deviceDescription'] = device_description
 
-        # new CloudDesk service to register token with computer name
-        url = self.server_url + 'authentication/cloudtoken?'
+        if USE_CLOUDDESK_TOKEN:               
+            # new CloudDesk service to register token with computer name
+            url = self.server_url + 'authentication/cloudtoken?'
+        else:
+            url = self.server_url + 'authentication/token?'
         url += urlencode(parameters)
 
         headers = self._get_common_headers()
