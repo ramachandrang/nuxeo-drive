@@ -526,6 +526,9 @@ class Controller(object):
                                    remote_state='synchronized')
             session.add(state)
             session.commit()
+            if session.query(SyncFolders).count() == 0:
+                self.synchronizer.get_folders(server_binding, update_roots=True, 
+                                 completion_notifiers={'notify_folders_retrieved': self.synchronizer})
             return server_binding
         except Exception as e:
             log.debug("Failed to bind server: %s", str(e))

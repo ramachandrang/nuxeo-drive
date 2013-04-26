@@ -21,6 +21,7 @@ from PySide.QtCore import QObject
 from sqlalchemy import not_, or_, and_
 from sqlalchemy import asc, desc
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+from sqlalchemy.sql.expression import bindparam
 
 from collections import defaultdict, Iterable
 from nxdrive.client import DEDUPED_BASENAME_PATTERN
@@ -210,7 +211,6 @@ class Synchronizer(object):
     def __init__(self, controller):
         self._controller = controller
         self._frontend = None
-        self.mydocs_folder = None
         self._sync_operation = None
         self.loop_count = 0
         self.quota_exceeded = False
@@ -625,27 +625,42 @@ class Synchronizer(object):
             for repo in repositories:
                 nxclient = self.get_remote_client(server_binding, repository=repo)
                 remote_roots = nxclient.get_roots()
-                remote_roots_ids = [rr.uid for rr in remote_roots]
+                remote_roots_ids = set([rr.uid for rr in remote_roots])
                 current_roots = session.query(SyncFolders).\
                                     filter(SyncFolders.local_folder == server_binding.local_folder).\
                                     filter(SyncFolders.bind_state == True).\
                                     all()
-                current_roots_ids = [r.remote_id for r in current_roots]
-                if set(remote_roots_ids) != set(current_roots_ids):
-                    roots_changed = True
+                current_roots_ids = set([r.remote_id for r in current_roots])
+                if set(remote_roots_ids) == set(current_roots_ids):
+                    continue
+                
+#                for folder in session.query(SyncFolders).\
+#                                    filter(SyncFolders.local_folder == server_binding.local_folder).\
+#                                    all():
+#                    folder.bind_state = False
                     
-                for folder in session.query(SyncFolders).\
-                                    filter(SyncFolders.local_folder == server_binding.local_folder).\
-                                    all():
-                    folder.bind_state = False
-                    
-                folders = session.query(SyncFolders).\
+#                folders = session.query(SyncFolders).\
+#                                filter(SyncFolders.local_folder == server_binding.local_folder).\
+#                                filter(SyncFolders.remote_id.in_(remote_roots_ids)).\
+#                                all()
+#                for folder in folders:
+#                    folder.check_state = folder.bind_state = True
+                folders_ids_to_bind = remote_roots_ids - current_roots_ids
+                folders_to_bind = session.query(SyncFolders).\
                                 filter(SyncFolders.local_folder == server_binding.local_folder).\
-                                filter(SyncFolders.remote_id.in_(remote_roots_ids)).\
+                                filter(SyncFolders.remote_id.in_(folders_ids_to_bind)).\
                                 all()
-                for folder in folders:
+                for folder in folders_to_bind:
                     folder.check_state = folder.bind_state = True
                     
+                folders_ids_to_unbind = current_roots_ids - remote_roots_ids
+                folders_to_unbind = session.query(SyncFolders).\
+                                filter(SyncFolders.local_folder == server_binding.local_folder).\
+                                filter(SyncFolders.remote_id.in_(folders_ids_to_unbind)).\
+                                all()
+                for folder in folders_to_unbind:
+                    folder.check_state = folder.bind_state = False                   
+                     
                 # TT#2112 - check Others Docs although is not reported by the server!!
                 others_subfolders = session.query(SyncFolders).\
                                         filter(SyncFolders.local_folder == server_binding.local_folder).\
@@ -653,15 +668,18 @@ class Synchronizer(object):
                                         all()
                         
                 bind_states = [fld.bind_state for fld in others_subfolders]
+                others_folder = session.query(SyncFolders).\
+                                        filter(SyncFolders.local_folder == server_binding.local_folder).\
+                                        filter(SyncFolders.remote_id == Constants.OTHERS_DOCS_UID).\
+                                        one()
                 # all() return True for an empty list
                 if all(bind_states) and len(bind_states) > 0:
-                    others_folder = session.query(SyncFolders).\
-                                            filter(SyncFolders.local_folder == server_binding.local_folder).\
-                                            filter(SyncFolders.remote_id == Constants.OTHERS_DOCS_UID).\
-                                            one()
                     others_folder.check_state = True
-
-            session.commit()
+                else:
+                    others_folder.check_state = False
+                    
+                session.commit()
+            # end repo loop
         log.debug('end updating roots.')
         return roots_changed
 
@@ -1706,7 +1724,7 @@ class Synchronizer(object):
                     'binding user=%s is different from exception user=%s' % (server_binding.remote_user, e.user_id)
 
             server_binding.update_server_maintenance_status(e.retry_after)
-            self.persist_server_event2(e.url, e.user_id, str(e), 'maintenance', session=session)
+            self.persist_server_event2(e.url, e.user_id, '%s\n%s' % (e.msg, e.detail), 'maintenance', data1=e.data1, data2=e.data2, session=session)
             if self._frontend is not None:
                 self._frontend.notify_maintenance_mode(server_binding.local_folder, e.msg, e.detail)
             return False
@@ -1734,20 +1752,25 @@ class Synchronizer(object):
     def get_remote_fs_client(self, server_binding):
         return self._controller.get_remote_fs_client(server_binding)
 
+    def get_mydocs(self, server_binding, session=None):
+        if session is None:
+            session = self.get_session()
+        nxclient = self.get_remote_client(server_binding)
+        if not nxclient.is_addon_installed():
+            return False
+        return nxclient.get_mydocs()
+            
     def get_folders(self, sb, update_roots=True,
                     top_level_notifiers=None,
                     completion_notifiers=None,
                     subfolder_notifiers=None,
+                    threads=None,
                     session=None):
         """Retrieve all folder hierarchy from server.
         If a server is not responding it is skipped.
         """
 
         log.debug('start retrieving folders.')
-        dirty = {}
-        dirty['add'] = 0
-        dirty['del'] = 0
-        success = False
         if session is None:
             session = self.get_session()
 
@@ -1756,50 +1779,43 @@ class Synchronizer(object):
             return False
         
         try:
-            nxclient = self.get_remote_client(sb)
-            if not nxclient.is_addon_installed():
-                return False
-
+            mydocs_folder = self.get_mydocs(sb, session=session)
+            if not mydocs_folder: return
+            
             self._update_clouddesk_root(sb.local_folder, session=session)
-            self.mydocs_folder = nxclient.get_mydocs()
             # replace title to 'My Docs' to be shown in the folders dialog
-            self.mydocs_folder[u'title'] = Constants.MY_DOCS
-            self._update_docs(self.mydocs_folder, sb.local_folder, session=session)
+            mydocs_folder[u'title'] = Constants.MY_DOCS
+            self._update_docs(mydocs_folder, sb.local_folder, session=session)
 
             # create a fake Others' Docs folder
             othersdocs_folder = {
                                  u'uid': Constants.OTHERS_DOCS_UID,
                                  u'title': Constants.OTHERS_DOCS,
-                                 u'repository': self.mydocs_folder[u'repository'],
+                                 u'repository': mydocs_folder[u'repository'],
                                  }
             self._update_docs(othersdocs_folder, sb.local_folder, session=session)
-
+            session.commit()
+            
             if completion_notifiers:
                 completion_notifiers = dict((k, weakref.proxy(v)) for (k,v) in completion_notifiers.items())
             if subfolder_notifiers:
                 subfolder_notifiers = dict((k, weakref.proxy(v)) for (k,v) in subfolder_notifiers.items())
-            self.get_all_subfolders_async(sb.local_folder, self.mydocs_folder, othersdocs_folder,
+            self.get_all_subfolders_async(sb.local_folder, mydocs_folder, othersdocs_folder,
                                           update_roots=update_roots,
                                           completion_notifiers=completion_notifiers,
-                                          subfolder_notifiers=subfolder_notifiers)
-            success = True
-            session.commit()
+                                          subfolder_notifiers=subfolder_notifiers,
+                                          threads=threads)
+#            success = True
         except POSSIBLE_NETWORK_ERROR_TYPES as e:
             # Ignore expected possible network related errors
             log.debug("network error retrieving folders: %s", e)
-            success = self._handle_network_error(sb, e, session=session)
+            self._handle_network_error(sb, e, session=session)
+            if isinstance(e, MaintenanceMode):
+                raise e
         except Exception as e:
             log.debug("error retrieving folders: %s", e)
 
-        log.debug('end retrieving folders.')
-        if success:
-            try:
-                if top_level_notifiers and (dirty['add'] > 0 or dirty['del'] > 0):
-                    for notifier_method, notifier_instance_or_class in top_level_notifiers.items():
-                        notifier = getattr(notifier_instance_or_class, notifier_method, None)
-                        if notifier: notifier()
-            except KeyError:
-                pass            
+        log.debug('end retrieving folders.')         
 
     def _get_all_subfolders(self, local_folder, mydocs, othersdocs, **kwargs):
         log.debug('start retrieving subfolders.')    
@@ -1851,6 +1867,8 @@ class Synchronizer(object):
         try:
             if kwargs.get("completion_notifiers", None):
                 update = dirty['add'] > 0 or dirty['del'] > 0 or roots_changed
+                # Force an update
+                update = True
                 for notifier_method, notifier_instance_or_class in kwargs["completion_notifiers"].items():
                     try:
                         notifier = getattr(notifier_instance_or_class, notifier_method, None)
@@ -1862,12 +1880,16 @@ class Synchronizer(object):
             pass            
                                   
     def get_all_subfolders_async(self, local_folder, mydocs, othersdocs, **kwargs):
-        Thread(target = self._get_all_subfolders,
+        thread = Thread(target = self._get_all_subfolders,
                                   args = (local_folder, mydocs, othersdocs,),
                                   kwargs = kwargs
-                                ).start()        
-                                
-#        self._get_all_subfolders(local_folder, mydocs, othersdocs, **kwargs)
+                                )
+        try:
+            threads = kwargs['threads']
+            threads.append(weakref.proxy(thread))
+        except KeyError:
+            pass
+        thread.start()        
                                   
     def notify_folders_retrieved(self, local_folder, update):
         self.communicator.folders_ready.emit(local_folder, update)
@@ -2242,8 +2264,11 @@ class Synchronizer(object):
         if session is None:
             session = self._controller.get_session()
         try:
+            if not utc_time:
+                utc_time = datetime.utcnow()
             server_binding = session.query(ServerBinding).\
-                                        filter(and_(ServerBinding.server_url == url, ServerBinding.remote_user == user_id)).\
+                                        filter(bindparam('url', url).startswith(ServerBinding.server_url)).\
+                                        filter(ServerBinding.remote_user == user_id).\
                                         one()
             server_event = ServerEvent(server_binding.local_folder, message, message_type,
                                        utc_time=utc_time, data1=data1, data2=data2)

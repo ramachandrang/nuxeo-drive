@@ -33,13 +33,13 @@ class ProxyAuthnDlg(QDialog, Ui_ProxyAuthnDialog):
         if proxy is None:
             self.txtUser.clear()
             self.txtPwd.clear()
-            self.txtRealm.clear()
+#            self.txtRealm.clear()
         else:
             self.user = proxy.user
             self.pwd = proxy.pwd
             self.txtUser.setText(self.user)
             self.txtPwd.setText(self.pwd)
-            self.txtRealm.setText(self.realm)
+#            self.txtRealm.setText(self.realm)
 
     def applyChanges(self):
         invalidate = False
@@ -51,10 +51,10 @@ class ProxyAuthnDlg(QDialog, Ui_ProxyAuthnDialog):
         if pwd != self.pwd:
             self.pwd = pwd
             invalidate = True
-        realm = self.txtRealm.text()
-        if realm != self.realm:
-            self.realm = realm
-            invalidate = True
+#        realm = self.txtRealm.text()
+#        if realm != self.realm:
+#            self.realm = realm
+#            invalidate = True
             
         if invalidate:
             result = ProgressDialog.stopServer(self.frontend, parent=self)
@@ -63,7 +63,7 @@ class ProxyAuthnDlg(QDialog, Ui_ProxyAuthnDialog):
 
             settings.setValue('preferences/proxyUser', self.user)
             settings.setValue('preferences/proxyPwd', self.pwd)
-            settings.setValue('preferences/proxyRealm', self.realm)
+#            settings.setValue('preferences/proxyRealm', self.realm)
             settings.sync()
         else:
             result = ProgressDialog.OK_AND_NO_RESTART

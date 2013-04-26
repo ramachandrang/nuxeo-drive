@@ -285,7 +285,14 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 self.local_folder_text_changed = False
                 return
          
-        if not self.reuse_folder() and os.path.exists(folder) and os.listdir(folder):
+        if os.path.exists(folder):
+            if sys.platform == 'darwin':
+                folder_empty = all([f == '.DS_Store' for f in os.listdir(folder)])
+            else:
+                folder_empty = not os.listdir(folder)
+        else:
+            folder_empty = True
+        if not self.reuse_folder() and not folder_empty:
             error = QMessageBox(QMessageBox.Warning, self.tr("Path Error"),
                                                       self.tr("Folder %s already exists") % folder,
                                                       QMessageBox.Ok,
@@ -329,7 +336,14 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
 
         parent_folder = self.txtCloudfolder.text()
         local_folder = os.path.join(parent_folder, Constants.DEFAULT_NXDRIVE_FOLDER)
-        if not self.reuse_folder() and os.path.exists(local_folder) and os.listdir(local_folder):
+        if os.path.exists(local_folder):
+            if sys.platform == 'darwin':
+                folder_empty = all([f == '.DS_Store' for f in os.listdir(local_folder)])
+            else:
+                folder_empty = not os.listdir(local_folder)
+        else:
+            folder_empty = True
+        if not self.reuse_folder() and not folder_empty:
             msg = QMessageBox(QMessageBox.Warning, self.tr('Folder Exists'),
                               self.tr("The folder %s already exists.") % local_folder,
                               QMessageBox.Ok)
@@ -368,6 +382,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                                                                                 remote_password=self.values['password']
                                                                                 )
             self.frontend.local_folder = self.local_folder = local_folder
+
         return result
 
     def _disconnect(self):
@@ -511,7 +526,7 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
             if self.useProxy == ProxyInfo.PROXY_DIRECT:    
                 settings.setValue('preferences/proxyUser', '')
                 settings.setValue('preferences/proxyPwd', '')
-                settings.setValue('preferences/proxyRealm', '')
+#                settings.setValue('preferences/proxyRealm', '')
         elif useProxy and self.controller.proxy_changed():
             self.result = ProgressDialog.stopServer(self.frontend, parent=self)
             if self.result == ProgressDialog.CANCELLED:

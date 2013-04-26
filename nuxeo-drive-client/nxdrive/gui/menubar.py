@@ -42,6 +42,7 @@ from nxdrive.utils import create_settings
 from nxdrive.utils import find_data_path
 from nxdrive.model import RecentFiles
 from nxdrive.model import ServerEvent
+from nxdrive.model import SyncFolders
 from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
 from nxdrive.gui.info_dlg import InfoDlg
@@ -137,6 +138,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.controller = controller
         self.options = options
         self.communicator = Communicator.getCommunicator()
+        self.threads = []
         self.state = Constants.APP_STATE_STOPPED
         self.substate = Constants.APP_SUBSTATE_AVAILABLE
         self.worker = None
@@ -258,9 +260,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         # lock folders to prevent user deletion
         self.controller.lock_folder(local_folder)
-            
+        session = self.controller.get_session()
         if self.server_binding is not None:
-            session = self.controller.get_session()
             # reset older version events
             self.controller._reset_upgrade_info(self.server_binding, session=session)
             # reset the nag schedules
@@ -301,10 +302,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         else:
             self.notifications = settings.value('preferences/notifications', True)
             
-        if self.server_binding:     
+        if self.server_binding and session.query(SyncFolders).count() == 0:
             self.controller.synchronizer.get_folders(self.server_binding, update_roots=True, 
                              completion_notifiers={'notify_folders_retrieved': self.controller.synchronizer,
-                                                   'notify_systray_folders_retrieved': self})
+                                                   'notify_systray_folders_retrieved': self},
+                             threads=self.threads)
 
 
     def enable_trace(self, state):
@@ -766,7 +768,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 self._resumeSync()
             self.controller.stop()
         else:
-            # quit directly
+            # quit directly but wait for threads to finish
+            try:
+                [t.join() for t in self.threads]
+            except ReferenceError:
+                pass
             QtGui.QApplication.quit()
 
     def rebuild_menu(self):
@@ -1077,10 +1083,26 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                     msg = server_maint_event.message
                     if self.server_binding.maintenance:
                         icon = QMessageBox.Warning
+                    start_utc = datetime.strptime(server_maint_event.data1 , '%Y-%m-%d %H:%M:%S')
+                    end_utc = datetime.strptime(server_maint_event.data2 , '%Y-%m-%d %H:%M:%S')
+                    
+                    from_tz = tz.tzutc()
+                    to_tz = tz.tzlocal()
+                    #convert local time for message
+                    start_utc = start_utc.replace(tzinfo = from_tz)
+                    end_utc = end_utc.replace(tzinfo = from_tz)
+                    start_local = start_utc.astimezone(to_tz)
+                    end_local = end_utc.astimezone(to_tz)
+                    if msg.find('\n') == -1:
+                        main, detail = msg, ''
+                    else:
+                        main, detail = msg.split('\n')
+                    #reassign current local for detail
+                    detail = _("From %s to %s.") % (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
                 else:
-                    msg = self.tr('No maintenance is scheduled.\n')
+                    main, detail = self.tr('No maintenance is scheduled.\n'), ''
             except NoResultFound:
-                msg = self.tr('No maintenance is scheduled.\n')
+                main, detail = self.tr('No maintenance is scheduled.\n'), ''
             except Exception, e:
                 log.debug("error retrieving maintenance info (%s)", e)
                 return
@@ -1090,21 +1112,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox.setText(self.tr("Maintenance information"))
         msgbox.setStandardButtons(QMessageBox.Ok)
         msgbox.setDefaultButton(QMessageBox.Ok)
-        
-        start_utc = datetime.strptime(server_maint_event.data1 , '%Y-%m-%d %H:%M:%S')
-        end_utc = datetime.strptime(server_maint_event.data2 , '%Y-%m-%d %H:%M:%S')
-        
-        from_tz = tz.tzutc()
-        to_tz = tz.tzlocal()
-        #convert local time for message
-        start_utc = start_utc.replace(tzinfo = from_tz)
-        end_utc = end_utc.replace(tzinfo = from_tz)
-        start_local = start_utc.astimezone(to_tz)
-        end_local = end_utc.astimezone(to_tz)
-
-        main, detail = msg.split('\n')
-        #reassign current local for detail
-        detail = _("From %s to %s.") % (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         msgbox.setInformativeText(main)
         msgbox.setDetailedText(detail)
         msgbox.setIcon(icon)

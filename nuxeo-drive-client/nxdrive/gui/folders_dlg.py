@@ -11,6 +11,7 @@ from nxdrive.model import SyncFolders
 from ui_sync_folders import Ui_FoldersDlg
 from nxdrive.RemoteFolderSystem import RemoteFoldersModel
 from nxdrive.RemoteFolderSystem import ID_ROLE, CHECKED_ROLE
+from nxdrive.client import MaintenanceMode
 from nxdrive import Constants
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
@@ -54,22 +55,29 @@ class SyncFoldersDlg(QDialog, Ui_FoldersDlg):
             self.model.populate_model()
             self.root = self.model.get_model().invisibleRootItem().child(0)
             self.treeView.setModel(self.model.get_model())
-            self.clear_all(self.root)
-            self.set_checked_state(self.root)
-            self.expand()
-            # hide header and all columns but first one
-            self.treeView.setHeaderHidden(True)
-            self.treeView.resizeColumnToContents(0)
-        except Exception as ex:
-            label = self.lblHelp
-            label.setText("<font size='4' color='red'><bold>%s</bold></font>" % str(ex))
-            label.setAlignment(Qt.AlignHCenter)
-            self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
-
+            if self.root:
+                self.clear_all(self.root)
+                self.set_checked_state(self.root)
+                self.expand()
+                # hide header and all columns but first one
+                self.treeView.setHeaderHidden(True)
+                self.treeView.resizeColumnToContents(0)
+            return
+        except MaintenanceMode as e:
+            msg = '%s (%s)' % (e.msg, e.detail)
+            self.lblHelp.setText("<font size='3' color='red'><bold>%s</bold></font>" % msg)
+        except Exception:
+            self.lblHelp.setText("<font size='3' color='red'><bold>%s</bold></font>" % self.tr('Failed to retrieve folders'))
+ 
+        self.lblHelp.setAlignment(Qt.AlignHCenter)
+        self.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+        self.progressBar.reset()
+        self.progressBar.setVisible(False)
 
     @Slot(str, bool)
     def folders_changed(self, local_folder, update):
         session = self.frontend.controller.get_session()
+        self.progressBar.reset()
         self.progressBar.setVisible(False)
         self.lblHelp.setText(self.help_message)
         if update:
@@ -236,7 +244,9 @@ class SyncFoldersDlg(QDialog, Ui_FoldersDlg):
                         sync_folder.check_state = False
                     else:
                         sync_folder.check_state = True if checked > 0 else False
-                        clear = True
+                        # make an exception for Others Docs since it cannot be a synchronization root
+                        if folder_id != Constants.OTHERS_DOCS_UID:
+                            clear = True
     
             for i in range(parent.rowCount()):
                 self._update_state(parent.child(i), clear = clear)
