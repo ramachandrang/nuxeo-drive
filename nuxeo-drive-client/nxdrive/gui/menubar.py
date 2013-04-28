@@ -60,8 +60,19 @@ def default_expanded_nuxeo_drive_folder():
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_EX_NX_DRIVE_FOLDER = default_expanded_nuxeo_drive_folder()
 
-
 log = get_logger(__name__)
+
+# Keep Growl an optional dependency for now
+notifier = object
+if sys.platform == 'darwin':
+    try:
+        from gntp import notifier
+        from gntp import errors
+        log.debug("Growl binding successfully imported")
+    except ImportError:
+        log.warning(_("Growl is not installed: Mac notifications are disabled"))
+        pass
+
 
 def sync_loop(controller, **kwargs):
     """Wrapper to log uncaught exception in the sync thread"""
@@ -275,9 +286,23 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.communicator.message.connect(self.handle_message)
         self.communicator.invalid_credentials.connect(self.handle_invalid_credentials)
         self.communicator.invalid_proxy.connect(self.handle_invalid_proxy)
-        self.communicator.error.connect(self.handle_recoverable_error)
-        
+        self.communicator.error.connect(self.handle_recoverable_error)        
         self.communicator.messageReceived.connect(self.notify_another_instance)
+
+        if sys.platform == 'darwin':
+            # Mac notifications (using Growl)
+            self.growl = notifier.GrowlNotifier(
+                applicationName = Constants.APP_NAME,
+                notifications = ["New Updates","New Messages"],
+                defaultNotifications = ["New Messages"],
+#                port=23052,
+                # hostname = "computer.example.com", # Defaults to localhost
+                # password = "abc123" # Defaults to a blank password
+            )
+            try:
+                self.growl.register()
+            except errors.NetworkError as e:
+                log.debug('Failed to register with Growl (%s)', e)
 
         # Show 'up-to-date' notification message only once
         self.firsttime_pending_message = True
@@ -991,11 +1016,33 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def isQuitting(self):
         return self.state == Constants.APP_STATE_QUITTING
-        
+
     @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
     def handle_message(self, title, message, icon_type):
         if self.notifications:
-            self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
+            if sys.platform == 'darwin':
+                # Send the image with the growl notification
+                if icon_type == QtGui.QSystemTrayIcon.Information:
+                    icon = Constants.APP_ICON_NOTIFICATION
+                elif icon_type == QtGui.QSystemTrayIcon.Warning: 
+                    icon = Constants.APP_ICON_MENU_MAINT
+                elif icon_type == QtGui.QSystemTrayIcon.Critical:
+                    icon = Constants.APP_ICON_MENU_QUOTA
+                else:
+                    icon = None
+                if icon:
+                    image = QtCore.QResource(icon).data()
+                else:
+                    image = None
+                self.growl.notify(
+                    noteType = "New Messages",
+                    title = title,
+                    description = message,
+                    icon = image,
+                )
+            else:
+                self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
+
 
     def handle_message_clicked(self):
         info = self.get_binding_info(self.local_folder)

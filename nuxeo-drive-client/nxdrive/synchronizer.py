@@ -1519,14 +1519,13 @@ class Synchronizer(object):
             updated = False
             if doc_pair is not None:
                 if doc_pair.server_binding.server_url == s_url:
-                    new_info = client.get_info(
-                        remote_ref, raise_if_missing=False)
-                    if new_info is None:
+                    fs_item = change.get('fileSystemItem') 
+                    if fs_item is None:
                         log.debug("Mark doc_pair '%s' as deleted",
                                   doc_pair.remote_name)
                         doc_pair.update_state(remote_state='deleted')
-
                     else:
+                        new_info = client.file_to_info(fs_item)
                         # Perform a regular document update on a document
                         # that has been updated, renamed or moved
                         log.debug("Refreshing remote state info"
@@ -1534,10 +1533,10 @@ class Synchronizer(object):
                                   doc_pair.remote_name)
                         self._scan_remote_recursive(session, client, doc_pair,
                             new_info, force_recursion=False)
-
+                
                     session.commit()
                     updated = True
-                    refreshed.add(remote_ref)
+                    refreshed.add(remote_ref)                         
 
             if not updated:
                 child_info = client.get_info(

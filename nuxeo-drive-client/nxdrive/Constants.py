@@ -90,6 +90,7 @@ APP_ICON_WIZARD_RB = ':/rb_icon.png'
 APP_ICON_MENU_QUOTA = ':/menu_quota_exceeded.png'
 APP_ICON_MENU_MAINT = ':/menu_maint_mode.png'
 APP_ICON_MENU_UNAVAILABLE = APP_ICON_MENU_QUOTA
+APP_ICON_NOTIFICATION = ':/rb_icon.png'
 
 if sys.platform == 'darwin':
     APP_IMG_WIZARD_FINDER_FOLDERS = ':/finder_folders.png'
