@@ -113,7 +113,7 @@ def get_maintenance_message(status, schedule=None):
         end_local = end_utc.astimezone(to_tz)
         if status == 'maintenance':
 #            msg = _("%s is currently offline.") % service
-            msg = _("%s is currently offline.") % Constants.SERVICE_NAME
+            msg = _("%s is currently offline due to maintenance.") % Constants.SERVICE_NAME
             detail = _("Due to maintenance from %s to %s.") % \
                              (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         elif status == 'available':

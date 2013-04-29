@@ -68,6 +68,7 @@ class CpoWizard(QWizard):
         self.keep_location = self.server_binding is not None
         self.options = options
         self.skip = False
+        self.threads = []
         
         self.addPage(IntroPage())  # 0
         self.addPage(InstallOptionsPage())  # 1
@@ -217,12 +218,6 @@ class CpoWizard(QWizard):
             os.makedirs(self.local_folder)
 
         self.session.commit()
-
-        if sys.platform == 'win32':
-            # create the Favorites shortcut
-            shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
-            win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
-
         settings = create_settings()
         settings.setValue('preferences/notifications', True)
         settings.setValue('preferences/icon-overlays', True)
@@ -234,6 +229,11 @@ class CpoWizard(QWizard):
         settings.sync()
         launch = self.field('launch')
         if launch:
+            #wait for folder threads to finish
+            try:
+                [t.join() for t in self.threads]
+            except ReferenceError:
+                pass
             exe_path = find_exe_path()
             script, ext = os.path.splitext(exe_path)
             params = ['gui', '--start']
@@ -351,7 +351,7 @@ class IntroPage(QWizardPage):
         settings.setValue('preferences/useProxy', ProxyInfo.PROXY_DIRECT)
         settings.setValue('preferences/proxyUser', '')
         settings.setValue('preferences/proxyPwd', '')
-        settings.setValue('preferences/proxyRealm', '')
+#        settings.setValue('preferences/proxyRealm', '')
         settings.setValue('preferences/proxyAuthN', False)
         self.btnProxy.clicked.connect(self.showProxy)
 
@@ -551,7 +551,8 @@ class InstallOptionsPage(QWizardPage):
             synchronizer = self.wizard().controller.synchronizer
             synchronizer.get_folders(server_binding, update_roots=True, 
                  completion_notifiers={'notify_folders_retrieved': synchronizer,
-                                       'notify_folders_retrieved': self})      
+                                       'notify_folders_retrieved': self},
+                 threads=self.wizard().threads)      
             
             app.restoreOverrideCursor()
             self.removeEventFilter(process_filter)
@@ -562,8 +563,8 @@ class InstallOptionsPage(QWizardPage):
             self.removeEventFilter(process_filter)
 
     # NOT USED
-    def notify_folders_retrieved(self, local_folder, update):
-        self.wizard().communicator.folders.emit(local_folder, update)
+    def notify_folders_retrieved(self, local_folder, success):
+        self.wizard().communicator.folders.emit(local_folder, success)
                 
     def validatePage(self):
         if not self.rdButtonAdvanced.isChecked():

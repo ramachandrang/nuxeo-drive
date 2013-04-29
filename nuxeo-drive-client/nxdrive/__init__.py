@@ -16,6 +16,8 @@ DEBUG_UNAVAILABLE = False
 NAG_EVERY_LOOP = False
 """Synchronize 'conflicted' state"""
 DEBUG_SYNC_CONFLICTED = True
+"""Use the modified CloudDesk token vs Nuxeo Drive token"""
+USE_CLOUDDESK_TOKEN = True
 
 """Setup i18n"""
 import gettext

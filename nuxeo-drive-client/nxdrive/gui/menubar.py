@@ -42,6 +42,7 @@ from nxdrive.utils import create_settings
 from nxdrive.utils import find_data_path
 from nxdrive.model import RecentFiles
 from nxdrive.model import ServerEvent
+from nxdrive.model import SyncFolders
 from nxdrive.gui.proxy_dlg import ProxyDlg
 from nxdrive.gui.preferences_dlg import PreferencesDlg
 from nxdrive.gui.info_dlg import InfoDlg
@@ -59,8 +60,19 @@ def default_expanded_nuxeo_drive_folder():
 DEFAULT_NX_DRIVE_FOLDER = default_nuxeo_drive_folder()
 DEFAULT_EX_NX_DRIVE_FOLDER = default_expanded_nuxeo_drive_folder()
 
-
 log = get_logger(__name__)
+
+# Keep Growl an optional dependency for now
+notifier = object
+if sys.platform == 'darwin':
+    try:
+        from gntp import notifier
+        from gntp import errors
+        log.debug("Growl binding successfully imported")
+    except ImportError:
+        log.warning(_("Growl is not installed: Mac notifications are disabled"))
+        pass
+
 
 def sync_loop(controller, **kwargs):
     """Wrapper to log uncaught exception in the sync thread"""
@@ -137,6 +149,7 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.controller = controller
         self.options = options
         self.communicator = Communicator.getCommunicator()
+        self.threads = []
         self.state = Constants.APP_STATE_STOPPED
         self.substate = Constants.APP_SUBSTATE_AVAILABLE
         self.worker = None
@@ -258,9 +271,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
         # lock folders to prevent user deletion
         self.controller.lock_folder(local_folder)
-            
+        session = self.controller.get_session()
         if self.server_binding is not None:
-            session = self.controller.get_session()
             # reset older version events
             self.controller._reset_upgrade_info(self.server_binding, session=session)
             # reset the nag schedules
@@ -274,9 +286,23 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.communicator.message.connect(self.handle_message)
         self.communicator.invalid_credentials.connect(self.handle_invalid_credentials)
         self.communicator.invalid_proxy.connect(self.handle_invalid_proxy)
-        self.communicator.error.connect(self.handle_recoverable_error)
-        
+        self.communicator.error.connect(self.handle_recoverable_error)        
         self.communicator.messageReceived.connect(self.notify_another_instance)
+
+        if sys.platform == 'darwin':
+            # Mac notifications (using Growl)
+            self.growl = notifier.GrowlNotifier(
+                applicationName = Constants.APP_NAME,
+                notifications = ["New Updates","New Messages"],
+                defaultNotifications = ["New Messages"],
+#                port=23052,
+                # hostname = "computer.example.com", # Defaults to localhost
+                # password = "abc123" # Defaults to a blank password
+            )
+            try:
+                self.growl.register()
+            except errors.NetworkError as e:
+                log.debug('Failed to register with Growl (%s)', e)
 
         # Show 'up-to-date' notification message only once
         self.firsttime_pending_message = True
@@ -287,10 +313,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.proxyDlg = None
 
         if sys.platform == 'win32':
-            # create the Favorites shortcut
-            shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
-            win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
-
             notifications = settings.value('preferences/notifications', 'true')
             if notifications.lower() == 'true':
                 self.notifications = True
@@ -301,10 +323,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         else:
             self.notifications = settings.value('preferences/notifications', True)
             
-        if self.server_binding:     
+        if self.server_binding and session.query(SyncFolders).count() == 0:
             self.controller.synchronizer.get_folders(self.server_binding, update_roots=True, 
                              completion_notifiers={'notify_folders_retrieved': self.controller.synchronizer,
-                                                   'notify_systray_folders_retrieved': self})
+                                                   'notify_systray_folders_retrieved': self},
+                             threads=self.threads)
 
 
     def enable_trace(self, state):
@@ -766,7 +789,11 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                 self._resumeSync()
             self.controller.stop()
         else:
-            # quit directly
+            # quit directly but wait for threads to finish
+            try:
+                [t.join() for t in self.threads]
+            except ReferenceError:
+                pass
             QtGui.QApplication.quit()
 
     def rebuild_menu(self):
@@ -985,11 +1012,33 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
 
     def isQuitting(self):
         return self.state == Constants.APP_STATE_QUITTING
-        
+
     @QtCore.Slot(str, str, QtGui.QSystemTrayIcon.MessageIcon)
     def handle_message(self, title, message, icon_type):
         if self.notifications:
-            self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
+            if sys.platform == 'darwin':
+                # Send the image with the growl notification
+                if icon_type == QtGui.QSystemTrayIcon.Information:
+                    icon = Constants.APP_ICON_NOTIFICATION
+                elif icon_type == QtGui.QSystemTrayIcon.Warning: 
+                    icon = Constants.APP_ICON_MENU_MAINT
+                elif icon_type == QtGui.QSystemTrayIcon.Critical:
+                    icon = Constants.APP_ICON_MENU_QUOTA
+                else:
+                    icon = None
+                if icon:
+                    image = QtCore.QResource(icon).data()
+                else:
+                    image = None
+                self.growl.notify(
+                    noteType = "New Messages",
+                    title = title,
+                    description = message,
+                    icon = image,
+                )
+            else:
+                self.showMessage(title, message, icon_type, Constants.NOTIFICATION_MESSAGE_DELAY * 1000)
+
 
     def handle_message_clicked(self):
         info = self.get_binding_info(self.local_folder)
@@ -1077,10 +1126,26 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                     msg = server_maint_event.message
                     if self.server_binding.maintenance:
                         icon = QMessageBox.Warning
+                    start_utc = datetime.strptime(server_maint_event.data1 , '%Y-%m-%d %H:%M:%S')
+                    end_utc = datetime.strptime(server_maint_event.data2 , '%Y-%m-%d %H:%M:%S')
+                    
+                    from_tz = tz.tzutc()
+                    to_tz = tz.tzlocal()
+                    #convert local time for message
+                    start_utc = start_utc.replace(tzinfo = from_tz)
+                    end_utc = end_utc.replace(tzinfo = from_tz)
+                    start_local = start_utc.astimezone(to_tz)
+                    end_local = end_utc.astimezone(to_tz)
+                    if msg.find('\n') == -1:
+                        main, detail = msg, ''
+                    else:
+                        main, detail = msg.split('\n')
+                    #reassign current local for detail
+                    detail = _("From %s to %s.") % (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
                 else:
-                    msg = self.tr('No maintenance is scheduled.\n')
+                    main, detail = self.tr('No maintenance is scheduled.\n'), ''
             except NoResultFound:
-                msg = self.tr('No maintenance is scheduled.\n')
+                main, detail = self.tr('No maintenance is scheduled.\n'), ''
             except Exception, e:
                 log.debug("error retrieving maintenance info (%s)", e)
                 return
@@ -1090,21 +1155,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         msgbox.setText(self.tr("Maintenance information"))
         msgbox.setStandardButtons(QMessageBox.Ok)
         msgbox.setDefaultButton(QMessageBox.Ok)
-        
-        start_utc = datetime.strptime(server_maint_event.data1 , '%Y-%m-%d %H:%M:%S')
-        end_utc = datetime.strptime(server_maint_event.data2 , '%Y-%m-%d %H:%M:%S')
-        
-        from_tz = tz.tzutc()
-        to_tz = tz.tzlocal()
-        #convert local time for message
-        start_utc = start_utc.replace(tzinfo = from_tz)
-        end_utc = end_utc.replace(tzinfo = from_tz)
-        start_local = start_utc.astimezone(to_tz)
-        end_local = end_utc.astimezone(to_tz)
-
-        main, detail = msg.split('\n')
-        #reassign current local for detail
-        detail = _("From %s to %s.") % (start_local.strftime("%x %X"), end_local.strftime("%x %X"))
         msgbox.setInformativeText(main)
         msgbox.setDetailedText(detail)
         msgbox.setIcon(icon)
@@ -1145,8 +1195,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                            QtGui.QSystemTrayIcon.Information)
             
     # NOT USED
-    def notify_systray_folders_retrieved(self, local_folder, update):
-        self.communicator.folders.emit(local_folder, update)
+    def notify_systray_folders_retrieved(self, local_folder, success):
+        self.communicator.folders.emit(local_folder, success)
 
     def _is_new_version_available(self):
         try:
