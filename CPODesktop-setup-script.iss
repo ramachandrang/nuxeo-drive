@@ -76,7 +76,7 @@ Source: "dll\32bit\CpoIconOverlaySynced.dll"; DestDir: "{app}\bin\"; Flags: igno
 Name: "{group}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"
 Name: "{group}\{cm:UninstallProgram,Cloud Portal Office Desktop}"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"; Tasks: desktopicon
-;Name: "{userstartup}\Cloud Portal Office Desktop"; Filename: "{app}\CpoDesktop.exe"   
+Name: "{userstartup}\CpoDesktop"; Filename: "{app}\CpoDesktop.exe"   
 
 [Run]
 Filename: "{app}\RedistPackages\64bit\cpo_x64Setup.exe"; Description: "{cm:LaunchProgram, Install Redist packages - 64bit}"; Flags: waituntilterminated ; Check: Is64BitInstallMode

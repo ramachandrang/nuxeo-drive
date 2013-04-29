@@ -11,6 +11,7 @@ from PySide.QtGui import QStandardItemModel, QStandardItem, QIcon
 from PySide.QtCore import Qt
 
 from nxdrive.model import SyncFolders
+from nxdrive.client import MaintenanceMode
 from nxdrive import Constants
 import nxdrive.gui.qrc_resources
 from nxdrive.logging_config import get_logger
@@ -49,9 +50,17 @@ class RemoteFoldersModel():
     def populate_model(self, session=None):
         if session is None:
             session = self.folder_dlg.frontend.controller.get_session()
+        result_ok = False
+        self.maintenance_mode = False
         rootItem = self.model.invisibleRootItem()
         try:
-            mydocs = self.controller.synchronizer.mydocs_folder
+            sync_folder = session.query(SyncFolders).\
+                            filter(SyncFolders.remote_parent == None).\
+                            filter(SyncFolders.local_folder == self.server_binding.local_folder).\
+                            one()
+            mydocs = self.controller.synchronizer.get_mydocs(self.server_binding, session=session)
+            if not mydocs: return
+            
             othersdocs = {u'uid': Constants.OTHERS_DOCS_UID,
                           u'title': Constants.OTHERS_DOCS,
                           u'repository': mydocs['repository']
@@ -62,26 +71,40 @@ class RemoteFoldersModel():
                         othersdocs,
                         update_roots=True, 
                         session=session,
-                        completion_notifiers={'notify_folders_retrieved': weakref.proxy(self.folder_dlg)}) 
-    
+                        completion_notifiers={'notify_folders_retrieved': weakref.proxy(self.folder_dlg)},
+                        threads=self.folder_dlg.frontend.threads) 
+            result_ok = True
+        except NoResultFound:
+            log.debug('Cloud Portal Office root not found.')
+            self.controller.synchronizer.get_folders(
+                        self.server_binding, 
+                        update_roots=True, 
+                        session=session,
+                        completion_notifiers={'notify_folders_retrieved': self.folder_dlg}) 
             sync_folder = session.query(SyncFolders).\
                             filter(SyncFolders.remote_parent == None).\
                             filter(SyncFolders.local_folder == self.server_binding.local_folder).\
                             one()
+            result_ok = True
+        except MultipleResultsFound:
+            log.debug('more than one Cloud Portal Office root found.')
+        except MaintenanceMode:
+            self.maintenance_mode = True
+        except Exception, e:
+            log.debug("failed to retrieve folders or sync roots (%s)", str(e))
+        
+        try:
             item = QStandardItem(sync_folder.remote_name)
             item.setCheckable(False)
             item.setEnabled(False)
             item.setSelectable(False)
-            item.setIcon(QIcon(Constants.APP_ICON_DIALOG))
+            item.setIcon(QIcon(Constants.APP_ICON_ENABLED if result_ok else Constants.APP_ICON_DISABLED))
             item.setData(sync_folder.remote_id, ID_ROLE)
             rootItem.appendRow(item)
             self._add_subfolders(session, item, sync_folder.remote_id, self.server_binding.local_folder)
-        except NoResultFound:
-            log.debug('Cloud Portal Office root not found.')
-        except MultipleResultsFound:
-            log.debug('more than one Cloud Portal Office root found.')
         except Exception, e:
-            log.debug("failed to retrieve folders or sync roots (%s)", str(e))
+            log.debug("failed to populate model (%s)", str(e))
+        return result_ok
     
     def _add_subfolders(self, session, root, data, local_folder):
         sync_folders = session.query(SyncFolders).\
@@ -121,6 +144,8 @@ class RemoteFoldersModel():
         subitems_ids = set(subitems_dict.keys())
         items_to_add = subfolders_ids - subitems_ids
         items_to_remove = subitems_ids - subfolders_ids
+        matched_ids = set.intersection(subfolders_ids, subitems_ids)
+        
         # update the model
         if len(items_to_add) > 0 or len(items_to_remove) > 0:
             parent.model().layoutAboutToBeChanged.emit()
@@ -154,7 +179,12 @@ class RemoteFoldersModel():
             # the slot should update the entire tree
             parent.model().layoutChanged.emit()
         else:
-            # otherwise process its children
+            # update checked state
+            for item_id in matched_ids:
+                server_state = subfolders_dict[item_id].bind_state
+                subitems_dict[item_id].setData(Qt.Checked if server_state else Qt.Unchecked, CHECKED_ROLE)
+                     
+            # and process its children
             for i in range(parent.rowCount()):
                 self.update_model(parent.child(i), local_folder, session=session)
     
