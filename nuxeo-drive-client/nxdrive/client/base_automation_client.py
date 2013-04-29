@@ -396,7 +396,7 @@ class BaseAutomationClient(object):
                     name, value = ck.split('=', 1)
                     log.debug('  %s: %s', name, value)
             if req.has_data():
-                log.debug('request data: %s...', str(req.get_data())[0:200])
+                log.debug('request data: %s...', str(req.get_data())[0:1000])
 
     def log_response(self, rsp, data='binary data'):
         if BaseAutomationClient._enable_trace:
@@ -416,7 +416,7 @@ class BaseAutomationClient(object):
             # show data for text like data
             if not rsp.info().getencoding() == '7bit':
                 data = 'binary data'
-            log.debug('data: %s...', data[:500])
+            log.debug('data: %s...', data[:1000])
 
     def make_raise(self, error):
         """Make next calls to server raise the provided exception"""

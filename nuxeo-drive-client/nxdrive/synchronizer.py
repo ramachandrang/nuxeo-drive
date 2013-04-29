@@ -1884,7 +1884,8 @@ class Synchronizer(object):
                                 )
         try:
             threads = kwargs['threads']
-            threads.append(weakref.proxy(thread))
+            if threads:
+                threads.append(weakref.proxy(thread))
         except KeyError:
             pass
         thread.start()        
