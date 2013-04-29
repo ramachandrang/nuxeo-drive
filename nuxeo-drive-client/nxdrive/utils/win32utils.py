@@ -32,17 +32,17 @@ FILE_NOT_FOUND = 0x80070002
 SUPPORTED_WINVER_MAJOR = 6
 SUPPORTED_WINVER_MINOR = 1
 
-#def update_win32_reg_key(reg, path, attributes=()):
-#    """Helper function to create / set a key with attribute values"""
-#    import _winreg
-#    key = _winreg.CreateKey(reg, path)
-#    _winreg.CloseKey(key)
-#    key = _winreg.OpenKey(reg, path, 0, _winreg.KEY_WRITE)
-#    for attribute, type_, value in attributes:
-#        _winreg.SetValueEx(key, attribute, 0, type_, value)
-#    _winreg.CloseKey(key)
+def update_win32_reg_key(reg, path, attributes = ()):
+    """Helper function to create / set a key with attribute values"""
+    import _winreg
+    key = _winreg.CreateKey(reg, path)
+    _winreg.CloseKey(key)
+    key = _winreg.OpenKey(reg, path, 0, _winreg.KEY_WRITE)
+    for attribute, type_, value in attributes:
+        _winreg.SetValueEx(key, attribute, 0, type_, value)
+    _winreg.CloseKey(key)
 
-def create_shortcut(path, target, wDir='', args=None, icon=None):
+def create_shortcut(path, target, wDir = '', args = None, icon = None):
     try:
         shell = Dispatch('WScript.Shell')
         shortcut = shell.CreateShortCut(path)
@@ -56,7 +56,7 @@ def create_shortcut(path, target, wDir='', args=None, icon=None):
     except Exception, e:
         log.debug('error creating shortcut %s for %s: %s', path, target, e)
 
-def create_or_replace_shortcut(shortcut, target, args=None):
+def create_or_replace_shortcut(shortcut, target, args = None):
     win_version = sys.getwindowsversion()
     if win_version.major >= SUPPORTED_WINVER_MAJOR and win_version.minor >= SUPPORTED_WINVER_MINOR:
         # check if the link already exists
@@ -74,10 +74,10 @@ def create_or_replace_shortcut(shortcut, target, args=None):
             if os.path.splitext(exe_path)[1] == '.py':
                 # FOR TESTING
                 icon = None
-            create_shortcut(shortcut, target, args=args, icon=icon)
+            create_shortcut(shortcut, target, args = args, icon = icon)
     else:
         # TODO find the Favorites location for other Windows versions
-        log.debug("failed to create shortcut. Windows version lower than %d.%d", 
+        log.debug("failed to create shortcut. Windows version lower than %d.%d",
                   SUPPORTED_WINVER_MAJOR, SUPPORTED_WINVER_MINOR)
 
 
