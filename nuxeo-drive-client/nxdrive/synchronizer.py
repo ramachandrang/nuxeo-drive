@@ -1358,8 +1358,9 @@ class Synchronizer(object):
         previous_time = time()
         session = self.get_session()
         self.loop_count = 0
-        # COM initialization
-        pythoncom.CoInitialize()
+        if sys.platform == 'win32':
+            # COM initialization
+            pythoncom.CoInitialize()
         # start status thread used to provide file status for icon overlays
         self._controller.start_status_thread()
 
