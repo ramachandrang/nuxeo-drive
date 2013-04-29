@@ -48,6 +48,8 @@ from nxdrive.utils import safe_long_path
 from nxdrive.utils import create_config_file
 from nxdrive.utils import read_config_file
 from nxdrive.utils import reload_config_file
+if sys.platform == 'win32':
+    from nxdrive.utils import win32utils
 from nxdrive._version import _is_newer_version
 from nxdrive import Constants
 from nxdrive.http_server import HttpServer
@@ -1320,18 +1322,20 @@ class Controller(object):
     def file_changed(self, path):
         # reload properties that may change at runtime
         reload_config_file(path)
+        
     def register_folder_link(self, folder_path):
         if sys.platform == 'darwin':
             self.register_folder_link_darwin(folder_path)
-        # TODO: implement Windows and Linux support here
+        elif sys.platform == 'win32':
+            self.register_folder_link_win32(folder_path)
 
     def register_folder_link_darwin(self, folder_path):
         try:
-           from LaunchServices import LSSharedFileListCreate
-           from LaunchServices import kLSSharedFileListFavoriteItems
-           from LaunchServices import LSSharedFileListInsertItemURL
-           from LaunchServices import kLSSharedFileListItemBeforeFirst
-           from LaunchServices import CFURLCreateWithString
+            from LaunchServices import LSSharedFileListCreate
+            from LaunchServices import kLSSharedFileListFavoriteItems
+            from LaunchServices import LSSharedFileListInsertItemURL
+            from LaunchServices import kLSSharedFileListItemBeforeFirst
+            from LaunchServices import CFURLCreateWithString
         except ImportError:
             log.warning("PyObjC package is not installed:"
                         " skipping favorite link creation")
@@ -1356,3 +1360,8 @@ class Controller(object):
             {}, [])
         if item is not None:
             log.debug("Registered new favorite in Finder for: %s", folder_path)
+            
+    def register_folder_link_win32(self, folder_path):
+        shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
+        win32utils.create_or_replace_shortcut(shortcut, folder_path)
+        

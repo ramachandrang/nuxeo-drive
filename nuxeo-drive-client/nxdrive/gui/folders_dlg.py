@@ -52,7 +52,13 @@ class SyncFoldersDlg(QDialog, Ui_FoldersDlg):
         try:
             self.lblHelp.setText(self.help_message + self.tr(" <font color='#00BFFF'>Retrieving data...</font>"))
             self.model = RemoteFoldersModel(self)
-            self.model.populate_model()
+            result_ok = self.model.populate_model()
+            if not result_ok:
+                self.progressBar.reset()
+                self.progressBar.setVisible(False)
+                self.lblHelp.setText(self.help_message)
+                if self.model.maintenance_mode:
+                    self.lblHelp.setText(self.help_message + self.tr(" <font size='3' color='red'><bold> System is in maintenance.</bold></font>"))
             self.root = self.model.get_model().invisibleRootItem().child(0)
             self.treeView.setModel(self.model.get_model())
             if self.root:
@@ -75,14 +81,16 @@ class SyncFoldersDlg(QDialog, Ui_FoldersDlg):
         self.progressBar.setVisible(False)
 
     @Slot(str, bool)
-    def folders_changed(self, local_folder, update):
+    def folders_changed(self, local_folder, success):
         session = self.frontend.controller.get_session()
         self.progressBar.reset()
         self.progressBar.setVisible(False)
         self.lblHelp.setText(self.help_message)
-        if update:
+        if success:
             self.model.update_model(self.root, local_folder, session=session)
             self.set_checked_state(self.root)
+        else:
+            self.root.setIcon(QIcon(Constants.APP_ICON_DISABLED))
 
     def set_checked_state(self, parent):
         """Initialize the state of all checkboxes based on the model."""
@@ -260,6 +268,6 @@ class SyncFoldersDlg(QDialog, Ui_FoldersDlg):
         except Exception, e:
             log.debug('failed to update folder state: %s', e)
 
-    def notify_folders_retrieved(self, local_folder, update):
-        self.communicator.folders.emit(self.server_binding.local_folder, update)
+    def notify_folders_retrieved(self, local_folder, success):
+        self.communicator.folders.emit(self.server_binding.local_folder, success)
 

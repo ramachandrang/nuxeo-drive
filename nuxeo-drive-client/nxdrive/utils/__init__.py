@@ -6,7 +6,7 @@ from nxdrive.utils.helpers import safe_long_path
 from nxdrive.utils.helpers import find_exe_path
 from nxdrive.utils.helpers import find_data_path
 from nxdrive.utils.helpers import get_maintenance_message
-from nxdrive.utils.win32utils import update_win32_reg_key
+#from nxdrive.utils.win32utils import update_win32_reg_key
 from nxdrive.utils.encryption import encrypt_password
 from nxdrive.utils.encryption import decrypt_password
 

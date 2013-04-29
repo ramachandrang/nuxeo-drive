@@ -494,12 +494,6 @@ class PreferencesDlg(QDialog, Ui_preferencesDlg):
                 session.commit()
                 self.frontend.local_folder = self.local_folder
 
-        # Update the Favorites link (Windows only)
-        if sys.platform == 'win32':
-            if self.server_binding is not None:
-                shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
-                win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
-
         # Apply other changes
         if self.rbProxy.isChecked():
             useProxy = ProxyInfo.PROXY_SERVER

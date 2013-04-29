@@ -313,10 +313,6 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
         self.proxyDlg = None
 
         if sys.platform == 'win32':
-            # create the Favorites shortcut
-            shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
-            win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
-
             notifications = settings.value('preferences/notifications', 'true')
             if notifications.lower() == 'true':
                 self.notifications = True
@@ -1199,8 +1195,8 @@ class CloudDeskTray(QtGui.QSystemTrayIcon):
                                            QtGui.QSystemTrayIcon.Information)
             
     # NOT USED
-    def notify_systray_folders_retrieved(self, local_folder, update):
-        self.communicator.folders.emit(local_folder, update)
+    def notify_systray_folders_retrieved(self, local_folder, success):
+        self.communicator.folders.emit(local_folder, success)
 
     def _is_new_version_available(self):
         try:

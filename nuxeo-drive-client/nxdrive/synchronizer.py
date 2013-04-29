@@ -1865,13 +1865,12 @@ class Synchronizer(object):
         log.debug('end retrieving subfolders.')
         try:
             if kwargs.get("completion_notifiers", None):
-                update = dirty['add'] > 0 or dirty['del'] > 0 or roots_changed
-                # Force an update
-                update = True
+                # Force an update if everything was ok
+#                update = dirty['add'] > 0 or dirty['del'] > 0 or roots_changed
                 for notifier_method, notifier_instance_or_class in kwargs["completion_notifiers"].items():
                     try:
                         notifier = getattr(notifier_instance_or_class, notifier_method, None)
-                        if notifier: notifier(local_folder, update)
+                        if notifier: notifier(local_folder, success)
                     except ReferenceError:
                         log.debug('notifier has been destructed')
                         continue

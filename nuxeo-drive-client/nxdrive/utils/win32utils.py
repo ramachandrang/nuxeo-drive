@@ -11,26 +11,36 @@ from nxdrive.logging_config import get_logger
 from nxdrive.utils.helpers import find_exe_path
 from nxdrive import Constants
 
-if sys.platform == 'win32':
-    import pythoncom
-    from win32com.client import Dispatch
-    from win32com.shell import shell
-
 log = get_logger(__name__)
+
+if sys.platform == 'win32':
+    try:
+        import pythoncom
+    except ImportError:
+        log.warning("pythoncom package is not installed:"
+                        " skipping favorite link creation")
+    try:
+        from win32com.client import Dispatch
+        from win32com.shell import shell
+    except ImportError:
+        log.warning("win32com package is not installed:"
+                        " skipping favorite link creation")
 
 # COM Errors
 FILE_NOT_FOUND = 0x80070002
+# Windows versions
+SUPPORTED_WINVER_MAJOR = 6
+SUPPORTED_WINVER_MINOR = 1
 
-
-def update_win32_reg_key(reg, path, attributes=()):
-    """Helper function to create / set a key with attribute values"""
-    import _winreg
-    key = _winreg.CreateKey(reg, path)
-    _winreg.CloseKey(key)
-    key = _winreg.OpenKey(reg, path, 0, _winreg.KEY_WRITE)
-    for attribute, type_, value in attributes:
-        _winreg.SetValueEx(key, attribute, 0, type_, value)
-    _winreg.CloseKey(key)
+#def update_win32_reg_key(reg, path, attributes=()):
+#    """Helper function to create / set a key with attribute values"""
+#    import _winreg
+#    key = _winreg.CreateKey(reg, path)
+#    _winreg.CloseKey(key)
+#    key = _winreg.OpenKey(reg, path, 0, _winreg.KEY_WRITE)
+#    for attribute, type_, value in attributes:
+#        _winreg.SetValueEx(key, attribute, 0, type_, value)
+#    _winreg.CloseKey(key)
 
 def create_shortcut(path, target, wDir='', args=None, icon=None):
     try:
@@ -45,9 +55,6 @@ def create_shortcut(path, target, wDir='', args=None, icon=None):
         shortcut.save()
     except Exception, e:
         log.debug('error creating shortcut %s for %s: %s', path, target, e)
-
-SUPPORTED_WINVER_MAJOR = 6
-SUPPORTED_WINVER_MINOR = 1
 
 def create_or_replace_shortcut(shortcut, target, args=None):
     win_version = sys.getwindowsversion()
@@ -70,6 +77,7 @@ def create_or_replace_shortcut(shortcut, target, args=None):
             create_shortcut(shortcut, target, args=args, icon=icon)
     else:
         # TODO find the Favorites location for other Windows versions
-        log.debug("failed to create shortcut. Windows version lower than %d.%d", SUPPORTED_WINVER_MAJOR, SUPPORTED_WINVER_MINOR)
+        log.debug("failed to create shortcut. Windows version lower than %d.%d", 
+                  SUPPORTED_WINVER_MAJOR, SUPPORTED_WINVER_MINOR)
 
 

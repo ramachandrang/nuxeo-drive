@@ -50,6 +50,8 @@ class RemoteFoldersModel():
     def populate_model(self, session=None):
         if session is None:
             session = self.folder_dlg.frontend.controller.get_session()
+        result_ok = False
+        self.maintenance_mode = False
         rootItem = self.model.invisibleRootItem()
         try:
             sync_folder = session.query(SyncFolders).\
@@ -71,6 +73,7 @@ class RemoteFoldersModel():
                         session=session,
                         completion_notifiers={'notify_folders_retrieved': weakref.proxy(self.folder_dlg)},
                         threads=self.folder_dlg.frontend.threads) 
+            result_ok = True
         except NoResultFound:
             log.debug('Cloud Portal Office root not found.')
             self.controller.synchronizer.get_folders(
@@ -82,26 +85,26 @@ class RemoteFoldersModel():
                             filter(SyncFolders.remote_parent == None).\
                             filter(SyncFolders.local_folder == self.server_binding.local_folder).\
                             one()
+            result_ok = True
         except MultipleResultsFound:
             log.debug('more than one Cloud Portal Office root found.')
-            return
         except MaintenanceMode:
-            raise
+            self.maintenance_mode = True
         except Exception, e:
             log.debug("failed to retrieve folders or sync roots (%s)", str(e))
-            return
         
         try:
             item = QStandardItem(sync_folder.remote_name)
             item.setCheckable(False)
             item.setEnabled(False)
             item.setSelectable(False)
-            item.setIcon(QIcon(Constants.APP_ICON_DIALOG))
+            item.setIcon(QIcon(Constants.APP_ICON_ENABLED if result_ok else Constants.APP_ICON_DISABLED))
             item.setData(sync_folder.remote_id, ID_ROLE)
             rootItem.appendRow(item)
             self._add_subfolders(session, item, sync_folder.remote_id, self.server_binding.local_folder)
         except Exception, e:
-            log.debug("failed to retrieve folders or sync roots (%s)", str(e))
+            log.debug("failed to populate model (%s)", str(e))
+        return result_ok
     
     def _add_subfolders(self, session, root, data, local_folder):
         sync_folders = session.query(SyncFolders).\

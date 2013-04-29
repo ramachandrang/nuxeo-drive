@@ -218,12 +218,6 @@ class CpoWizard(QWizard):
             os.makedirs(self.local_folder)
 
         self.session.commit()
-
-        if sys.platform == 'win32':
-            # create the Favorites shortcut
-            shortcut = os.path.join(os.path.expanduser('~'), 'Links', Constants.PRODUCT_NAME + '.lnk')
-            win32utils.create_or_replace_shortcut(shortcut, self.local_folder)
-
         settings = create_settings()
         settings.setValue('preferences/notifications', True)
         settings.setValue('preferences/icon-overlays', True)
@@ -569,8 +563,8 @@ class InstallOptionsPage(QWizardPage):
             self.removeEventFilter(process_filter)
 
     # NOT USED
-    def notify_folders_retrieved(self, local_folder, update):
-        self.wizard().communicator.folders.emit(local_folder, update)
+    def notify_folders_retrieved(self, local_folder, success):
+        self.wizard().communicator.folders.emit(local_folder, success)
                 
     def validatePage(self):
         if not self.rdButtonAdvanced.isChecked():
