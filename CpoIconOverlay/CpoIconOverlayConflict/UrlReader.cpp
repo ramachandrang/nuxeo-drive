@@ -10,6 +10,9 @@ UrlReader::UrlReader()
 
 UrlReader::UrlReader(LPCTSTR inputPath, syncMap * map)
 {
+	// assume valid connection, check during query
+	isValidConn = true;
+
 	//add Cloud Desk folder to path
 	TCHAR * doc = TEXT("/Documents/Cloud Portal Office/My Documents");
 	TCHAR rootFolder[MAX_PATH];
@@ -21,8 +24,7 @@ UrlReader::UrlReader(LPCTSTR inputPath, syncMap * map)
 
 	this->fileStateSyncedMap = map;
 
-	// assume valid connection, check during query
-	isValidConn = true;
+	
 }
 
 //initial startup parse of user path
