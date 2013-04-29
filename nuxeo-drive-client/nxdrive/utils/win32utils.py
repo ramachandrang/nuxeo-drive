@@ -60,9 +60,9 @@ def create_or_replace_shortcut(shortcut, target, args = None):
     win_version = sys.getwindowsversion()
     if win_version.major >= SUPPORTED_WINVER_MAJOR and win_version.minor >= SUPPORTED_WINVER_MINOR:
         # check if the link already exists
-        shlink = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None,
-                                              pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
         try:
+            shlink = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None,
+                                                  pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
             shlink.QueryInterface(pythoncom.IID_IPersistFile).Load(shortcut)
             if shlink.GetPath(shell.SLGP_RAWPATH)[0].lower() != target.lower():
                 shlink.SetPath(target)
