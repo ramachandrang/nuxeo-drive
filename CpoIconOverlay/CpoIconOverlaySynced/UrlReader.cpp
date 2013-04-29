@@ -11,13 +11,7 @@ UrlReader::UrlReader()
 UrlReader::UrlReader(LPCTSTR inputPath, syncMap * map)
 {
 	//add Cloud Desk folder to path
-	TCHAR * doc = TEXT("/Documents/Cloud Portal Office/My Documents");
-	TCHAR rootFolder[MAX_PATH];
-	_tcscpy(rootFolder, inputPath);
-	StringCchCat(rootFolder, MAX_PATH, doc);
-
-	userPath = new TCHAR [MAX_PATH];
-	_tcscpy(userPath, rootFolder);
+	queryForUserRoot();
 
 	this->fileStateSyncedMap = map;
 
@@ -50,6 +44,23 @@ void UrlReader::performParse(TCHAR * urlParams){
 		UrlReader::parseJsonValue(val);
 	}
 }
+
+void UrlReader::queryForUserRoot(){
+	if(isValidConn){
+		TCHAR * rootFolderQuery = TEXT("/rootfolder");
+		char * rootPath = getJsonStringFromServer(rootFolderQuery);
+		if(rootPath){
+			json_settings settings;
+			memset(&settings, 0, sizeof (json_settings)); 
+			char error[256];
+			json_value * jsonRootPath = json_parse_ex(&settings, rootPath, error);
+			char * path = jsonRootPath->u.object.values->value->u.string.ptr;
+
+			MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, userPath, MAX_PATH);
+		}	
+	}
+}
+
 
 TCHAR * UrlReader::getUserRootPath(){
 	return userPath;

@@ -14,9 +14,8 @@ FileState::FileState(LPCTSTR userPath)
 	_tcscpy(path, userPath);
 	urlPathEncode(path);
 
-
 	urlReader = UrlReader::UrlReader(path, &myFileSyncMap);
-	urlReader.parse();
+	//urlReader.parse();
 	time(&cacheResetTimer);
 }
 
@@ -90,7 +89,9 @@ void FileState::clearCache(){//clears map to reset cache
 }
 
 bool FileState::isValidCloudFolder(TCHAR * folder){
-	TCHAR * sub = _tcsstr(folder, TEXT("Cloud Portal Office"));
+	TCHAR * userPath = urlReader.getUserRootPath();
+	urlPathEncode(userPath);
+	TCHAR * sub = _tcsstr(folder, userPath);
 	if(sub == NULL){
 		return false;
 	}else{

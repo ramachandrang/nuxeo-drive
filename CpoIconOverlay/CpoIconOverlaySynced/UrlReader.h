@@ -28,6 +28,7 @@ public:
 	UrlReader::UrlReader(LPCTSTR inputPath, syncMap * map);
 	void UrlReader::parse();
 	void UrlReader::parseSubFolder(TCHAR * subFolder);
+	void UrlReader::queryForUserRoot();
 	void UrlReader::performParse(TCHAR * urlParams);
 	bool UrlReader::getConnState();
 	void UrlReader::parseJsonValue(json_value *val);
