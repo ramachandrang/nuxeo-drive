@@ -22,6 +22,7 @@ private:
 	syncMap * fileStateSyncedMap;
 	bool isValidConn;
 	TCHAR currDir[MAX_PATH];
+	TCHAR currentParentFolder[MAX_PATH];
 
 public:
 	UrlReader::UrlReader();
@@ -31,6 +32,7 @@ public:
 	void UrlReader::performParse(TCHAR * urlParams);
 	void UrlReader::longPull(TCHAR * filePath);
 	bool UrlReader::getConnState();
+	void UrlReader::updateParentFolder(TCHAR *);
 	void UrlReader::queryForUserRoot();
 	void UrlReader::parseJsonValue(json_value *val);
 	char* UrlReader::getJsonStringFromServer(const wchar_t* request, bool isThread);

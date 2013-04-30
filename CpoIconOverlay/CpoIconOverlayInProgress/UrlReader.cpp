@@ -10,13 +10,14 @@ UrlReader::UrlReader()
 
 UrlReader::UrlReader(LPCTSTR inputPath, syncMap * map)
 {
-	//add Cloud Desk folder to path
-	queryForUserRoot();
-
-	this->fileStateSyncedMap = map;
-
 	// assume valid connection, check during query
 	isValidConn = true;
+
+	//add Cloud Desk folder to path
+	queryForUserRoot();
+	_tcscpy(currentParentFolder, userPath);
+
+	this->fileStateSyncedMap = map;
 }
 
 //initial startup parse of user path
@@ -32,6 +33,7 @@ void UrlReader::parseSubFolder(TCHAR * subFolder){
 	TCHAR urlParams[MAX_PATH + 50] = TEXT("?state=progress&folder=");
 	StringCchCat(urlParams, MAX_PATH, subFolder);
 	performParse(urlParams);
+	updateParentFolder(subFolder);
 }
 
 void UrlReader::performParse(TCHAR * urlParams){
@@ -54,31 +56,33 @@ void longPullThread(void * params){
 	localParam.urlReader = threadParams->urlReader;
 
 	TCHAR urlParams[MAX_PATH + 50] = TEXT("?state=progress&transition=true&folder=");
-	StringCchCat(urlParams, MAX_PATH, localParam.folderPath);
+	StringCchCat(urlParams, MAX_PATH, localParam.filePath);
 
 	Sleep(5000);
-	char * returnVal = localParam.urlReader->getJsonStringFromServer(urlParams, true);
+	if(_tcscmp(localParam.filePath, _T("")) != 0){
+		char * returnVal = localParam.urlReader->getJsonStringFromServer(urlParams, true);
 
-	TCHAR findChar = '/';
-	TCHAR replaceChar = '\\';
+		TCHAR findChar = '/';
+		TCHAR replaceChar = '\\';
 
-	int i = 0;
-	while(localParam.filePath[i] != '\0'){
-		if((int)localParam.filePath[i] == (int)findChar){
-			localParam.filePath[i] = replaceChar;
+		int i = 0;
+		while(localParam.filePath[i] != '\0'){
+			if((int)localParam.filePath[i] == (int)findChar){
+				localParam.filePath[i] = replaceChar;
+			}
+			i++;
 		}
-		i++;
-	}
-	//TCHAR urlParams2[MAX_PATH + 50] = TEXT("?debug=");
-	//StringCchCat(urlParams2, MAX_PATH, localParam.filePath);
+		//TCHAR urlParams2[MAX_PATH + 50] = TEXT("?debug=");
+		//StringCchCat(urlParams2, MAX_PATH, localParam.filePath);
 
-	//LPCVOID absPath = localParam.filePath;
-	//SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST | SHCNF_FLUSHNOWAIT, NULL, NULL);
-	SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSHNOWAIT, localParam.filePath, NULL);
-	//localParam.urlReader->getJsonStringFromServer(urlParams2, true);
-	//MessageBox(NULL, threadParams->filePath, L"Prev Param", MB_OK);
-	//MessageBox(NULL, localParam.filePath, L"Local", MB_OK);
-	//delete threadParams;
+		//LPCVOID absPath = localParam.filePath;
+		//SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST | SHCNF_FLUSHNOWAIT, NULL, NULL);
+		SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSH, localParam.filePath, NULL);
+		//localParam.urlReader->getJsonStringFromServer(urlParams2, true);
+		//MessageBox(NULL, threadParams->filePath, L"Prev Param", MB_OK);
+		//MessageBox(NULL, localParam.filePath, L"Local", MB_OK);
+		//delete threadParams;
+	}
 }
 
 void UrlReader::longPull(TCHAR * filePath){
@@ -86,28 +90,37 @@ void UrlReader::longPull(TCHAR * filePath){
  	_tcscpy(ps.filePath, filePath);
 	TCHAR * temp = getFileFolder(filePath);
 
-	TCHAR parentFolder[MAX_PATH];
-	_tcscpy(parentFolder, temp);
-	TCHAR findChar = '/';
-	TCHAR replaceChar = '\\';
-	int i = 0;
-	while(parentFolder[i] != '\0'){
-		if((int)parentFolder[i] == (int)findChar){
-			parentFolder[i] = replaceChar;
-		}
-		i++;
-	}
 	_tcscpy(ps.folderPath, temp);
 	//delete temp;
 	//temp = NULL;
 	ps.urlReader = this;
-	//unsigned int lastOcc = _tcslen(filePath) - _tcslen(_tcsrchr(filePath, '/'));
-	//_tcsncpy(ps.filePath, filePath, folderLen);
-	//_tcsncpy(ps.folderPath, filePath, _tcslen(filePath) - _tcslen(_tcsrchr(filePath, '/')));
 
+	//begin thread with longPull
 	_beginthread(longPullThread, 0, (void *)&ps);
-	//refresh parent folder icon
-	SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSH, parentFolder, NULL);
+	
+	//refresh parent icon
+	//updateParentFolder(temp);
+}
+
+void UrlReader::updateParentFolder(TCHAR * input){
+	if(_tcscmp(input, currentParentFolder) != 0){
+		//put into refresh parent function
+		TCHAR parentFolder[MAX_PATH];
+		_tcscpy(parentFolder, input);
+		TCHAR findChar = '/';
+		TCHAR replaceChar = '\\';
+		int i = 0;
+		while(parentFolder[i] != '\0'){
+			if((int)parentFolder[i] == (int)findChar){
+				parentFolder[i] = replaceChar;
+			}
+			i++;
+		}
+
+		_tcscpy(currentParentFolder, parentFolder);
+		SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSH, parentFolder, NULL);
+	}
+	
 }
 
 void UrlReader::queryForUserRoot(){

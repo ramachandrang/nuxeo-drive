@@ -31,7 +31,7 @@ void FileState::isValidCache()
 	time(&currTime);
 	double diff;
 	diff = difftime(currTime, cacheResetTimer);
-	if(diff > 0.3){
+	if(diff > 3.3){
 		clearCache();
 		time(&cacheResetTimer);
 	}
@@ -51,42 +51,44 @@ bool FileState::inProgress(LPCTSTR path)
 	_tcscpy(file, path);
 	urlPathEncode(file);
 
-	TCHAR * tempPtr = new TCHAR[MAX_PATH];
-	_tcscpy(tempPtr, file);
-	bool isValidFolder = false;
+	TCHAR * fileFolder = getFileFolder(file);
+	if(isValidCloudFolder(fileFolder)){
+		TCHAR * tempPtr = new TCHAR[MAX_PATH];
+		_tcscpy(tempPtr, file);
 	
-	if(myFileSyncMap.find(file) != myFileSyncMap.end()){
-		if(myFileSyncMap.find(file)->second){
-			urlReader.longPull(tempPtr);
-			//MessageBox(NULL, path, L"return true", MB_OK);
-			return true; //file is synced
-		}else{
-			//MessageBox(NULL, path, L"return false", MB_OK);
-			return false; //file is in map but not synced -- this currently isn't used
-		}
-	}else{ //file does not exist in map, perform a query and update map for this specific folder
-		TCHAR * fileFolder = getFileFolder(file);
-		isValidFolder = isValidCloudFolder(fileFolder);
-		if(isValidFolder){
-			//query new folder params
-			urlReader.parseSubFolder(fileFolder);
-			if(myFileSyncMap.find(file) != myFileSyncMap.end()){
+	
+		if(myFileSyncMap.find(file) != myFileSyncMap.end()){
+			if(myFileSyncMap.find(file)->second){
 				urlReader.longPull(tempPtr);
-				//delete fileFolder;
-				//fileFolder = NULL;
-				//MessageBox(NULL, path, L"return true after query", MB_OK);
-				//urlReader.longPull(file);
-				return true;
+				//MessageBox(NULL, path, L"return true", MB_OK);
+				return true; //file is synced
+			}else{
+				//MessageBox(NULL, path, L"return false", MB_OK);
+				return false; //file is in map but not synced -- this currently isn't used
 			}
+		}else{ //file does not exist in map, perform a query and update map for this specific folder
+			//urlReader.parseSubFolder(fileFolder);
+			urlReader.parseSubFolder(fileFolder);
+				if(myFileSyncMap.find(file) != myFileSyncMap.end()){
+					//urlReader.longPull(tempPtr);
+					//delete fileFolder;
+					//fileFolder = NULL;
+					//MessageBox(NULL, path, L"return true after query", MB_OK);
+					//urlReader.longPull(file);
+					return true;
+				}
 		}
-		//delete fileFolder;
-		//fileFolder = NULL;
-		if(isValidFolder && isValidConn){
-			//MessageBox(NULL, path, L"return false after everything", MB_OK);
-			//SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSHNOWAIT, path, NULL);
-			urlReader.longPull(tempPtr);
-			return true;
-		}
+			//TCHAR * fileFolder = getFileFolder(file);
+			//isValidFolder = isValidCloudFolder(fileFolder);
+			//delete fileFolder;
+			//fileFolder = NULL;
+			//if(isValidFolder && isValidConn){
+				//MessageBox(NULL, path, L"return false after everything", MB_OK);
+				//SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH | SHCNF_FLUSHNOWAIT, path, NULL);
+				//urlReader.longPull(tempPtr);
+				//return true;
+			//}
+		
 		return false;
 	}
 }
