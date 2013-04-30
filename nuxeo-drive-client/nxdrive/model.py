@@ -196,9 +196,11 @@ class ServerBinding(Base):
         return self.remote_password is None and self.remote_token is None
 
     def __eq__(self, other):
+        this_server_url = self.server_url[:-1] if self.server_url[-1] == '/' else self.server_url
+        other_server_url = other.server_url[:-1] if other.server_url[-1] == '/' else other.server_url 
         return (isinstance(other, ServerBinding) and
                 self.local_folder == other.local_folder and
-                self.server_url == other.server_url and
+                this_server_url == other_server_url and
                 self.remote_user == other.remote_user)
 #                and self.remote_token == other.remote_token)
 

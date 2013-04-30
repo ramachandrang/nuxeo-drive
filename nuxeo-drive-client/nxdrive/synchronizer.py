@@ -1548,15 +1548,18 @@ class Synchronizer(object):
                     refreshed.add(remote_ref)
 
             if not updated:
-                if change['eventId'] == 'deleted':
-                    # document was deleted, continue
-                    continue
-                child_info = client.get_info(
-                    remote_ref, raise_if_missing = False)
-                if child_info is None:
-                    # Document must have been deleted since: nothing to do
-                    continue
-
+                try:
+                    child_info = client.get_info(
+                        remote_ref, raise_if_missing = False)
+                    if child_info is None:
+                        # Document must have been deleted since: nothing to do
+                        continue
+                except:
+                    # Workaround: if an exception occurs (e.g. 401) for a deleted doc, 
+                    # ignore it and continue
+                    if change['eventId'] == 'deleted':
+                        continue
+                    
                 created = False
                 parent_pairs = session.query(LastKnownState).filter_by(
                     remote_ref = child_info.parent_uid).all()
