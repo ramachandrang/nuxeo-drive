@@ -31,7 +31,7 @@ void FileState::isValidCache()
 	time(&currTime);
 	double diff;
 	diff = difftime(currTime, cacheResetTimer);
-	if(diff > 0.3){
+	if(diff > 0.5){
 		clearCache();
 		time(&cacheResetTimer);
 	}

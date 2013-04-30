@@ -10,13 +10,13 @@ UrlReader::UrlReader()
 
 UrlReader::UrlReader(LPCTSTR inputPath, syncMap * map)
 {
+	// assume valid connection, check during query
+	isValidConn = true;
+
 	//add Cloud Desk folder to path
 	queryForUserRoot();
 
 	this->fileStateSyncedMap = map;
-
-	// assume valid connection, check during query
-	isValidConn = true;
 }
 
 //initial startup parse of user path
