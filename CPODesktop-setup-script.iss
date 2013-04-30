@@ -7,7 +7,7 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{5D0411E3-47F5-441A-B595-C1DCE87519C2}}
 AppName=Cloud Portal Office Desktop
-AppVersion=0.2.5.1
+AppVersion=0.2.3
 AppPublisher=SHARP
 AppPublisherURL=http://www.sharp.com/
 AppSupportURL=http://www.sharp.com/
